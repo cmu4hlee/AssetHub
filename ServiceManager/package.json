@@ -1,0 +1,115 @@
+{
+  "name": "asset-management-service-manager",
+  "version": "1.0.0",
+  "description": "资产管理系统服务管理器",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --mac",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win"
+  },
+  "keywords": [
+    "service",
+    "manager",
+    "electron"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "mysql2": "^3.16.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "build": {
+    "appId": "com.assetmanagement.service-manager",
+    "productName": "AssetManagementServiceManager",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "pkg",
+          "arch": ["arm64"]
+        },
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        }
+      ],
+      "icon": "icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "icon.ico",
+      "sign": null,
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "资产管理服务管理器"
+    },
+    "files": [
+      "**/*",
+      "!node_modules",
+      "!backend",
+      "!frontend",
+      "!.git",
+      "!*.md",
+      "!构建说明.md",
+      "!使用说明.md",
+      "!快速开始.md",
+      "!安装程序说明.md",
+      "!*.bat",
+      "!*.sh",
+      "node_modules/mysql2/**/*",
+      "node_modules/sqlstring/**/*",
+      "node_modules/denque/**/*",
+      "node_modules/long/**/*",
+      "node_modules/iconv-lite/**/*",
+      "node_modules/safer-buffer/**/*",
+      "node_modules/generate-function/**/*",
+      "node_modules/is-property/**/*",
+      "node_modules/aws-ssl-profiles/**/*",
+      "node_modules/lru.min/**/*",
+      "node_modules/named-placeholders/**/*",
+      "node_modules/seq-queue/**/*",
+      "node_modules/buffer-writer/**/*",
+      "node_modules/readable-stream/**/*"
+    ],
+    "asarUnpack": [
+      "**/node_modules/mysql2/**/*",
+      "**/node_modules/sqlstring/**/*",
+      "**/node_modules/denque/**/*",
+      "**/node_modules/long/**/*",
+      "**/node_modules/iconv-lite/**/*",
+      "**/node_modules/safer-buffer/**/*",
+      "**/node_modules/generate-function/**/*",
+      "**/node_modules/is-property/**/*",
+      "**/node_modules/aws-ssl-profiles/**/*",
+      "**/node_modules/lru.min/**/*",
+      "**/node_modules/named-placeholders/**/*",
+      "**/node_modules/seq-queue/**/*",
+      "**/node_modules/buffer-writer/**/*",
+      "**/node_modules/readable-stream/**/*"
+    ],
+    "directories": {
+      "output": "dist-new"
+    }
+  }
+}

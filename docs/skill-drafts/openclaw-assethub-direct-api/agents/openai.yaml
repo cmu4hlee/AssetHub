@@ -1,0 +1,7 @@
+interface:
+  display_name: "OpenClaw AssetHub Direct API"
+  short_description: "在 OpenClaw 中直连 AssetHub HTTP API，处理租户头、受保护写入幂等键，以及 AI 安全报修入口"
+  default_prompt: "Use $openclaw-assethub-direct-api to log in to AssetHub and perform direct HTTP API calls with correct tenant headers, guarded-write Idempotency-Key handling, AI-safe repair submission through /maintenance/ai/submit-request, query-before-write workflows, and post-write verification."
+
+policy:
+  allow_implicit_invocation: true

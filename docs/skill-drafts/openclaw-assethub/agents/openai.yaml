@@ -1,0 +1,7 @@
+interface:
+  display_name: "OpenClaw AssetHub"
+  short_description: "在 OpenClaw 中按租户规则使用 AssetHub MCP 工具"
+  default_prompt: "Use $openclaw-assethub to answer or operate on AssetHub data through the assethub MCP tools with correct tenant and auth inheritance."
+
+policy:
+  allow_implicit_invocation: true

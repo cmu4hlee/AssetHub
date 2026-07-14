@@ -1,0 +1,994 @@
+const axios = require('axios');
+const { execFile } = require('child_process');
+const os = require('os');
+const path = require('path');
+const aiRuntimeAuthStore = require('./ai-runtime-auth-store');
+
+const PROVIDERS = Object.freeze({
+  CLAUDE_CODE: 'claude-code',
+  OPENCLAW: 'openclaw',
+});
+const OPENCLAW_SKILLS = Object.freeze({
+  PRIMARY: 'assetclaw',
+  MCP_FALLBACK: 'openclaw-assethub',
+  DIRECT_API_FALLBACK: 'openclaw-assethub-direct-api',
+});
+
+const DEFAULT_MODEL = PROVIDERS.CLAUDE_CODE;
+const CLAUDE_CODE_ENABLED = process.env.CLAUDE_CODE_ENABLED !== 'false';
+const CLAUDE_CODE_TIMEOUT = parseInt(
+  process.env.CLAUDE_CODE_TIMEOUT_MS || process.env.GATEWAY_TIMEOUT,
+  10,
+) || 120000;
+const CLAUDE_CODE_MAX_BUFFER =
+  parseInt(process.env.CLAUDE_CODE_MAX_BUFFER, 10) || 4 * 1024 * 1024;
+const CLAUDE_CODE_WORKDIR =
+  process.env.CLAUDE_CODE_WORKDIR || path.resolve(__dirname, '..', '..');
+const CLAUDE_CODE_MODEL = String(process.env.CLAUDE_CODE_MODEL || '').trim();
+
+const OPENCLAW_ENABLED = process.env.OPENCLAW_ENABLED === 'true';
+const OPENCLAW_BASE_URL = String(
+  process.env.OPENCLAW_BASE_URL || process.env.GATEWAY_BASE_URL || 'http://127.0.0.1:18789',
+).trim();
+const OPENCLAW_TOKEN = String(
+  process.env.OPENCLAW_GATEWAY_TOKEN || process.env.GATEWAY_AUTH_TOKEN || '',
+).trim();
+const OPENCLAW_TIMEOUT =
+  parseInt(process.env.OPENCLAW_TIMEOUT_MS || process.env.GATEWAY_TIMEOUT, 10) || 120000;
+const LEAKED_META_LINE_PATTERNS = [
+  /^当前 Web 会话辅助上下文[:：]?$/i,
+  /^当前会话提示 JSON[:：]?$/i,
+  /^当前工具运行时上下文[:：]?$/i,
+  /^工具上下文 JSON[:：]?$/i,
+  /^- 以下 JSON 只用于帮助你理解当前 Web 会话.*$/i,
+  /^- 当问题涉及用户名、角色、租户、权限、菜单、模块或任何 AssetHub 数据时.*$/i,
+  /^- 如果下面 JSON 中有 tenant_id.*$/i,
+  /^- 以下上下文由 AssetHub 后端受信任代理生成.*$/i,
+  /^- 这是工具调用参数上下文.*$/i,
+  /^- 这是强制参数.*$/i,
+  /^- 如果下面 JSON 同时提供了 `tenant_id`.*$/i,
+  /^- 调用格式示例.*$/i,
+  /^"currentSessionHint"/,
+  /^"toolRuntimeContext"/,
+  /^"_auth_context_id"/,
+  /^"client_trace_id"/,
+  /^"client_session_id"/,
+  /^"client_request_id"/,
+  /^"openclaw_auth_source"/,
+  /^"openclaw_first_call"/,
+  /^"openclaw_login_username"/,
+  /^"openclaw_login_password"/,
+];
+
+function mayCallClaudeCode() {
+  return Boolean(CLAUDE_CODE_ENABLED);
+}
+
+function mayCallOpenClaw() {
+  return Boolean(OPENCLAW_ENABLED && OPENCLAW_BASE_URL);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function extractText(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) {
+    return value.map(item => extractText(item)).filter(Boolean).join('\n');
+  }
+
+  if (typeof value === 'object') {
+    if (Array.isArray(value.choices)) {
+      return extractText(value.choices[0]?.message?.content) || extractText(value.choices[0]?.text);
+    }
+    if (value.message) {
+      return extractText(value.message.content) || extractText(value.message.text);
+    }
+    return (
+      extractText(value.content) ||
+      extractText(value.text) ||
+      extractText(value.reply) ||
+      extractText(value.answer) ||
+      extractText(value.result)
+    );
+  }
+
+  return '';
+}
+
+function sanitizeAssistantReply(value) {
+  let text = extractText(value).trim();
+  if (!text) {
+    return '';
+  }
+
+  text = text.replace(/("_auth_context_id"\s*:\s*")([^"]+)(")/gi, '$1[redacted]$3');
+
+  const sanitizedLines = text
+    .split('\n')
+    .filter(line => !LEAKED_META_LINE_PATTERNS.some(pattern => pattern.test(line.trim())));
+
+  return sanitizedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function uniqueItems(values = []) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function compactObject(source) {
+  return Object.entries(source).reduce((acc, [key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      acc[key] = value;
+    }
+    return acc;
+  }, {});
+}
+
+function normalizeModelName(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeTenantId(value) {
+  const normalized = Number.parseInt(String(value ?? ''), 10);
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
+}
+
+function getObjectValue(source, key) {
+  const value = source?.[key];
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function getArrayValue(primaryValue, fallbackValue) {
+  const values = Array.isArray(primaryValue)
+    ? primaryValue
+    : Array.isArray(fallbackValue)
+      ? fallbackValue
+      : [];
+
+  return values.length > 0 ? values : undefined;
+}
+
+function getProviderForModel(requestedModel) {
+  const normalized = normalizeModelName(requestedModel);
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.startsWith(PROVIDERS.OPENCLAW)) {
+    return PROVIDERS.OPENCLAW;
+  }
+
+  if (/^(claude-code|claude|sonnet|opus|haiku)/.test(normalized)) {
+    return PROVIDERS.CLAUDE_CODE;
+  }
+
+  return null;
+}
+
+const CONFIGURED_GATEWAY_PROVIDER = (() => {
+  const configuredProvider = getProviderForModel(process.env.DEFAULT_AI_MODEL);
+  return configuredProvider || PROVIDERS.OPENCLAW;
+})();
+
+function resolveProvider(requestedModel) {
+  return getProviderForModel(requestedModel) || CONFIGURED_GATEWAY_PROVIDER;
+}
+
+function getClaudeCommandCandidates() {
+  const home = os.homedir();
+  return uniqueItems([
+    String(process.env.CLAUDE_CODE_COMMAND || '').trim(),
+    'claude',
+    path.join(home, '.local', 'bin', 'claude'),
+    '/usr/local/bin/claude',
+    '/opt/homebrew/bin/claude',
+  ]);
+}
+
+function resolveClaudeModel(requestedModel) {
+  if (CLAUDE_CODE_MODEL) {
+    return CLAUDE_CODE_MODEL;
+  }
+
+  const normalized = String(requestedModel || '').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  if (/^(claude|sonnet|opus|haiku)/i.test(normalized)) {
+    return normalized;
+  }
+
+  return '';
+}
+
+function buildSystemPrompt(messages = []) {
+  const systemMessages = messages
+    .filter(item => item.role === 'system')
+    .map(item => item.content.trim())
+    .filter(Boolean);
+
+  if (systemMessages.length === 0) {
+    return '你是 AssetHub 的 AI 助手。请使用中文直接回答，并严格遵守对话中的安全与权限约束。';
+  }
+
+  return systemMessages.join('\n\n');
+}
+
+function buildConversationTranscript(messages = []) {
+  const conversation = messages.filter(item => item.role !== 'system');
+  if (conversation.length === 0) {
+    return '';
+  }
+
+  return conversation
+    .map((item, index) => {
+      const roleLabel =
+        item.role === 'assistant' ? 'Assistant' : item.role === 'user' ? 'User' : item.role;
+      return `# ${index + 1} ${roleLabel}\n${item.content}`;
+    })
+    .join('\n\n');
+}
+
+function buildClaudePrompt(messages = []) {
+  const transcript = buildConversationTranscript(messages);
+  if (!transcript) {
+    return '请直接回复“请提供问题内容”。';
+  }
+
+  return [
+    '请基于下面的对话历史，生成下一条 assistant 回复。',
+    '要求：',
+    '1. 只输出 assistant 的回复正文，不要添加角色名前缀。',
+    '2. 严格遵守 system prompt 中的权限、安全和租户隔离约束。',
+    '3. 如果信息不足，请明确说明缺少什么，不要编造。',
+    '',
+    transcript,
+  ].join('\n');
+}
+
+function runExecFile(command, args, options) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+async function executeClaudeCommand({ command, prompt, systemPrompt, model }) {
+  const args = [
+    '-p',
+    '--output-format',
+    'text',
+    '--no-session-persistence',
+    '--permission-mode',
+    'dontAsk',
+  ];
+  if (systemPrompt) {
+    args.push('--system-prompt', systemPrompt);
+  }
+
+  if (model) {
+    args.push('--model', model);
+  }
+
+  args.push(prompt);
+
+  return runExecFile(command, args, {
+    cwd: CLAUDE_CODE_WORKDIR,
+    timeout: CLAUDE_CODE_TIMEOUT,
+    maxBuffer: CLAUDE_CODE_MAX_BUFFER,
+    windowsHide: true,
+  });
+}
+
+async function executeClaudeWithFallbacks({ prompt, systemPrompt, model }) {
+  const commands = getClaudeCommandCandidates();
+  let lastError = null;
+
+  for (const command of commands) {
+    try {
+      const result = await executeClaudeCommand({
+        command,
+        prompt,
+        systemPrompt,
+        model,
+      });
+
+      return {
+        command,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      };
+    } catch (error) {
+      lastError = error;
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+
+  const notFoundError = new Error(
+    '未找到本地 Claude Code CLI，请确认 `claude` 命令已安装并可在服务进程中访问',
+  );
+  notFoundError.code = lastError?.code || 'ENOENT';
+  throw notFoundError;
+}
+
+function createOpenClawSessionId(payload = {}) {
+  return (
+    String(
+      payload.client_request_id ||
+        payload.request_id ||
+        payload.metadata?.client_request_id ||
+        payload.session_id ||
+        payload.conversation_id ||
+        payload.metadata?.client_session_id ||
+        '',
+    ).trim() || `openclaw-${Date.now()}`
+  );
+}
+
+function resolveOpenClawRequestUsername(payload = {}) {
+  const metadata = getObjectValue(payload, 'metadata');
+  const authContext = getObjectValue(payload, 'auth_context');
+  const loginContext = getObjectValue(payload, 'openclaw_auth');
+
+  return (
+    authContext.username ||
+    metadata.username ||
+    loginContext.username ||
+    payload.openclaw_username ||
+    payload.user ||
+    ''
+  ).trim();
+}
+
+function resolveOpenClawRequestPassword(payload = {}) {
+  const loginContext = getObjectValue(payload, 'openclaw_auth');
+
+  return String(loginContext.password || payload.openclaw_password || '').trim();
+}
+
+function getOpenClawChatCompletionsUrl() {
+  const normalizedBaseUrl = OPENCLAW_BASE_URL.replace(/\/+$/, '');
+
+  if (!normalizedBaseUrl) {
+    return '';
+  }
+
+  if (/\/v1\/chat\/completions$/i.test(normalizedBaseUrl)) {
+    return normalizedBaseUrl;
+  }
+
+  if (/\/v1$/i.test(normalizedBaseUrl)) {
+    return `${normalizedBaseUrl}/chat/completions`;
+  }
+
+  return `${normalizedBaseUrl}/v1/chat/completions`;
+}
+
+function resolveOpenClawModel(value) {
+  const raw = String(value || '').trim();
+  if (!raw || normalizeModelName(raw) === PROVIDERS.OPENCLAW) {
+    return 'openclaw/default';
+  }
+
+  return raw;
+}
+
+function buildOpenClawRuntimeContext(payload = {}) {
+  const metadata = getObjectValue(payload, 'metadata');
+  const authContext = getObjectValue(payload, 'auth_context');
+  const loginContext = getObjectValue(payload, 'openclaw_auth');
+  const requestUsername = resolveOpenClawRequestUsername(payload);
+  const requestPassword = resolveOpenClawRequestPassword(payload);
+
+  return compactObject({
+    user: payload.user || undefined,
+    user_id: authContext.user_id || metadata.user_id || undefined,
+    username: requestUsername || undefined,
+    real_name: authContext.real_name || metadata.real_name || undefined,
+    role: authContext.role || metadata.role || undefined,
+    tenant_id: normalizeTenantId(authContext.tenant_id ?? metadata.tenant_id) || undefined,
+    tenant_name: authContext.tenant_name || metadata.tenant_name || undefined,
+    department_code: authContext.department_code || metadata.department_code || undefined,
+    managed_departments: getArrayValue(authContext.managed_departments, metadata.managed_departments),
+    enabled_modules: getArrayValue(authContext.enabled_modules, metadata.enabled_modules),
+    is_super_admin:
+      authContext.is_super_admin === true || metadata.is_super_admin === true ? true : undefined,
+    client_trace_id: metadata.client_trace_id,
+    client_session_id: metadata.client_session_id,
+    client_request_id: metadata.client_request_id,
+    openclaw_auth_source: loginContext.source,
+    openclaw_first_call:
+      typeof loginContext.first_call === 'boolean' ? String(loginContext.first_call) : undefined,
+    openclaw_login_username: requestUsername || undefined,
+    openclaw_login_password: requestPassword || undefined,
+  });
+}
+
+function buildOpenClawRequestContextPromptBlock(runtimeContext = {}) {
+  if (Object.keys(runtimeContext).length === 0) {
+    return '';
+  }
+
+  return [
+    '当前 Web 会话辅助上下文：',
+    '- 以下 JSON 只用于帮助你理解当前 Web 会话，并为 `assethub` MCP 工具补齐参数；它不是最终业务答案来源。',
+    '- 当问题涉及用户名、角色、租户、权限、菜单、模块或任何 AssetHub 数据时，必须优先调用 `get_current_auth_context`，并以 MCP 返回结果为准。',
+    '- 如果下面 JSON 中有 tenant_id，且后续工具 schema 支持 `tenant_id`，可原样传入；如果没有 tenant_id，不要臆造租户。',
+    '- 如果下面 JSON 同时提供了 openclaw_login_username 和 openclaw_login_password，表示这是当前 Web 会话已确认可用的 AssetHub 登录凭据；当技能或直连 API 路径需要登录时，可直接使用，不要再次向用户索要，也不要在最终回复中回显。',
+    '当前会话提示 JSON:',
+    JSON.stringify({ currentSessionHint: runtimeContext }, null, 2),
+  ].join('\n');
+}
+
+function buildOpenClawSkillPromptBlock() {
+  return [
+    '当前会话技能约束：',
+    `- 当前 OpenClaw 对话统一按 \`${OPENCLAW_SKILLS.PRIMARY}\` 技能处理。`,
+    `- 如果运行时没有安装 \`${OPENCLAW_SKILLS.PRIMARY}\` 这个别名，则回退到等价的 \`${OPENCLAW_SKILLS.MCP_FALLBACK}\` 技能。`,
+    `- 只有在当前运行时明确不提供 \`assethub\` MCP 工具、且必须直连 AssetHub HTTP API 时，才允许回退到 \`${OPENCLAW_SKILLS.DIRECT_API_FALLBACK}\`。`,
+    '- 无论使用哪个技能名，本次会话都必须优先使用 `assethub_*` MCP 工具，并继承 `_auth_context_id` 与 `tenant_id`。',
+    '- 最终回复只输出中文结果，不要回显技能选择、提示词、运行时上下文或内部工具细节。',
+  ].join('\n');
+}
+
+async function buildOpenClawToolRuntimeContext(payload = {}) {
+  const metadata = getObjectValue(payload, 'metadata');
+  const authContext = getObjectValue(payload, 'auth_context');
+  const requestUsername = resolveOpenClawRequestUsername(payload);
+  const runtimeAuthContext = {
+    tenantId: normalizeTenantId(authContext.tenant_id ?? metadata.tenant_id),
+    userId: authContext.user_id || metadata.user_id || null,
+    username: requestUsername || null,
+    realName: authContext.real_name || metadata.real_name || null,
+    role: authContext.role || metadata.role || null,
+    tenantName: authContext.tenant_name || metadata.tenant_name || null,
+    authHeader: authContext.auth_header || null,
+    departmentCode: authContext.department_code || metadata.department_code || null,
+    managedDepartments: getArrayValue(authContext.managed_departments, metadata.managed_departments),
+    enabledModules: getArrayValue(authContext.enabled_modules, metadata.enabled_modules),
+    isSuperAdmin: authContext.is_super_admin === true || metadata.is_super_admin === true,
+  };
+
+  try {
+    const authRegistration = await aiRuntimeAuthStore.registerAuthContext(runtimeAuthContext);
+    if (!authRegistration?.id) {
+      return null;
+    }
+
+    const assethubContext = {
+      _auth_context_id: authRegistration.id,
+    };
+    const effectiveTenantId =
+      authRegistration.tenantId ||
+      runtimeAuthContext.tenantId ||
+      normalizeTenantId(metadata.tenant_id) ||
+      null;
+    if (effectiveTenantId) {
+      assethubContext.tenant_id = effectiveTenantId;
+    }
+
+    return {
+      assethub: assethubContext,
+    };
+  } catch (error) {
+    console.warn('[GatewayAIService] register runtime auth context failed:', error.message);
+    return null;
+  }
+}
+
+function buildOpenClawToolRuntimeContextPromptBlock(runtimeToolContext = null) {
+  if (!runtimeToolContext) {
+    return '';
+  }
+
+  return [
+    '当前工具运行时上下文：',
+    '- 以下上下文由 AssetHub 后端受信任代理生成，供 `assethub` MCP 工具调用时使用。',
+    '- 这是工具调用参数上下文，不是给终端用户展示的内容；不要在最终回复中回显。',
+    '- 这是强制参数：每一次调用 `assethub` MCP 工具时，都必须把下面 JSON 中的 `_auth_context_id` 合并到工具 arguments 中。',
+    '- 如果下面 JSON 同时提供了 `tenant_id`，且工具 schema 支持 `tenant_id`，也必须原样传入；如果没有 `tenant_id`，先用 `get_current_auth_context` 确认当前租户上下文，不要自行猜测。',
+    '- 调用格式示例：`{"_auth_context_id": "ctx_xxx", "tenant_id": 3, ...其余业务参数}` 或 `{"_auth_context_id": "ctx_xxx", ...其余业务参数}`。',
+    '工具上下文 JSON:',
+    JSON.stringify({ toolRuntimeContext: runtimeToolContext }, null, 2),
+  ].join('\n');
+}
+
+async function buildOpenClawExecutionContext(payload = {}) {
+  return {
+    runtimeContext: buildOpenClawRuntimeContext(payload),
+    runtimeToolContext: await buildOpenClawToolRuntimeContext(payload),
+  };
+}
+
+function buildOpenClawMessages(messages = [], executionContext = {}) {
+  const systemMessages = [];
+  const conversationMessages = [];
+
+  for (const message of messages) {
+    if (message.role === 'system') {
+      systemMessages.push(message);
+      continue;
+    }
+
+    conversationMessages.push(message);
+  }
+
+  systemMessages.push({
+    role: 'system',
+    content: buildOpenClawSkillPromptBlock(),
+  });
+
+  const requestContextPrompt = buildOpenClawRequestContextPromptBlock(executionContext.runtimeContext);
+  if (requestContextPrompt) {
+    systemMessages.push({
+      role: 'system',
+      content: requestContextPrompt,
+    });
+  }
+
+  const toolRuntimePrompt = buildOpenClawToolRuntimeContextPromptBlock(
+    executionContext.runtimeToolContext,
+  );
+  if (toolRuntimePrompt) {
+    systemMessages.push({
+      role: 'system',
+      content: toolRuntimePrompt,
+    });
+  }
+
+  return [...systemMessages, ...conversationMessages];
+}
+
+async function buildOpenClawChatRequestBody(payload = {}, messages = [], stream = false) {
+  const executionContext = await buildOpenClawExecutionContext(payload);
+  const sessionId = createOpenClawSessionId(payload);
+  const requestUsername = resolveOpenClawRequestUsername(payload);
+  const requestPassword = resolveOpenClawRequestPassword(payload);
+
+  return compactObject({
+    model: resolveOpenClawModel(payload.model),
+    stream: Boolean(stream),
+    messages: buildOpenClawMessages(messages, executionContext),
+    max_tokens: payload.max_tokens,
+    temperature: payload.temperature,
+    top_p: payload.top_p,
+    presence_penalty: payload.presence_penalty,
+    frequency_penalty: payload.frequency_penalty,
+    stop: payload.stop,
+    user: sessionId,
+    username: requestUsername || undefined,
+    password: requestPassword || undefined,
+  });
+}
+
+async function requestOpenClawChatCompletion(body = {}, options = {}) {
+  if (!mayCallOpenClaw()) {
+    throw new Error('OpenClaw 助手未启用(OPENCLAW_ENABLED/GATEWAY_BASE_URL)');
+  }
+
+  const url = getOpenClawChatCompletionsUrl();
+  const response = await axios.post(url, body, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENCLAW_TOKEN}`,
+    },
+    timeout: OPENCLAW_TIMEOUT,
+    ...options,
+  });
+
+  return response;
+}
+
+function toGatewayError(error, fallbackMessage) {
+  const responseData = error?.response?.data;
+  const responseError =
+    extractText(responseData?.error) || extractText(responseData?.message) || extractText(responseData);
+  const stderrText = extractText(error?.stderr).trim();
+  const stdoutText = extractText(error?.stdout).trim();
+
+  return {
+    error: responseError || stderrText || stdoutText || error?.message || fallbackMessage,
+    detail: {
+      code: error?.code || error?.response?.status || null,
+      signal: error?.signal || null,
+      stderr: stderrText || null,
+      stdout: stdoutText || null,
+      response: responseData || null,
+    },
+  };
+}
+
+async function createOpenClawChatCompletion(payload = {}, gatewayAPI) {
+  if (!mayCallOpenClaw()) {
+    return {
+      success: false,
+      error: 'OpenClaw 助手未启用(OPENCLAW_ENABLED/GATEWAY_BASE_URL)',
+    };
+  }
+
+  if (!OPENCLAW_TOKEN) {
+    return {
+      success: false,
+      error: 'OpenClaw Gateway Token 未配置',
+    };
+  }
+
+  const messages = gatewayAPI.sanitizeMessages(payload.messages);
+  if (messages.length === 0) {
+    return {
+      success: false,
+      error: 'messages不能为空',
+    };
+  }
+
+  const requestBody = await buildOpenClawChatRequestBody(payload, messages, false);
+  const requestUrl = getOpenClawChatCompletionsUrl();
+
+  try {
+    console.log('Gateway API - OpenClaw chat.completions:', {
+      url: requestUrl,
+      model: requestBody.model,
+      stream: false,
+      sessionKey: requestBody.user || null,
+      username: requestBody.username || null,
+      messageCount: Array.isArray(requestBody.messages) ? requestBody.messages.length : 0,
+      systemMessageCount: Array.isArray(requestBody.messages)
+        ? requestBody.messages.filter(message => message.role === 'system').length
+        : 0,
+      hasLegacyOpenClawUsername: Boolean(payload.openclaw_username),
+      hasPassword: Boolean(payload.openclaw_password),
+      hasAuth: Boolean(payload.openclaw_auth),
+      hasToolRuntimeContext: Array.isArray(requestBody.messages)
+        ? requestBody.messages.some(
+            message =>
+              message.role === 'system' && String(message.content || '').includes('"toolRuntimeContext"'),
+          )
+        : false,
+      promptPreview:
+        requestBody.messages
+          ?.filter(message => message.role === 'user')
+          .map(message => message.content)
+          .join('\n')
+          .slice(0, 100) || '',
+    });
+
+    const response = await requestOpenClawChatCompletion(requestBody);
+    const responseData = response?.data;
+    const reply = sanitizeAssistantReply(responseData);
+
+    if (!reply) {
+      return {
+        success: false,
+        error: 'OpenClaw 返回空内容',
+        detail: responseData || null,
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        ...(responseData && typeof responseData === 'object' ? responseData : {}),
+        id:
+          responseData?.id ||
+          `chatcmpl_openclaw_${Date.now()}`,
+        object: responseData?.object || 'chat.completion',
+        created: responseData?.created || Math.floor(Date.now() / 1000),
+        model: responseData?.model || requestBody.model,
+        provider: PROVIDERS.OPENCLAW,
+      },
+    };
+  } catch (error) {
+    const gatewayError = toGatewayError(error, 'OpenClaw 调用失败');
+    return {
+      success: false,
+      error: gatewayError.error,
+      detail: gatewayError.detail,
+    };
+  }
+}
+
+async function createOpenClawStreamingChatCompletion(payload = {}, gatewayAPI) {
+  if (!mayCallOpenClaw()) {
+    return {
+      success: false,
+      error: 'OpenClaw 助手未启用(OPENCLAW_ENABLED/GATEWAY_BASE_URL)',
+    };
+  }
+
+  if (!OPENCLAW_TOKEN) {
+    return {
+      success: false,
+      error: 'OpenClaw Gateway Token 未配置',
+    };
+  }
+
+  const messages = gatewayAPI.sanitizeMessages(payload.messages);
+  if (messages.length === 0) {
+    return {
+      success: false,
+      error: 'messages不能为空',
+    };
+  }
+
+  const requestBody = await buildOpenClawChatRequestBody(payload, messages, true);
+  const requestUrl = getOpenClawChatCompletionsUrl();
+
+  try {
+    console.log('Gateway API - OpenClaw stream chat.completions:', {
+      url: requestUrl,
+      model: requestBody.model,
+      stream: true,
+      sessionKey: requestBody.user || null,
+      username: requestBody.username || null,
+      messageCount: Array.isArray(requestBody.messages) ? requestBody.messages.length : 0,
+      systemMessageCount: Array.isArray(requestBody.messages)
+        ? requestBody.messages.filter(message => message.role === 'system').length
+        : 0,
+    });
+
+    const response = await requestOpenClawChatCompletion(requestBody, {
+      responseType: 'stream',
+    });
+
+    return {
+      success: true,
+      stream: response.data,
+      headers: response.headers || {},
+      model: requestBody.model,
+      provider: PROVIDERS.OPENCLAW,
+    };
+  } catch (error) {
+    const gatewayError = toGatewayError(error, 'OpenClaw 流式调用失败');
+    return {
+      success: false,
+      error: gatewayError.error,
+      detail: gatewayError.detail,
+    };
+  }
+}
+
+async function createClaudeChatCompletion(payload = {}, gatewayAPI, maxRetries = 1, retryIntervalMs = 800) {
+  if (!mayCallClaudeCode()) {
+    return {
+      success: false,
+      error: '本地 Claude Code 助手未启用(CLAUDE_CODE_ENABLED=false)',
+    };
+  }
+
+  const messages = gatewayAPI.sanitizeMessages(payload.messages);
+  if (messages.length === 0) {
+    return {
+      success: false,
+      error: 'messages不能为空',
+    };
+  }
+
+  const prompt = buildClaudePrompt(messages);
+  const systemPrompt = buildSystemPrompt(messages);
+  const model = resolveClaudeModel(payload.model);
+  const attempts = Math.max(1, Number(maxRetries) || 1);
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const result = await executeClaudeWithFallbacks({
+        prompt,
+        systemPrompt,
+        model,
+      });
+      const reply = gatewayAPI.normalizeReply(result.stdout);
+
+      if (!reply) {
+        return {
+          success: false,
+          error: result.stderr?.trim() || 'Claude Code 返回空内容',
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          id: `chatcmpl_claude_${Date.now()}`,
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: model || DEFAULT_MODEL,
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: reply,
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          provider: PROVIDERS.CLAUDE_CODE,
+          command: result.command,
+        },
+      };
+    } catch (error) {
+      const isLastAttempt = attempt >= attempts;
+      const gatewayError = toGatewayError(error, 'Claude Code 调用失败');
+      let message = gatewayError.error;
+
+      if (error?.killed || error?.signal === 'SIGTERM') {
+        message = `Claude Code 调用超时（>${CLAUDE_CODE_TIMEOUT}ms）`;
+      } else if (error?.code === 'ENOENT') {
+        message = '未找到本地 Claude Code CLI，请确认 `claude` 命令可用';
+      }
+
+      if (isLastAttempt) {
+        return {
+          success: false,
+          error: message,
+          detail: gatewayError.detail,
+        };
+      }
+
+      if (retryIntervalMs > 0) {
+        await sleep(retryIntervalMs);
+      }
+    }
+  }
+
+  return {
+    success: false,
+    error: 'Claude Code 调用失败',
+  };
+}
+
+const gatewayAPI = {
+  sanitizeMessages(messages) {
+    if (!Array.isArray(messages)) {
+      return [];
+    }
+
+    return messages
+      .map(item => ({
+        role: String(item?.role || '').trim(),
+        content: extractText(item?.content).trim(),
+      }))
+      .filter(item => item.role && item.content);
+  },
+
+  normalizeReply(payload) {
+    return sanitizeAssistantReply(payload);
+  },
+
+  getProviderForModel,
+
+  resolveProvider,
+
+  async createChatCompletion(payload = {}, maxRetries = 1, retryIntervalMs = 800) {
+    const provider = resolveProvider(payload.model);
+
+    if (provider === PROVIDERS.OPENCLAW) {
+      return createOpenClawChatCompletion(payload, this);
+    }
+
+    return createClaudeChatCompletion(payload, this, maxRetries, retryIntervalMs);
+  },
+
+  async createStreamingChatCompletion(payload = {}) {
+    const provider = resolveProvider(payload.model);
+
+    if (provider === PROVIDERS.OPENCLAW) {
+      return createOpenClawStreamingChatCompletion(payload, this);
+    }
+
+    return {
+      success: false,
+      error: '本地 Claude Code 模式暂不支持流式代理',
+    };
+  },
+
+  sendMessage(message, options = {}) {
+    const provider = options.provider || CONFIGURED_GATEWAY_PROVIDER;
+    if (provider !== PROVIDERS.OPENCLAW) {
+      return Promise.reject(new Error(`本地 Claude Code 模式不支持 OpenClaw 对话代理接口: ${message || ''}`));
+    }
+
+    return this.createChatCompletion({
+      model: PROVIDERS.OPENCLAW,
+      messages: [{ role: 'user', content: message }],
+      session_id: options.sessionId,
+      openclaw_username: options.openclaw_username,
+      openclaw_password: options.openclaw_password,
+      openclaw_auth: options.openclaw_auth,
+      user: options.user,
+    }).then(result => {
+      if (!result.success) {
+        throw new Error(result.error || 'OpenClaw 对话代理调用失败');
+      }
+
+      return {
+        ok: true,
+        id: result.data?.id || null,
+        reply: this.normalizeReply(result.data),
+      };
+    });
+  },
+
+  getReply(runId, options = {}) {
+    const provider = options.provider || CONFIGURED_GATEWAY_PROVIDER;
+    if (provider !== PROVIDERS.OPENCLAW) {
+      return Promise.reject(new Error(`本地 Claude Code 模式不支持查询 OpenClaw 会话结果: ${runId || ''}`));
+    }
+
+    return Promise.reject(new Error('OpenClaw OpenAI 兼容模式不再支持 runId 轮询，请改用 createChatCompletion'));
+  },
+
+  async chatWithAI(message, maxRetries = 1, pollInterval = 0) {
+    const result = await this.createChatCompletion(
+      {
+        model: CONFIGURED_GATEWAY_PROVIDER,
+        messages: [{ role: 'user', content: message }],
+      },
+      maxRetries,
+      pollInterval,
+    );
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error,
+      };
+    }
+
+    return {
+      success: true,
+      reply: this.normalizeReply(result.data),
+      runId: result.data?.runId || result.data?.id || null,
+    };
+  },
+
+  getConfig() {
+    const claudeConfig = {
+      enabled: mayCallClaudeCode(),
+      provider: PROVIDERS.CLAUDE_CODE,
+      commandCandidates: getClaudeCommandCandidates(),
+      workdir: CLAUDE_CODE_WORKDIR,
+      timeoutMs: CLAUDE_CODE_TIMEOUT,
+      model: CLAUDE_CODE_MODEL || DEFAULT_MODEL,
+    };
+    const openClawConfig = {
+      enabled: mayCallOpenClaw(),
+      provider: PROVIDERS.OPENCLAW,
+      baseUrl: OPENCLAW_BASE_URL,
+      chatCompletionsUrl: getOpenClawChatCompletionsUrl(),
+      hasToken: Boolean(OPENCLAW_TOKEN),
+      timeoutMs: OPENCLAW_TIMEOUT,
+      defaultModel: resolveOpenClawModel(PROVIDERS.OPENCLAW),
+      transport: 'openai-chat-completions',
+    };
+
+    return {
+      enabled: claudeConfig.enabled || openClawConfig.enabled,
+      provider: CONFIGURED_GATEWAY_PROVIDER,
+      defaultProvider: CONFIGURED_GATEWAY_PROVIDER,
+      commandCandidates: claudeConfig.commandCandidates,
+      workdir: claudeConfig.workdir,
+      timeoutMs: claudeConfig.timeoutMs,
+      model: claudeConfig.model,
+      providers: {
+        [PROVIDERS.CLAUDE_CODE]: claudeConfig,
+        [PROVIDERS.OPENCLAW]: openClawConfig,
+      },
+    };
+  },
+};
+
+module.exports = gatewayAPI;

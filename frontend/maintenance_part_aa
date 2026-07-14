@@ -1,0 +1,1000 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../config/database');
+const { authenticate } = require('../middleware/auth');
+const { addTenantFilter, getTenantId } = require('../middleware/tenant-filter');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { fileSecurity } = require('../middleware/fileSecurity');
+
+// 设置文件存储
+const storage = multer.diskStorage({
+  destination(req, file, cb) {
+    const uploadPath = path.join(__dirname, '../uploads/maintenance-attachments');
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    cb(null, uploadPath);
+  },
+  filename(req, file, cb) {
+    // 生成更友好的文件名：维护日志ID-时间戳-随机数.扩展名
+    const { id } = req.params;
+    const timestamp = Date.now();
+    const random = Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    const baseName = path
+      .basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
+    const fileName = `log-${id}-${timestamp}-${random}${ext}`;
+    cb(null, fileName);
+  },
+});
+
+// 文件过滤器：只允许图片和常见文档类型
+const fileFilter = (req, file, cb) => {
+  const allowedMimes = [
+    // 图片类型
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/bmp',
+    // 文档类型
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+  ];
+
+  if (allowedMimes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`不支持的文件类型: ${file.mimetype}。只支持图片和常见文档格式。`), false);
+  }
+};
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB
+    files: 10, // 最多10个文件
+  },
+  fileFilter,
+});
+
+// ============================================
+// 维护日志记录相关接口
+// ============================================
+
+// 获取维护日志列表
+router.get('/logs', authenticate, async (req, res) => {
+  try {
+    const {
+      page = 1,
+      pageSize = 20,
+      asset_code,
+      maintenance_type,
+      status,
+      start_date,
+      end_date,
+      keyword,
+    } = req.query;
+    const offset = (page - 1) * pageSize;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    // 添加租户过滤
+    const tenantFilter = addTenantFilter(req, 'ml');
+    whereClause += tenantFilter.whereClause;
+    params.push(...tenantFilter.params);
+
+    // 根据用户的管理科室过滤资产
+    // 系统管理员可以看到所有维护日志
+    if (req.user.role !== 'super_admin' && req.user.role !== 'system_admin') {
+      // 非系统管理员需要根据管理科室过滤
+      if (
+        req.user.managed_departments &&
+        Array.isArray(req.user.managed_departments) &&
+        req.user.managed_departments.length > 0
+      ) {
+        try {
+          // 检查是否有所有科室权限
+          if (req.user.managed_departments.includes('*')) {
+            // 拥有所有科室权限，不需要过滤
+          } else {
+            // 从user_managed_departments获取的是department_code，需要查询科室名称
+            const placeholders = req.user.managed_departments.map(() => '?').join(',');
+            const [deptRows] = await db.execute(
+              `SELECT department_name FROM departments WHERE department_code IN (${placeholders})`,
+              req.user.managed_departments
+            );
+
+            const deptNames = deptRows.map(row => row.department_name);
+
+            if (deptNames.length > 0) {
+              const deptPlaceholders = deptNames.map(() => '?').join(',');
+              whereClause += ` AND EXISTS (
+                SELECT 1 FROM assets a
+                WHERE a.asset_code = ml.asset_code
+                AND (a.department IN (${deptPlaceholders}) OR a.department_new IN (${deptPlaceholders}))
+              )`;
+              params.push(...deptNames, ...deptNames);
+            }
+          }
+        } catch (deptError) {
+          console.error('查询管理科室失败:', deptError);
+          // 出错时不过滤，允许查看所有
+        }
+      }
+      // 如果没有管理科室设置，允许查看所有
+    }
+
+    if (asset_code) {
+      whereClause += ' AND ml.asset_code LIKE ?';
+      params.push(`%${asset_code}%`);
+    }
+    if (maintenance_type) {
+      whereClause += ' AND ml.maintenance_type = ?';
+      params.push(maintenance_type);
+    }
+    if (status) {
+      whereClause += ' AND ml.status = ?';
+      params.push(status);
+    }
+    if (start_date) {
+      whereClause += ' AND ml.maintenance_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND ml.maintenance_date <= ?';
+      params.push(end_date);
+    }
+    if (keyword) {
+      whereClause +=
+        ' AND (ml.asset_code LIKE ? OR ml.asset_name LIKE ? OR ml.maintenance_person LIKE ?)';
+      const keywordParam = `%${keyword}%`;
+      params.push(keywordParam, keywordParam, keywordParam);
+    }
+
+    // 获取总数
+    const [countResult] = await db.execute(
+      `SELECT COUNT(*) as total FROM maintenance_logs ml ${whereClause}`,
+      params
+    );
+    const { total } = countResult[0];
+
+    // 获取数据
+    const [rows] = await db.execute(
+      `SELECT ml.*, a.department, a.location
+       FROM maintenance_logs ml
+       LEFT JOIN assets a ON ml.asset_code = a.asset_code
+       ${whereClause}
+       ORDER BY ml.maintenance_date DESC, ml.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, parseInt(pageSize), offset]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error('获取维护日志列表失败:', error);
+    console.error('错误堆栈:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: '获取维护日志列表失败',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    });
+  }
+});
+
+// 创建维护日志
+router.post('/logs', authenticate, async (req, res) => {
+  try {
+    const {
+      asset_code,
+      maintenance_type,
+      maintenance_date,
+      maintenance_person,
+      maintenance_content,
+      maintenance_cost,
+      parts_replaced,
+      next_maintenance_date,
+      status,
+      remark,
+      maintenance_duration,
+      maintenance_location,
+      maintenance_method,
+      supplier_name,
+      warranty_info,
+      quality_check,
+      quality_check_person,
+      quality_check_date,
+    } = req.body;
+
+    if (!asset_code || !maintenance_type || !maintenance_date || !maintenance_person) {
+      return res
+        .status(400)
+        .json({ success: false, message: '资产编号、维护类型、维护日期和维护人员不能为空' });
+    }
+
+    // 获取资产信息（需要验证资产属于同一租户）
+    const assetTenantFilter = addTenantFilter(req, 'a');
+    const [assets] = await db.execute(
+      `SELECT a.id, a.asset_code, a.asset_name FROM assets a WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
+      [asset_code, ...assetTenantFilter.params]
+    );
+
+    if (assets.length === 0) {
+      return res.status(404).json({ success: false, message: '资产不存在' });
+    }
+
+    const asset = assets[0];
+    const createdBy = req.user.real_name || req.user.username || '系统管理员';
+    const tenantId = getTenantId(req);
+
+    const [result] = await db.execute(
+      `INSERT INTO maintenance_logs (
+        tenant_id, asset_code, asset_name, maintenance_type, maintenance_method,
+        maintenance_date, maintenance_person, maintenance_location,
+        maintenance_content, maintenance_cost, maintenance_duration,
+        supplier_name, parts_replaced, warranty_info,
+        next_maintenance_date, status,
+        quality_check, quality_check_person, quality_check_date,
+        remark, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        asset.asset_code,
+        asset.asset_name,
+        maintenance_type,
+        maintenance_method || null,
+        maintenance_date,
+        maintenance_person,
+        maintenance_location || null,
+        maintenance_content || null,
+        maintenance_cost || 0,
+        maintenance_duration || null,
+        supplier_name || null,
+        parts_replaced || null,
+        warranty_info || null,
+        next_maintenance_date || null,
+        status || '已完成',
+        quality_check || '待检查',
+        quality_check_person || null,
+        quality_check_date || null,
+        remark || null,
+        createdBy,
+      ]
+    );
+
+    // 如果维护类型是故障维修，更新资产状态为维修
+    if (maintenance_type === '故障维修' && status === '进行中') {
+      await db.execute('UPDATE assets SET status = ? WHERE asset_code = ?', ['维修', asset_code]);
+    }
+
+    res.json({
+      success: true,
+      message: '维护日志创建成功',
+      data: { id: result.insertId },
+    });
+  } catch (error) {
+    console.error('创建维护日志失败:', error);
+    res.status(500).json({ success: false, message: '创建维护日志失败', error: error.message });
+  }
+});
+
+// 更新维护日志
+router.put('/logs/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      maintenance_type,
+      maintenance_date,
+      maintenance_person,
+      maintenance_content,
+      maintenance_cost,
+      parts_replaced,
+      next_maintenance_date,
+      status,
+      remark,
+      maintenance_duration,
+      maintenance_location,
+      maintenance_method,
+      supplier_name,
+      warranty_info,
+      quality_check,
+      quality_check_person,
+      quality_check_date,
+    } = req.body;
+
+    const updateFields = [];
+    const updateValues = [];
+
+    if (maintenance_type !== undefined) {
+      updateFields.push('maintenance_type = ?');
+      updateValues.push(maintenance_type);
+    }
+    if (maintenance_date !== undefined) {
+      updateFields.push('maintenance_date = ?');
+      updateValues.push(maintenance_date);
+    }
+    if (maintenance_person !== undefined) {
+      updateFields.push('maintenance_person = ?');
+      updateValues.push(maintenance_person);
+    }
+    if (maintenance_content !== undefined) {
+      updateFields.push('maintenance_content = ?');
+      updateValues.push(maintenance_content);
+    }
+    if (maintenance_cost !== undefined) {
+      updateFields.push('maintenance_cost = ?');
+      updateValues.push(maintenance_cost);
+    }
+    if (parts_replaced !== undefined) {
+      updateFields.push('parts_replaced = ?');
+      updateValues.push(parts_replaced);
+    }
+    if (next_maintenance_date !== undefined) {
+      updateFields.push('next_maintenance_date = ?');
+      updateValues.push(next_maintenance_date);
+    }
+    if (status !== undefined) {
+      updateFields.push('status = ?');
+      updateValues.push(status);
+    }
+    if (remark !== undefined) {
+      updateFields.push('remark = ?');
+      updateValues.push(remark);
+    }
+    if (maintenance_duration !== undefined) {
+      updateFields.push('maintenance_duration = ?');
+      updateValues.push(maintenance_duration);
+    }
+    if (maintenance_location !== undefined) {
+      updateFields.push('maintenance_location = ?');
+      updateValues.push(maintenance_location);
+    }
+    if (maintenance_method !== undefined) {
+      updateFields.push('maintenance_method = ?');
+      updateValues.push(maintenance_method);
+    }
+    if (supplier_name !== undefined) {
+      updateFields.push('supplier_name = ?');
+      updateValues.push(supplier_name);
+    }
+    if (warranty_info !== undefined) {
+      updateFields.push('warranty_info = ?');
+      updateValues.push(warranty_info);
+    }
+    if (quality_check !== undefined) {
+      updateFields.push('quality_check = ?');
+      updateValues.push(quality_check);
+    }
+    if (quality_check_person !== undefined) {
+      updateFields.push('quality_check_person = ?');
+      updateValues.push(quality_check_person);
+    }
+    if (quality_check_date !== undefined) {
+      updateFields.push('quality_check_date = ?');
+      updateValues.push(quality_check_date);
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: '没有要更新的字段' });
+    }
+
+    // 验证维护日志是否存在并验证租户
+    const tenantFilter = addTenantFilter(req, 'ml');
+    const [existing] = await db.execute(
+      `SELECT id FROM maintenance_logs ml WHERE ml.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '维护日志不存在' });
+    }
+
+    updateFields.push('updated_at = NOW()');
+    updateValues.push(id);
+
+    const [result] = await db.execute(
+      `UPDATE maintenance_logs ml SET ${updateFields.join(', ')} WHERE ml.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+      [...updateValues, ...tenantFilter.params]
+    );
+
+    res.json({ success: true, message: '维护日志更新成功' });
+  } catch (error) {
+    console.error('更新维护日志失败:', error);
+    res.status(500).json({ success: false, message: '更新维护日志失败', error: error.message });
+  }
+});
+
+// 删除维护日志
+router.delete('/logs/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 验证维护日志是否存在并验证租户
+    const tenantFilter = addTenantFilter(req, 'ml');
+    const [existing] = await db.execute(
+      `SELECT id FROM maintenance_logs ml WHERE ml.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '维护日志不存在' });
+    }
+
+    const [result] = await db.execute(
+      `DELETE ml FROM maintenance_logs ml WHERE ml.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '维护日志不存在' });
+    }
+
+    res.json({ success: true, message: '维护日志删除成功' });
+  } catch (error) {
+    console.error('删除维护日志失败:', error);
+    res.status(500).json({ success: false, message: '删除维护日志失败', error: error.message });
+  }
+});
+
+// ============================================
+// 维护计划模板相关接口
+// ============================================
+
+// 获取维护计划模板列表
+router.get('/templates', authenticate, async (req, res) => {
+  try {
+    const { page = 1, pageSize = 20, asset_type, brand, model, keyword } = req.query;
+    const offset = (page - 1) * pageSize;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    if (asset_type) {
+      whereClause += ' AND asset_type = ?';
+      params.push(asset_type);
+    }
+    if (brand) {
+      whereClause += ' AND brand = ?';
+      params.push(brand);
+    }
+    if (model) {
+      whereClause += ' AND model = ?';
+      params.push(model);
+    }
+    if (keyword) {
+      whereClause += ' AND (template_name LIKE ? OR maintenance_content LIKE ?)';
+      const keywordParam = `%${keyword}%`;
+      params.push(keywordParam, keywordParam);
+    }
+
+    // 获取总数
+    const [countResult] = await db.execute(
+      `SELECT COUNT(*) as total FROM maintenance_templates ${whereClause}`,
+      params
+    );
+    const { total } = countResult[0];
+
+    // 获取数据
+    const [rows] = await db.execute(
+      `SELECT * FROM maintenance_templates
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, parseInt(pageSize), offset]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error('获取维护计划模板列表失败:', error);
+    res.status(500).json({ success: false, message: '获取维护计划模板列表失败', error: error.message });
+  }
+});
+
+// 创建维护计划模板
+router.post('/templates', authenticate, async (req, res) => {
+  try {
+    const {
+      template_name,
+      asset_type,
+      brand,
+      model,
+      maintenance_items,
+      cycle_type,
+      cycle_value,
+      estimated_hours,
+      required_materials,
+      maintenance_content,
+      status,
+    } = req.body;
+
+    if (!template_name || !cycle_type || !cycle_value) {
+      return res.status(400).json({ success: false, message: '模板名称、周期类型和周期值不能为空' });
+    }
+
+    const [result] = await db.execute(
+      `INSERT INTO maintenance_templates (
+        template_name, asset_type, brand, model, maintenance_items,
+        cycle_type, cycle_value, estimated_hours, required_materials,
+        maintenance_content, status, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        template_name,
+        asset_type || null,
+        brand || null,
+        model || null,
+        maintenance_items ? JSON.stringify(maintenance_items) : null,
+        cycle_type,
+        cycle_value,
+        estimated_hours || null,
+        required_materials ? JSON.stringify(required_materials) : null,
+        maintenance_content || null,
+        status || '启用',
+        req.user.real_name || req.user.username,
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: '维护计划模板创建成功',
+      data: { id: result.insertId },
+    });
+  } catch (error) {
+    console.error('创建维护计划模板失败:', error);
+    res.status(500).json({ success: false, message: '创建维护计划模板失败', error: error.message });
+  }
+});
+
+// 更新维护计划模板
+router.put('/templates/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      template_name,
+      asset_type,
+      brand,
+      model,
+      maintenance_items,
+      cycle_type,
+      cycle_value,
+      estimated_hours,
+      required_materials,
+      maintenance_content,
+      status,
+    } = req.body;
+
+    const updateFields = [];
+    const updateValues = [];
+
+    if (template_name !== undefined) {
+      updateFields.push('template_name = ?');
+      updateValues.push(template_name);
+    }
+    if (asset_type !== undefined) {
+      updateFields.push('asset_type = ?');
+      updateValues.push(asset_type);
+    }
+    if (brand !== undefined) {
+      updateFields.push('brand = ?');
+      updateValues.push(brand);
+    }
+    if (model !== undefined) {
+      updateFields.push('model = ?');
+      updateValues.push(model);
+    }
+    if (maintenance_items !== undefined) {
+      updateFields.push('maintenance_items = ?');
+      updateValues.push(maintenance_items ? JSON.stringify(maintenance_items) : null);
+    }
+    if (cycle_type !== undefined) {
+      updateFields.push('cycle_type = ?');
+      updateValues.push(cycle_type);
+    }
+    if (cycle_value !== undefined) {
+      updateFields.push('cycle_value = ?');
+      updateValues.push(cycle_value);
+    }
+    if (estimated_hours !== undefined) {
+      updateFields.push('estimated_hours = ?');
+      updateValues.push(estimated_hours);
+    }
+    if (required_materials !== undefined) {
+      updateFields.push('required_materials = ?');
+      updateValues.push(required_materials ? JSON.stringify(required_materials) : null);
+    }
+    if (maintenance_content !== undefined) {
+      updateFields.push('maintenance_content = ?');
+      updateValues.push(maintenance_content);
+    }
+    if (status !== undefined) {
+      updateFields.push('status = ?');
+      updateValues.push(status);
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: '没有要更新的字段' });
+    }
+
+    updateFields.push('updated_at = NOW()');
+    updateValues.push(id);
+
+    const [result] = await db.execute(
+      `UPDATE maintenance_templates SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateValues
+    );
+
+    res.json({ success: true, message: '维护计划模板更新成功' });
+  } catch (error) {
+    console.error('更新维护计划模板失败:', error);
+    res.status(500).json({ success: false, message: '更新维护计划模板失败', error: error.message });
+  }
+});
+
+// 删除维护计划模板
+router.delete('/templates/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [result] = await db.execute(
+      'DELETE FROM maintenance_templates WHERE id = ?',
+      [id]
+    );
+
+    res.json({ success: true, message: '维护计划模板删除成功' });
+  } catch (error) {
+    console.error('删除维护计划模板失败:', error);
+    res.status(500).json({ success: false, message: '删除维护计划模板失败', error: error.message });
+  }
+});
+
+// 获取推荐的维护计划模板
+router.get('/templates/recommend', authenticate, async (req, res) => {
+  try {
+    const { asset_type, brand, model } = req.query;
+
+    if (!asset_type) {
+      return res.status(400).json({ success: false, message: '资产类型不能为空' });
+    }
+
+    let whereClause = 'WHERE status = ?';
+    const params = ['启用'];
+
+    // 按匹配程度排序：资产类型 + 品牌 + 型号 完全匹配 > 资产类型 + 品牌匹配 > 资产类型匹配
+    if (asset_type) {
+      whereClause += ' AND asset_type = ?';
+      params.push(asset_type);
+    }
+
+    // 优先匹配品牌和型号
+    const [templates] = await db.execute(
+      `SELECT * FROM maintenance_templates
+       ${whereClause}
+       ORDER BY
+         (CASE
+           WHEN (brand = ? AND model = ?) THEN 3
+           WHEN brand = ? THEN 2
+           ELSE 1
+         END) DESC
+       LIMIT 10`,
+      [...params, brand || '', model || '', brand || '']
+    );
+
+    // 解析JSON字段
+    const parsedTemplates = templates.map(template => {
+      if (template.maintenance_items) {
+        try {
+          template.maintenance_items = JSON.parse(template.maintenance_items);
+        } catch (e) {
+          template.maintenance_items = null;
+        }
+      }
+      if (template.required_materials) {
+        try {
+          template.required_materials = JSON.parse(template.required_materials);
+        } catch (e) {
+          template.required_materials = null;
+        }
+      }
+      return template;
+    });
+
+    res.json({ success: true, data: parsedTemplates });
+  } catch (error) {
+    console.error('获取推荐维护计划模板失败:', error);
+    res.status(500).json({ success: false, message: '获取推荐维护计划模板失败', error: error.message });
+  }
+});
+
+// ============================================
+// 预防性维护计划相关接口
+// ============================================
+
+// 获取预防性维护计划列表
+router.get('/plans', authenticate, async (req, res) => {
+  try {
+    const { page = 1, pageSize = 20, asset_code, status, keyword } = req.query;
+    const offset = (page - 1) * pageSize;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    // 添加租户过滤
+    const tenantFilter = addTenantFilter(req, 'pmp');
+    whereClause += tenantFilter.whereClause;
+    params.push(...tenantFilter.params);
+
+    // 根据用户的管理科室过滤资产
+    // 超级管理员和系统管理员（租户级）可以看到所有预防性维护计划
+    if (req.user.role !== 'super_admin' && req.user.role !== 'system_admin') {
+      // 非系统管理员需要根据管理科室过滤
+      if (
+        req.user.managed_departments &&
+        Array.isArray(req.user.managed_departments) &&
+        req.user.managed_departments.length > 0
+      ) {
+        try {
+          const placeholders = req.user.managed_departments.map(() => '?').join(',');
+          const [deptRows] = await db.execute(
+            `SELECT department_name FROM departments WHERE id IN (${placeholders})`,
+            req.user.managed_departments
+          );
+
+          if (deptRows.length > 0) {
+            const deptNames = deptRows.map(row => row.department_name);
+            const deptPlaceholders = deptNames.map(() => '?').join(',');
+            whereClause += ` AND EXISTS (
+              SELECT 1 FROM assets a
+              WHERE a.asset_code = pmp.asset_code
+              AND (a.department IN (${deptPlaceholders}) OR a.department_new IN (${deptPlaceholders}))
+            )`;
+            params.push(...deptNames, ...deptNames);
+          } else {
+            whereClause += ' AND 1=0';
+          }
+        } catch (deptError) {
+          console.error('查询管理科室失败:', deptError);
+          whereClause += ' AND 1=0';
+        }
+      } else {
+        whereClause += ' AND 1=0';
+      }
+    }
+
+    if (asset_code) {
+      whereClause += ' AND pmp.asset_code LIKE ?';
+      params.push(`%${asset_code}%`);
+    }
+    if (status) {
+      whereClause += ' AND pmp.status = ?';
+      params.push(status);
+    }
+    if (keyword) {
+      whereClause +=
+        ' AND (pmp.asset_code LIKE ? OR pmp.asset_name LIKE ? OR pmp.plan_name LIKE ?)';
+      const keywordParam = `%${keyword}%`;
+      params.push(keywordParam, keywordParam, keywordParam);
+    }
+
+    // 获取总数
+    const [countResult] = await db.execute(
+      `SELECT COUNT(*) as total FROM preventive_maintenance_plans pmp ${whereClause}`,
+      params
+    );
+    const { total } = countResult[0];
+
+    // 获取数据
+    const [rows] = await db.execute(
+      `SELECT pmp.*, a.department, a.location
+       FROM preventive_maintenance_plans pmp
+       LEFT JOIN assets a ON pmp.asset_code = a.asset_code
+       ${whereClause}
+       ORDER BY pmp.next_maintenance_date ASC, pmp.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, parseInt(pageSize), offset]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error('获取预防性维护计划列表失败:', error);
+    res
+      .status(500)
+      .json({ success: false, message: '获取预防性维护计划列表失败', error: error.message });
+  }
+});
+
+// 获取单个预防性维护计划详情
+router.get('/plans/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    // 添加租户过滤验证
+    const tenantFilter = addTenantFilter(req, 'pmp');
+    const [rows] = await db.execute(
+      `SELECT pmp.*, a.department, a.location, a.brand, a.model
+       FROM preventive_maintenance_plans pmp
+       LEFT JOIN assets a ON pmp.asset_code = a.asset_code
+       WHERE pmp.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '预防性维护计划不存在' });
+    }
+
+    const plan = rows[0];
+
+    // 解析JSON字段
+    if (plan.maintenance_items) {
+      try {
+        plan.maintenance_items = JSON.parse(plan.maintenance_items);
+      } catch (e) {
+        plan.maintenance_items = null;
+      }
+    }
+
+    if (plan.required_materials) {
+      try {
+        plan.required_materials = JSON.parse(plan.required_materials);
+      } catch (e) {
+        plan.required_materials = null;
+      }
+    }
+
+    // 转换布尔值
+    if (plan.auto_generate_workorder !== undefined) {
+      plan.auto_generate_workorder = Boolean(plan.auto_generate_workorder);
+    }
+
+    res.json({ success: true, data: plan });
+  } catch (error) {
+    console.error('获取预防性维护计划详情失败:', error);
+    res
+      .status(500)
+      .json({ success: false, message: '获取预防性维护计划详情失败', error: error.message });
+  }
+});
+
+// 创建预防性维护计划
+router.post('/plans', authenticate, async (req, res) => {
+  try {
+    console.log('========== 创建维护计划 ==========');
+    console.log('接收到的数据:', req.body);
+
+    const {
+      asset_code,
+      plan_name,
+      maintenance_type,
+      cycle_type,
+      cycle_value,
+      next_maintenance_date,
+      maintenance_content,
+      responsible_person,
+      remark,
+      template_id,
+      trigger_type,
+      maintenance_items,
+      required_materials,
+      estimated_hours,
+      auto_generate_workorder,
+      current_usage,
+      usage_threshold,
+    } = req.body;
+
+    if (!asset_code || !plan_name || !maintenance_type || !cycle_type || !cycle_value) {
+      console.log('验证失败 - 缺少必填字段:', {
+        asset_code: !!asset_code,
+        plan_name: !!plan_name,
+        maintenance_type: !!maintenance_type,
+        cycle_type: !!cycle_type,
+        cycle_value: !!cycle_value,
+      });
+      return res.status(400).json({ success: false, message: '必填字段不能为空' });
+    }
+
+    console.log('验证通过，所有必填字段都存在');
+    console.log('资产编号:', asset_code);
+    console.log('计划名称:', plan_name);
+    console.log('维护类型:', maintenance_type);
+    console.log('周期类型:', cycle_type);
+    console.log('周期值:', cycle_value);
+
+    // 获取资产信息（需要验证资产属于同一租户）
+    const assetTenantFilter = addTenantFilter(req, 'a');
+    const [assets] = await db.execute(
+      `SELECT a.id, a.asset_code, a.asset_name FROM assets a WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
+      [asset_code, ...assetTenantFilter.params]
+    );
+
+    if (assets.length === 0) {
+      return res.status(404).json({ success: false, message: '资产不存在' });
+    }
+
+    const asset = assets[0];
+    const createdBy = req.user.real_name || req.user.username || '系统管理员';
+    const tenantId = getTenantId(req);
+
+    // 如果没有指定下次维护日期，根据周期自动计算
+    let calculatedNextDate = next_maintenance_date;
+    if (!calculatedNextDate) {
+      const today = new Date();
+      const cycleValue = parseInt(cycle_value) || 1;
+
+      switch (cycle_type) {
+        case '按天':
+          today.setDate(today.getDate() + cycleValue);
+          break;
+        case '按周':
+          today.setDate(today.getDate() + cycleValue * 7);
+          break;
+        case '按月':
+          today.setMonth(today.getMonth() + cycleValue);
+          break;
+        case '按季度':
+          today.setMonth(today.getMonth() + cycleValue * 3);
+          break;
+        case '按年':
+          today.setFullYear(today.getFullYear() + cycleValue);
+          break;
+      }
+      calculatedNextDate = today.toISOString().split('T')[0];
+    }
+
+    // 构建插入字段和值
+    const insertFields = [
+      'tenant_id',
+      'asset_code',
+      'asset_name',
+      'plan_name',
+      'maintenance_type',
+      'cycle_type',
+      'cycle_value',
+      'next_maintenance_date',
+      'maintenance_content',
+      'responsible_person',
+      'status',
+      'remark',
+      'created_by',
+    ];
+    const insertValues = [
+      tenantId,
+      asset.asset_code,
+      asset.asset_name,
+      plan_name,
+      maintenance_type,
+      cycle_type,
+      cycle_value,

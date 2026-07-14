@@ -1,0 +1,81 @@
+# 资产管理系统 - 依赖项清单
+# 本项目使用 Node.js，依赖项通过 npm 安装
+# 安装命令: npm install
+
+# ============================================
+# 后端依赖 (backend/package.json)
+# ============================================
+# 安装后端依赖: cd backend && npm install
+
+# 生产依赖
+bcryptjs@^3.0.3
+body-parser@^1.20.2
+cors@^2.8.5
+dotenv@^16.3.1
+express@^4.18.2
+jsonwebtoken@^9.0.3
+multer@^2.0.2
+mysql2@^3.6.5
+openai@^6.15.0
+xlsx@^0.18.5
+
+# 开发依赖
+nodemon@^3.0.2
+
+# ============================================
+# 前端依赖 (frontend/package.json)
+# ============================================
+# 安装前端依赖: cd frontend && npm install
+
+# 生产依赖
+antd@^6.1.4
+axios@^1.13.2
+dayjs@^1.11.19
+react@^19.2.0
+react-dom@^19.2.0
+react-router-dom@^7.11.0
+
+# 开发依赖
+@eslint/js@^9.39.1
+@types/react@^19.2.5
+@types/react-dom@^19.2.3
+@vitejs/plugin-react@^5.1.1
+eslint@^9.39.1
+eslint-plugin-react-hooks@^7.0.1
+eslint-plugin-react-refresh@^0.4.24
+globals@^16.5.0
+vite@^7.2.4
+
+# ============================================
+# 系统要求
+# ============================================
+# Node.js: >= 16.0.0 (推荐 v18 或更高版本)
+# npm: >= 8.0.0
+# MySQL: >= 5.7 或 MySQL 8.0
+
+# ============================================
+# 快速安装
+# ============================================
+# 1. 安装后端依赖:
+#    cd backend && npm install
+#
+# 2. 安装前端依赖:
+#    cd frontend && npm install
+#
+# 3. 或使用启动脚本自动安装:
+#    ./start.sh (Linux/Mac)
+#    start.bat (Windows)
+
+# ============================================
+# 环境变量配置
+# ============================================
+# 后端需要配置 .env 文件，参考 backend/.env.example
+# 主要配置项:
+# - DB_HOST: 数据库主机
+# - DB_PORT: 数据库端口
+# - DB_USER: 数据库用户名
+# - DB_PASSWORD: 数据库密码
+# - DB_NAME: 数据库名称
+# - JWT_SECRET: JWT密钥
+# - PORT: 服务器端口 (默认: 3000)
+# - DASHSCOPE_API_KEY 或 OPENAI_API_KEY: AI服务密钥 (可选)

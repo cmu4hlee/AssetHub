@@ -1,0 +1,514 @@
+/* ============================================
+   AssetHost · Enterprise Select
+   Editorial split-screen · warm tonal palette
+   Adaptive grid (1 → 4+ items)
+   ============================================ */
+
+.enterprise-container {
+  /* Brand panel smaller, list panel gets more room */
+  grid-template-columns: 0.85fr 1.4fr;
+}
+
+.enterprise-form-panel {
+  align-items: stretch;
+  padding: 48px 40px;
+}
+
+.enterprise-form-wrapper {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  animation: formReveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+.enterprise-form-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.enterprise-form-header .login-form-title {
+  font-size: 30px;
+}
+
+.enterprise-form-header .login-form-title em {
+  font-family: var(--font-family);
+  font-style: italic;
+  font-weight: 500;
+  color: var(--primary-color);
+}
+
+/* ============================================
+   Adaptive grid · true auto-fit columns
+   - cards minimum width 260px → as many columns as fit
+   - 1 card → 1 column (centered, max 460)
+   - 2-3 cards → 2 columns
+   - 4-6 cards → 2 or 3 columns depending on width
+   - 7+ cards → 3 columns, page scrolls (cards keep full height)
+   ============================================ */
+.enterprise-grid {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  /* Auto-fill: as many 280px columns as fit, rest stretch */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.enterprise-grid > .enterprise-card {
+  /* Each card forms its own stacking context so hover lifts above neighbours */
+  position: relative;
+  z-index: 0;
+  min-width: 0;
+}
+
+.enterprise-grid > .enterprise-card:hover {
+  z-index: 2;
+}
+
+/* Single card → centered, narrower */
+.enterprise-grid--1 {
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+/* Many cards → cap at 3 columns */
+.enterprise-grid--many {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Tight two-column on medium panels */
+@media (max-width: 1300px) {
+  .enterprise-grid--many {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ============================================
+   Enterprise card
+   ============================================ */
+.enterprise-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-secondary);
+  border-radius: 14px;
+  cursor: default;
+  transition:
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0;
+  transform: translateY(12px);
+  animation: enterpriseCardIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  overflow: hidden;
+}
+
+@keyframes enterpriseCardIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Top accent bar reveals on hover */
+.enterprise-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #d97757 0%, #c4634a 100%);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 2;
+}
+
+.enterprise-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 100% 0%, rgba(217, 119, 87, 0.06) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.enterprise-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--primary-color-light);
+  box-shadow:
+    0 12px 28px rgba(26, 25, 24, 0.08),
+    0 4px 10px rgba(217, 119, 87, 0.08);
+}
+
+.enterprise-card:hover::before {
+  transform: scaleX(1);
+}
+
+.enterprise-card:hover::after {
+  opacity: 1;
+}
+
+.enterprise-card-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.enterprise-card-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #d97757 0%, #c4634a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 20px;
+  flex-shrink: 0;
+  box-shadow:
+    0 4px 12px rgba(217, 119, 87, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.enterprise-role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--font-family-heading);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.role--super {
+  background: rgba(217, 119, 87, 0.12);
+  color: #c4634a;
+  border-color: rgba(217, 119, 87, 0.25);
+}
+
+.role--system {
+  background: rgba(120, 140, 93, 0.14);
+  color: #5d6e48;
+  border-color: rgba(120, 140, 93, 0.28);
+}
+
+.role--asset {
+  background: rgba(212, 168, 67, 0.14);
+  color: #9a7c2c;
+  border-color: rgba(212, 168, 67, 0.3);
+}
+
+.role--department {
+  background: rgba(106, 155, 204, 0.12);
+  color: #3a6ea5;
+  border-color: rgba(106, 155, 204, 0.25);
+}
+
+.role--default {
+  background: rgba(148, 163, 184, 0.12);
+  color: #64748b;
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.enterprise-card-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.enterprise-card-name {
+  font-family: var(--font-family-heading);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.enterprise-card-code {
+  font-family: var(--font-family-heading);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  color: var(--primary-color);
+  text-transform: uppercase;
+}
+
+.enterprise-card-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+.enterprise-card-foot {
+  position: relative;
+  z-index: 1;
+}
+
+.enterprise-card-foot .ant-btn {
+  height: 42px;
+  border-radius: 10px;
+  font-family: var(--font-family-heading);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: linear-gradient(135deg, #d97757 0%, #c4634a 100%) !important;
+  border: none !important;
+  color: #fff !important;
+  box-shadow:
+    0 4px 14px rgba(217, 119, 87, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 1;
+}
+
+.enterprise-card-foot .ant-btn:hover {
+  background: linear-gradient(135deg, #e08a6d 0%, #d17557 100%) !important;
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 22px rgba(217, 119, 87, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.enterprise-card-foot .ant-btn:active {
+  transform: translateY(0);
+}
+
+/* ============================================
+   Footer actions
+   ============================================ */
+.enterprise-form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-secondary);
+  flex-wrap: wrap;
+}
+
+.enterprise-secondary-btn {
+  height: 44px;
+  padding: 0 20px !important;
+  border-radius: 10px !important;
+  border: 1.5px dashed var(--border-secondary) !important;
+  background: transparent !important;
+  font-family: var(--font-family-heading) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.4px !important;
+  color: var(--text-secondary) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.enterprise-secondary-btn:hover {
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+  background: rgba(217, 119, 87, 0.05) !important;
+}
+
+.enterprise-logout-btn {
+  height: 44px;
+  padding: 0 16px !important;
+  border-radius: 10px !important;
+  font-family: var(--font-family-heading) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--text-tertiary) !important;
+  transition: color 0.2s ease;
+}
+
+.enterprise-logout-btn:hover {
+  color: var(--primary-active) !important;
+  background: transparent !important;
+}
+
+/* ============================================
+   Join modal
+   ============================================ */
+.enterprise-modal .ant-modal-content {
+  padding: 28px 28px 24px !important;
+  border-radius: 16px !important;
+  background: var(--bg-primary) !important;
+  box-shadow:
+    0 24px 60px rgba(26, 25, 24, 0.14),
+    0 8px 24px rgba(26, 25, 24, 0.08) !important;
+}
+
+.enterprise-modal-head {
+  margin-bottom: 20px;
+}
+
+.enterprise-modal-title {
+  font-family: var(--font-family-heading);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  color: var(--text-primary);
+  margin: 8px 0 6px;
+}
+
+.enterprise-modal-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.enterprise-modal .ant-form-item-label > label {
+  font-family: var(--font-family-heading);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-secondary) !important;
+}
+
+.enterprise-modal .ant-input {
+  height: 46px;
+  border-radius: 10px !important;
+  border: 1.5px solid var(--border-secondary) !important;
+  background: var(--bg-secondary) !important;
+  font-family: var(--font-family-heading);
+  font-size: 18px !important;
+  letter-spacing: 4px;
+  text-align: center;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.enterprise-modal .ant-input:focus {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.1) !important;
+}
+
+/* ============================================
+   Dark theme
+   ============================================ */
+[data-theme="dark"] .enterprise-form-panel {
+  background: var(--bg-primary);
+}
+
+[data-theme="dark"] .enterprise-card {
+  background: var(--bg-secondary);
+  border-color: var(--border-secondary);
+}
+
+[data-theme="dark"] .enterprise-card:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--primary-color-light);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.35),
+    0 4px 10px rgba(217, 119, 87, 0.12);
+}
+
+[data-theme="dark"] .role--super {
+  background: rgba(217, 119, 87, 0.18);
+  color: #e5a59c;
+  border-color: rgba(217, 119, 87, 0.35);
+}
+
+[data-theme="dark"] .role--system {
+  background: rgba(120, 140, 93, 0.18);
+  color: #a8b894;
+  border-color: rgba(120, 140, 93, 0.4);
+}
+
+[data-theme="dark"] .role--asset {
+  background: rgba(212, 168, 67, 0.18);
+  color: #d4a843;
+  border-color: rgba(212, 168, 67, 0.4);
+}
+
+[data-theme="dark"] .role--department {
+  background: rgba(106, 155, 204, 0.18);
+  color: #6a9bcc;
+  border-color: rgba(106, 155, 204, 0.4);
+}
+
+[data-theme="dark"] .role--default {
+  background: rgba(148, 163, 184, 0.18);
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+@media (max-width: 1100px) {
+  .enterprise-container {
+    grid-template-columns: 1fr 1.6fr;
+  }
+}
+
+@media (max-width: 960px) {
+  .enterprise-container {
+    grid-template-columns: 1fr;
+  }
+
+  .enterprise-form-panel {
+    padding: 32px 24px;
+  }
+
+  .enterprise-form-wrapper {
+    margin-top: 32px;
+    max-width: 520px;
+  }
+
+  /* On mobile, single column for all variants */
+  .enterprise-grid,
+  .enterprise-grid--1,
+  .enterprise-grid--many {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .enterprise-form-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .enterprise-secondary-btn,
+  .enterprise-logout-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .enterprise-form-panel {
+    padding: 24px 20px;
+  }
+
+  .enterprise-form-header .login-form-title {
+    font-size: 24px;
+  }
+
+  .enterprise-card {
+    padding: 16px;
+  }
+
+  .enterprise-card-name {
+    font-size: 16px;
+  }
+}

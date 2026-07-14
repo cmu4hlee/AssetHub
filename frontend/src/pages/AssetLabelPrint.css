@@ -1,0 +1,73 @@
+.asset-label-print-page {
+  --alp-primary: #2563eb;
+  --alp-primary-hover: #1d4ed8;
+  --alp-primary-active: #1e40af;
+  --alp-surface: #ffffff;
+  --alp-surface-alt: #f8fbff;
+  --alp-border: #dbe6ff;
+  --alp-text: #1f2937;
+  --alp-muted: #64748b;
+}
+
+.asset-label-print-page .ant-card {
+  background: linear-gradient(180deg, var(--alp-surface) 0%, var(--alp-surface-alt) 100%);
+  border: 1px solid var(--alp-border);
+}
+
+.asset-label-print-page .alp-btn-primary.ant-btn,
+.asset-label-print-page .alp-btn-primary.ant-btn-primary {
+  background: linear-gradient(135deg, var(--alp-primary) 0%, var(--alp-primary-hover) 100%);
+  border-color: var(--alp-primary-hover);
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.asset-label-print-page .alp-btn-primary.ant-btn:hover,
+.asset-label-print-page .alp-btn-primary.ant-btn:focus {
+  background: linear-gradient(135deg, var(--alp-primary-hover) 0%, var(--alp-primary-active) 100%);
+  border-color: var(--alp-primary-active);
+  color: #ffffff;
+}
+
+.asset-label-print-page .alp-btn-secondary.ant-btn {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: var(--alp-text);
+}
+
+.asset-label-print-page .alp-btn-secondary.ant-btn:hover,
+.asset-label-print-page .alp-btn-secondary.ant-btn:focus {
+  border-color: var(--alp-primary);
+  color: var(--alp-primary);
+  background: #f8fbff;
+}
+
+.asset-label-print-page .alp-muted-tip {
+  margin-top: 8px;
+  color: var(--alp-muted);
+  font-size: 12px;
+}
+
+body[data-theme='dark'] .asset-label-print-page {
+  --alp-primary: #d97757;
+  --alp-primary-hover: #e08a6d;
+  --alp-primary-active: #c4634a;
+  --alp-surface: #1e1e1e;
+  --alp-surface-alt: #2c2c2e;
+  --alp-border: #3a3a3c;
+  --alp-text: #ffffff;
+  --alp-muted: #98989d;
+}
+
+body[data-theme='dark'] .asset-label-print-page .alp-btn-secondary.ant-btn {
+  background: #111827;
+  border-color: #334155;
+  color: #e5e7eb;
+}
+
+body[data-theme='dark'] .asset-label-print-page .alp-btn-secondary.ant-btn:hover,
+body[data-theme='dark'] .asset-label-print-page .alp-btn-secondary.ant-btn:focus {
+  background: #2c2c2e;
+  border-color: #d97757;
+  color: #e08a6d;
+}

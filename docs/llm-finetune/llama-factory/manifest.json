@@ -1,0 +1,38 @@
+{
+  "generated_at": "2026-04-13T00:10:01.690Z",
+  "dataset_name": "assethub_asset_query_sft",
+  "total_samples": 285,
+  "templates_count": 19,
+  "per_template_samples": 15,
+  "format": "llama_factory_sft_jsonl",
+  "fields": {
+    "messages": "对话消息数组",
+    "messages[].role": "角色 (system/user/assistant)",
+    "messages[].content": "消息内容"
+  },
+  "intent_coverage": [
+    "asset_list_query_by_department",
+    "asset_list_query_by_type",
+    "asset_list_query_by_status",
+    "asset_list_query_by_keyword",
+    "asset_detail_query",
+    "asset_statistics_query",
+    "asset_location_query",
+    "asset_depreciation_query",
+    "asset_change_logs_query",
+    "asset_category_tree_query",
+    "asset_filter_query",
+    "asset_paginated_query",
+    "asset_all_query",
+    "asset_brand_filter",
+    "asset_warranty_query",
+    "asset_value_summary",
+    "asset_department_distribution",
+    "asset_age_distribution",
+    "asset_status_summary"
+  ],
+  "output_files": {
+    "jsonl": "llama-factory/assethub_asset_query_sft.jsonl",
+    "readme": "llama-factory/README.md"
+  }
+}

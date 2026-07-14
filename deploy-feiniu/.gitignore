@@ -1,0 +1,15 @@
+# 忽略已保存的旧镜像
+assethub-images-*.tar.gz
+
+# 数据目录
+data/
+
+# 日志
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "assethub": {
+      "command": "/Users/cjlee/PJ/AssetHub/tools/mcp-assethub/mcp-assethub",
+      "env": {
+        "ASSETHUB_API_URL": "http://localhost:5183/api",
+        "ASSETHUB_RUNTIME_AUTH_STORE_DIR": "/tmp/assethub-ai-runtime-auth",
+        "ASSETHUB_TOOL_PREFIX": "assethub"
+      }
+    }
+  }
+}

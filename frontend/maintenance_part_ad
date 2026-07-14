@@ -1,0 +1,1000 @@
+      model,
+      maintenance_items,
+      cycle_type,
+      cycle_value,
+      estimated_hours,
+      required_materials,
+      maintenance_content,
+      status,
+    } = req.body;
+
+    const updateFields = [];
+    const updateValues = [];
+
+    if (template_name !== undefined) {
+      updateFields.push('template_name = ?');
+      updateValues.push(template_name);
+    }
+    if (asset_type !== undefined) {
+      updateFields.push('asset_type = ?');
+      updateValues.push(asset_type);
+    }
+    if (brand !== undefined) {
+      updateFields.push('brand = ?');
+      updateValues.push(brand);
+    }
+    if (model !== undefined) {
+      updateFields.push('model = ?');
+      updateValues.push(model);
+    }
+    if (maintenance_items !== undefined) {
+      updateFields.push('maintenance_items = ?');
+      try {
+        updateValues.push(maintenance_items ? JSON.stringify(maintenance_items) : null);
+      } catch (e) {
+        console.error('序列化维护项目JSON失败:', e);
+        return res.status(400).json({ success: false, message: '维护项目格式错误' });
+      }
+    }
+    if (cycle_type !== undefined) {
+      updateFields.push('cycle_type = ?');
+      updateValues.push(cycle_type);
+    }
+    if (cycle_value !== undefined) {
+      updateFields.push('cycle_value = ?');
+      updateValues.push(cycle_value);
+    }
+    if (estimated_hours !== undefined) {
+      updateFields.push('estimated_hours = ?');
+      updateValues.push(estimated_hours);
+    }
+    if (required_materials !== undefined) {
+      updateFields.push('required_materials = ?');
+      try {
+        updateValues.push(required_materials ? JSON.stringify(required_materials) : null);
+      } catch (e) {
+        console.error('序列化物料清单JSON失败:', e);
+        return res.status(400).json({ success: false, message: '物料清单格式错误' });
+      }
+    }
+    if (maintenance_content !== undefined) {
+      updateFields.push('maintenance_content = ?');
+      updateValues.push(maintenance_content);
+    }
+    if (status !== undefined) {
+      updateFields.push('status = ?');
+      updateValues.push(status);
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: '没有要更新的字段' });
+    }
+
+    updateFields.push('updated_at = NOW()');
+    // 验证模板是否存在并验证租户
+    const tenantFilter = addTenantFilter(req, 'mt');
+    const [existing] = await db.execute(
+      `SELECT id FROM maintenance_templates mt WHERE mt.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '维护计划模板不存在' });
+    }
+
+    updateValues.push(id);
+
+    const [result] = await db.execute(
+      `UPDATE maintenance_templates mt SET ${updateFields.join(', ')} WHERE mt.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+      [...updateValues, ...tenantFilter.params]
+    );
+
+    res.json({ success: true, message: '维护计划模板更新成功' });
+  } catch (error) {
+    console.error('更新维护计划模板失败:', error);
+    res.status(500).json({ success: false, message: '更新维护计划模板失败', error: error.message });
+  }
+});
+
+// 删除维护计划模板
+router.delete('/templates/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 验证模板是否存在并验证租户
+    const tenantFilter = addTenantFilter(req, 'mt');
+    const [existing] = await db.execute(
+      `SELECT id FROM maintenance_templates mt WHERE mt.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '维护计划模板不存在' });
+    }
+
+    const [result] = await db.execute(
+      `DELETE mt FROM maintenance_templates mt WHERE mt.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+      [id, ...tenantFilter.params]
+    );
+
+    res.json({ success: true, message: '维护计划模板删除成功' });
+  } catch (error) {
+    console.error('删除维护计划模板失败:', error);
+    res.status(500).json({ success: false, message: '删除维护计划模板失败', error: error.message });
+  }
+});
+
+// 获取维护计划历史记录
+router.get('/plans/:id/history', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 验证计划是否存在并验证租户
+    const tenantFilter = addTenantFilter(req, 'pmp');
+    const [planCheck] = await db.execute(
+      `SELECT id FROM preventive_maintenance_plans pmp WHERE pmp.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+    if (planCheck.length === 0) {
+      return res.status(404).json({ success: false, message: '预防性维护计划不存在' });
+    }
+
+    // 查询历史记录（通过计划关联确保租户隔离）
+    const [rows] = await db.execute(
+      `SELECT mph.* FROM maintenance_plan_history mph
+       INNER JOIN preventive_maintenance_plans pmp ON mph.plan_id = pmp.id
+       WHERE mph.plan_id = ? ${tenantFilter.whereClause}
+       ORDER BY mph.maintenance_date DESC, mph.created_at DESC`,
+      [id, ...tenantFilter.params]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+    });
+  } catch (error) {
+    console.error('获取维护计划历史记录失败:', error);
+    res
+      .status(500)
+      .json({ success: false, message: '获取维护计划历史记录失败', error: error.message });
+  }
+});
+
+// ============================================
+// 故障维修申请相关接口
+// ============================================
+
+// 生成申请单号
+function generateRequestNo() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const random = Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, '0');
+  return `WX${year}${month}${day}${random}`;
+}
+
+// 获取故障维修申请列表
+router.get('/requests', authenticate, async (req, res) => {
+  try {
+    const {
+      page = 1,
+      pageSize = 20,
+      asset_code,
+      status,
+      fault_level,
+      start_date,
+      end_date,
+      keyword,
+    } = req.query;
+    const offset = (page - 1) * pageSize;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    // 添加租户过滤
+    const tenantFilter = addTenantFilter(req, 'mr');
+    whereClause += tenantFilter.whereClause;
+    params.push(...tenantFilter.params);
+
+    // 根据用户的管理科室过滤资产
+    // 超级管理员和系统管理员（租户级）可以看到所有维修申请
+    if (req.user.role !== 'super_admin' && req.user.role !== 'system_admin') {
+      // 非系统管理员需要根据管理科室过滤
+      if (
+        req.user.managed_departments &&
+        Array.isArray(req.user.managed_departments) &&
+        req.user.managed_departments.length > 0
+      ) {
+        try {
+          // 检查是否有所有科室权限
+          if (req.user.managed_departments.includes('*')) {
+            // 拥有所有科室权限，不需要过滤
+          } else {
+            // 从user_managed_departments获取的是department_code，需要查询科室名称
+            const placeholders = req.user.managed_departments.map(() => '?').join(',');
+            const [deptRows] = await db.execute(
+              `SELECT department_name FROM departments WHERE department_code IN (${placeholders})`,
+              req.user.managed_departments
+            );
+
+            const deptNames = deptRows.map(row => row.department_name);
+
+            if (deptNames.length > 0) {
+              const deptPlaceholders = deptNames.map(() => '?').join(',');
+              whereClause += ` AND EXISTS (
+                SELECT 1 FROM assets a
+                WHERE a.asset_code = mr.asset_code
+                AND (a.department IN (${deptPlaceholders}) OR a.department_new IN (${deptPlaceholders}))
+              )`;
+              params.push(...deptNames, ...deptNames);
+            }
+          }
+        } catch (deptError) {
+          console.error('查询管理科室失败:', deptError);
+          // 出错时不过滤，允许查看所有
+        }
+      }
+      // 如果没有管理科室设置，允许查看所有
+    }
+
+    if (asset_code) {
+      whereClause += ' AND mr.asset_code LIKE ?';
+      params.push(`%${asset_code}%`);
+    }
+    if (status) {
+      whereClause += ' AND mr.status = ?';
+      params.push(status);
+    }
+    if (fault_level) {
+      whereClause += ' AND mr.fault_level = ?';
+      params.push(fault_level);
+    }
+    if (start_date) {
+      whereClause += ' AND mr.request_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND mr.request_date <= ?';
+      params.push(end_date);
+    }
+    if (keyword) {
+      whereClause +=
+        ' AND (mr.request_no LIKE ? OR mr.asset_code LIKE ? OR mr.asset_name LIKE ? OR mr.request_person LIKE ?)';
+      const keywordParam = `%${keyword}%`;
+      params.push(keywordParam, keywordParam, keywordParam, keywordParam);
+    }
+
+    // 获取总数
+    const [countResult] = await db.execute(
+      `SELECT COUNT(*) as total FROM maintenance_requests mr ${whereClause}`,
+      params
+    );
+    const { total } = countResult[0];
+
+    // 获取数据
+    const [rows] = await db.execute(
+      `SELECT mr.*, a.department, a.location
+       FROM maintenance_requests mr
+       LEFT JOIN assets a ON mr.asset_code = a.asset_code
+       ${whereClause}
+       ORDER BY mr.request_date DESC, mr.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, parseInt(pageSize), offset]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error('获取故障维修申请列表失败:', error);
+    res
+      .status(500)
+      .json({ success: false, message: '获取故障维修申请列表失败', error: error.message });
+  }
+});
+
+// 获取单个故障维修申请详情
+router.get('/requests/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    // 添加租户过滤验证
+    const tenantFilter = addTenantFilter(req, 'mr');
+    const [rows] = await db.execute(
+      `SELECT mr.*, a.department, a.location, a.brand, a.model
+       FROM maintenance_requests mr
+       LEFT JOIN assets a ON mr.asset_code = a.asset_code
+       WHERE mr.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '故障维修申请不存在' });
+    }
+
+    res.json({ success: true, data: rows[0] });
+  } catch (error) {
+    console.error('获取故障维修申请详情失败:', error);
+    res
+      .status(500)
+      .json({ success: false, message: '获取故障维修申请详情失败', error: error.message });
+  }
+});
+
+// 创建故障维修申请
+router.post('/requests', authenticate, async (req, res) => {
+  try {
+    const {
+      asset_code,
+      fault_description,
+      fault_level,
+      request_date,
+      request_department,
+      contact_phone,
+      expected_repair_date,
+      remark,
+    } = req.body;
+
+    if (!asset_code || !fault_description) {
+      return res.status(400).json({ success: false, message: '资产编号和故障描述不能为空' });
+    }
+
+    // 获取资产信息（需要验证资产属于同一租户）
+    const assetTenantFilter = addTenantFilter(req, 'a');
+    const [assets] = await db.execute(
+      `SELECT a.id, a.asset_code, a.asset_name FROM assets a WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
+      [asset_code, ...assetTenantFilter.params]
+    );
+
+    if (assets.length === 0) {
+      return res.status(404).json({ success: false, message: '资产不存在' });
+    }
+
+    const asset = assets[0];
+    const requestNo = generateRequestNo();
+    const requestPerson = req.user.real_name || req.user.username || '系统管理员';
+    const createdBy = requestPerson;
+    const tenantId = getTenantId(req);
+
+    const [result] = await db.execute(
+      `INSERT INTO maintenance_requests (
+        tenant_id, request_no, asset_code, asset_name, fault_description,
+        fault_level, request_date, request_person, request_department,
+        contact_phone, expected_repair_date, status, remark, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        requestNo,
+        asset.asset_code,
+        asset.asset_name,
+        fault_description,
+        fault_level || '一般',
+        request_date || new Date().toISOString().split('T')[0],
+        requestPerson,
+        request_department || null,
+        contact_phone || null,
+        expected_repair_date || null,
+        '待审批',
+        remark || null,
+        createdBy,
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: '故障维修申请创建成功',
+      data: { id: result.insertId, request_no: requestNo },
+    });
+  } catch (error) {
+    console.error('创建故障维修申请失败:', error);
+    res.status(500).json({ success: false, message: '创建故障维修申请失败', error: error.message });
+  }
+});
+
+// 审批故障维修申请
+router.post('/requests/:id/approve', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approved, comment } = req.body;
+
+    if (approved === undefined) {
+      return res.status(400).json({ success: false, message: '审批结果不能为空' });
+    }
+
+    // 获取申请信息
+    // 添加租户过滤验证
+    const tenantFilter = addTenantFilter(req, 'mr');
+    const [requests] = await db.execute(
+      `SELECT mr.* FROM maintenance_requests mr WHERE mr.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (requests.length === 0) {
+      return res.status(404).json({ success: false, message: '故障维修申请不存在' });
+    }
+
+    const request = requests[0];
+
+    if (request.status !== '待审批') {
+      return res.status(400).json({ success: false, message: '该申请已处理，无法重复审批' });
+    }
+
+    const approver = req.user.real_name || req.user.username || '系统管理员';
+    const status = approved ? '已批准' : '已拒绝';
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // 更新申请状态（已验证租户，使用上面已声明的tenantFilter）
+      await connection.execute(
+        `UPDATE maintenance_requests mr SET
+          mr.status = ?,
+          mr.approver = ?,
+          mr.approve_date = ?,
+          mr.approve_comment = ?,
+          mr.updated_at = NOW()
+        WHERE mr.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+        [
+          status,
+          approver,
+          new Date().toISOString().split('T')[0],
+          comment || null,
+          id,
+          ...tenantFilter.params,
+        ]
+      );
+
+      // 如果批准，更新资产状态为维修（需要验证资产属于同一租户）
+      if (approved) {
+        const assetTenantFilter = addTenantFilter(req, 'a');
+        await connection.execute(
+          `UPDATE assets a SET a.status = ? WHERE a.asset_code = ? ${assetTenantFilter.whereClause.replace('WHERE', 'AND')}`,
+          ['维修', request.asset_code, ...assetTenantFilter.params]
+        );
+      }
+
+      await connection.commit();
+
+      res.json({ success: true, message: `故障维修申请已${approved ? '批准' : '拒绝'}` });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('审批故障维修申请失败:', error);
+    res.status(500).json({ success: false, message: '审批故障维修申请失败', error: error.message });
+  }
+});
+
+// 开始维修
+router.post('/requests/:id/start', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { repair_person, repair_start_date } = req.body;
+
+    if (!repair_person) {
+      return res.status(400).json({ success: false, message: '维修人员不能为空' });
+    }
+
+    // 获取申请信息
+    // 添加租户过滤验证
+    const tenantFilter = addTenantFilter(req, 'mr');
+    const [requests] = await db.execute(
+      `SELECT mr.* FROM maintenance_requests mr WHERE mr.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (requests.length === 0) {
+      return res.status(404).json({ success: false, message: '故障维修申请不存在' });
+    }
+
+    const request = requests[0];
+
+    if (request.status !== '已批准') {
+      return res.status(400).json({ success: false, message: '只能开始已批准的维修申请' });
+    }
+
+    // 已验证租户，直接更新
+    await db.execute(
+      `UPDATE maintenance_requests mr SET
+        mr.status = ?,
+        mr.repair_person = ?,
+        mr.repair_start_date = ?,
+        mr.updated_at = NOW()
+      WHERE mr.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+      [
+        '维修中',
+        repair_person,
+        repair_start_date || new Date().toISOString().split('T')[0],
+        id,
+        ...tenantFilter.params,
+      ]
+    );
+
+    res.json({ success: true, message: '维修已开始' });
+  } catch (error) {
+    console.error('开始维修失败:', error);
+    res.status(500).json({ success: false, message: '开始维修失败', error: error.message });
+  }
+});
+
+// 完成维修
+router.post('/requests/:id/complete', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { repair_end_date, repair_cost, repair_content, parts_replaced, remark } = req.body;
+
+    // 获取申请信息
+    // 添加租户过滤验证
+    const tenantFilter = addTenantFilter(req, 'mr');
+    const [requests] = await db.execute(
+      `SELECT mr.* FROM maintenance_requests mr WHERE mr.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (requests.length === 0) {
+      return res.status(404).json({ success: false, message: '故障维修申请不存在' });
+    }
+
+    const request = requests[0];
+
+    if (request.status !== '维修中') {
+      return res.status(400).json({ success: false, message: '只能完成维修中的申请' });
+    }
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // 更新申请状态（已验证租户）
+      await connection.execute(
+        `UPDATE maintenance_requests mr SET
+          mr.status = ?,
+          mr.repair_end_date = ?,
+          mr.repair_cost = ?,
+          mr.repair_content = ?,
+          mr.parts_replaced = ?,
+          mr.remark = ?,
+          mr.updated_at = NOW()
+        WHERE mr.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+        [
+          '已完成',
+          repair_end_date || new Date().toISOString().split('T')[0],
+          repair_cost || 0,
+          repair_content || null,
+          parts_replaced || null,
+          remark || null,
+          id,
+          ...tenantFilter.params,
+        ]
+      );
+
+      // 创建维护日志
+      const createdBy = req.user.real_name || req.user.username || '系统管理员';
+      const tenantId = getTenantId(req);
+      await connection.execute(
+        `INSERT INTO maintenance_logs (
+          tenant_id, asset_code, asset_name, maintenance_type, maintenance_date,
+          maintenance_person, maintenance_content, maintenance_cost, parts_replaced,
+          status, remark, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          tenantId,
+          request.asset_code,
+          request.asset_name,
+          '故障维修',
+          repair_end_date || new Date().toISOString().split('T')[0],
+          request.repair_person,
+          repair_content || request.fault_description,
+          repair_cost || 0,
+          parts_replaced || null,
+          '已完成',
+          remark || null,
+          createdBy,
+        ]
+      );
+
+      // 检查资产当前状态（使用行锁防止并发问题）
+      const [assets] = await connection.execute(
+        'SELECT * FROM assets WHERE asset_code = ? FOR UPDATE',
+        [request.asset_code]
+      );
+
+      if (assets.length === 0) {
+        await connection.rollback();
+        connection.release();
+        return res.status(404).json({ success: false, message: '资产不存在' });
+      }
+
+      // 检查资产状态是否为"维修中"或"维修"
+      const currentStatus = assets[0].status;
+      if (currentStatus !== '维修中' && currentStatus !== '维修') {
+        await connection.rollback();
+        connection.release();
+        return res.status(400).json({
+          success: false,
+          message: `资产当前状态为"${currentStatus}"，无法完成维修。资产必须处于"维修中"或"维修"状态才能完成维修。`,
+        });
+      }
+
+      // 更新资产状态为在用
+      await connection.execute(
+        'UPDATE assets SET status = ?, updated_at = NOW() WHERE asset_code = ?',
+        ['在用', request.asset_code]
+      );
+
+      await connection.commit();
+
+      res.json({ success: true, message: '维修已完成，已创建维护日志' });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('完成维修失败:', error);
+    res.status(500).json({ success: false, message: '完成维修失败', error: error.message });
+  }
+});
+
+// 更新故障维修申请
+router.put('/requests/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      fault_description,
+      fault_level,
+      request_department,
+      contact_phone,
+      expected_repair_date,
+      remark,
+    } = req.body;
+
+    // 获取申请信息
+    // 添加租户过滤验证
+    const tenantFilter = addTenantFilter(req, 'mr');
+    const [requests] = await db.execute(
+      `SELECT mr.status FROM maintenance_requests mr WHERE mr.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (requests.length === 0) {
+      return res.status(404).json({ success: false, message: '故障维修申请不存在' });
+    }
+
+    const request = requests[0];
+
+    // 只能更新待审批状态的申请
+    if (request.status !== '待审批') {
+      return res.status(400).json({ success: false, message: '只能更新待审批状态的申请' });
+    }
+
+    const updateFields = [];
+    const updateValues = [];
+
+    if (fault_description !== undefined) {
+      updateFields.push('fault_description = ?');
+      updateValues.push(fault_description);
+    }
+    if (fault_level !== undefined) {
+      updateFields.push('fault_level = ?');
+      updateValues.push(fault_level);
+    }
+    if (request_department !== undefined) {
+      updateFields.push('request_department = ?');
+      updateValues.push(request_department);
+    }
+    if (contact_phone !== undefined) {
+      updateFields.push('contact_phone = ?');
+      updateValues.push(contact_phone);
+    }
+    if (expected_repair_date !== undefined) {
+      updateFields.push('expected_repair_date = ?');
+      updateValues.push(expected_repair_date);
+    }
+    if (remark !== undefined) {
+      updateFields.push('remark = ?');
+      updateValues.push(remark);
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: '没有要更新的字段' });
+    }
+
+    // 申请已在上面的查询中验证过租户，这里直接更新
+    updateFields.push('updated_at = NOW()');
+    updateValues.push(id);
+
+    const [result] = await db.execute(
+      `UPDATE maintenance_requests mr SET ${updateFields.join(', ')} WHERE mr.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+      [...updateValues, ...tenantFilter.params]
+    );
+
+    res.json({ success: true, message: '故障维修申请更新成功' });
+  } catch (error) {
+    console.error('更新故障维修申请失败:', error);
+    res.status(500).json({ success: false, message: '更新故障维修申请失败', error: error.message });
+  }
+});
+
+// 取消故障维修申请
+router.post('/requests/:id/cancel', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 获取申请信息
+    const tenantFilter = addTenantFilter(req, 'mr');
+    const [requests] = await db.execute(
+      `SELECT mr.status, mr.asset_code FROM maintenance_requests mr WHERE mr.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (requests.length === 0) {
+      return res.status(404).json({ success: false, message: '故障维修申请不存在' });
+    }
+
+    const request = requests[0];
+
+    if (['已完成', '已取消'].includes(request.status)) {
+      return res.status(400).json({ success: false, message: '该申请无法取消' });
+    }
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // 更新申请状态（已验证租户）
+      await connection.execute(
+        `UPDATE maintenance_requests mr SET
+          mr.status = ?,
+          mr.updated_at = NOW()
+        WHERE mr.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+        ['已取消', id, ...tenantFilter.params]
+      );
+
+      // 如果资产状态是维修，恢复为在用（需要验证资产属于同一租户）
+      const assetTenantFilter = addTenantFilter(req, 'a');
+      const [assets] = await connection.execute(
+        `SELECT a.status FROM assets a WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
+        [request.asset_code, ...assetTenantFilter.params]
+      );
+
+      if (assets.length > 0 && assets[0].status === '维修') {
+        // 检查是否还有其他未完成的维修申请（在同一租户内）
+        const [otherRequests] = await connection.execute(
+          `SELECT id FROM maintenance_requests mr
+           WHERE mr.asset_code = ? AND mr.id != ? AND mr.status IN (?, ?, ?) ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+          [request.asset_code, id, '待审批', '已批准', '维修中', ...tenantFilter.params]
+        );
+
+        if (otherRequests.length === 0) {
+          await connection.execute(
+            `UPDATE assets a SET a.status = ? WHERE a.asset_code = ? ${assetTenantFilter.whereClause.replace('WHERE', 'AND')}`,
+            ['在用', request.asset_code, ...assetTenantFilter.params]
+          );
+        }
+      }
+
+      await connection.commit();
+
+      res.json({ success: true, message: '故障维修申请已取消' });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('取消故障维修申请失败:', error);
+    res.status(500).json({ success: false, message: '取消故障维修申请失败', error: error.message });
+  }
+});
+
+// 删除故障维修申请（只能删除已取消或已拒绝的申请）
+router.delete('/requests/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 检查申请状态
+    // 添加租户过滤验证
+    const tenantFilter = addTenantFilter(req, 'mr');
+    const [requests] = await db.execute(
+      `SELECT mr.status FROM maintenance_requests mr WHERE mr.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (requests.length === 0) {
+      return res.status(404).json({ success: false, message: '故障维修申请不存在' });
+    }
+
+    if (!['已取消', '已拒绝'].includes(requests[0].status)) {
+      return res.status(400).json({ success: false, message: '只能删除已取消或已拒绝的申请' });
+    }
+
+    // 申请已在上面的查询中验证过租户，这里直接删除
+    const [result] = await db.execute(
+      `DELETE mr FROM maintenance_requests mr WHERE mr.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '故障维修申请不存在' });
+    }
+
+    res.json({ success: true, message: '故障维修申请删除成功' });
+  } catch (error) {
+    console.error('删除故障维修申请失败:', error);
+    res.status(500).json({ success: false, message: '删除故障维修申请失败', error: error.message });
+  }
+});
+
+// ============================================
+// 维护日志附件相关接口
+// 注意：这些路由必须在 /logs/:id 之前定义，避免路由冲突
+// ============================================
+
+// 获取维护日志附件列表
+router.get('/logs/:id/attachments', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`[附件API] 获取维护日志附件列表，日志ID: ${id}`);
+    const [rows] = await db.execute(
+      'SELECT * FROM maintenance_log_attachments WHERE maintenance_log_id = ? ORDER BY upload_date DESC',
+      [id]
+    );
+
+    // 为每个附件构建访问URL
+    // 优先使用 API 路径（支持认证），而不是静态文件路径
+    const attachments = rows.map(attachment => {
+      // 使用 API 路径而不是静态文件路径，确保支持认证
+      const apiUrl = `${req.protocol}://${req.get('host')}/api/maintenance/logs/${id}/attachments/${attachment.id}`;
+      return {
+        ...attachment,
+        file_url: apiUrl, // 使用 API 路径
+      };
+    });
+
+    res.json({ success: true, data: attachments });
+  } catch (error) {
+    console.error('获取附件列表失败:', error);
+    res.status(500).json({ success: false, message: '获取附件列表失败', error: error.message });
+  }
+});
+
+// ============================================
+// 文件名解析中间件（在 multer 处理之前）
+// ============================================
+const parseFileNameFromRequest = (req, res, next) => {
+  req.parsedFileName = null;
+
+  // 方法1: 从请求体的 originalFileName 字段获取（前端发送的备用字段）
+  if (req.body && req.body.originalFileName) {
+    try {
+      const decoded = decodeURIComponent(req.body.originalFileName);
+      req.parsedFileName = decoded;
+      console.log(`[文件名解析] ✅ 从请求体获取文件名: ${req.parsedFileName}`);
+    } catch (e) {
+      console.warn('[文件名解析] 请求体文件名解码失败:', e);
+    }
+  }
+
+  // 方法2: 从 Content-Disposition 头中提取（在 multer 处理之前）
+  const contentDisposition = req.headers['content-disposition'];
+  if (contentDisposition && !req.parsedFileName) {
+    console.log(`[文件名解析] Content-Disposition: ${contentDisposition}`);
+
+    // 优先尝试 RFC 5987 格式：filename*=UTF-8''encoded
+    const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;,\s]+)/i);
+    if (utf8Match && utf8Match[1]) {
+      try {
+        const decoded = decodeURIComponent(utf8Match[1]);
+        req.parsedFileName = decoded;
+        console.log(
+          `[文件名解析] ✅ 从 Content-Disposition (RFC 5987) 提取: ${req.parsedFileName}`
+        );
+      } catch (e) {
+        console.warn('[文件名解析] RFC 5987 解码失败:', e);
+      }
+    }
+
+    // 如果没有找到，尝试 RFC 2231 格式：filename*=charset'lang'encoded
+    if (!req.parsedFileName) {
+      const rfc2231Match = contentDisposition.match(/filename\*=([^']+)'[^']*'([^;,\s]+)/i);
+      if (rfc2231Match && rfc2231Match[2]) {
+        try {
+          const charset = rfc2231Match[1].toLowerCase();
+          const encoded = rfc2231Match[2];
+          const decoded = decodeURIComponent(encoded);
+          req.parsedFileName = decoded;
+          console.log(
+            `[文件名解析] ✅ 从 Content-Disposition (RFC 2231, ${charset}) 提取: ${req.parsedFileName}`
+          );
+        } catch (e) {
+          console.warn('[文件名解析] RFC 2231 解码失败:', e);
+        }
+      }
+    }
+  }
+
+  next();
+};
+
+// 处理 multer 错误的中间件
+const handleMulterError = (err, req, res, next) => {
+  if (err) {
+    console.error('[Multer错误]', err);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ success: false, message: '文件大小超过限制（最大50MB）' });
+    }
+    if (err.message && err.message.includes('不支持的文件类型')) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    return res.status(400).json({ success: false, message: `文件上传失败: ${err.message}` });
+  }
+  next();
+};
+
+// 上传维护日志附件
+router.post(
+  '/logs/:id/attachments',
+  authenticate,
+  parseFileNameFromRequest,
+  upload.single('file'),
+  fileSecurity(),
+  handleMulterError,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      console.log('[附件上传] ========== 开始处理上传 ==========');
+      console.log(`[附件上传] 日志ID: ${id}`);
+
+      // 检查维护日志是否存在
+      const [logs] = await db.execute('SELECT id FROM maintenance_logs WHERE id = ?', [id]);
+      if (logs.length === 0) {
+        return res.status(404).json({ success: false, message: '维护日志不存在' });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: '请选择要上传的文件' });
+      }
+
+      const { file } = req;
+
+      // ========== 文件名处理：优先使用预解析的文件名 ==========
+      let fileName = null;
+
+      // 策略1: 使用预解析的文件名（从请求头或请求体提取）
+      if (req.parsedFileName) {
+        fileName = req.parsedFileName;
+        console.log(`[附件上传] ✅ 使用预解析的文件名: ${fileName}`);
+      } else {
+        // 策略2: 使用 multer 解析的文件名，但需要修复编码
+        fileName = file.originalname;
+        console.log(`[附件上传] ⚠️ 使用 multer 解析的文件名: ${fileName}`);
+
+        // 记录 multer 接收到的原始信息
+        console.log(`[附件上传] multer originalname (原始): ${file.originalname}`);
+        console.log(`[附件上传] multer originalname (JSON): ${JSON.stringify(file.originalname)}`);
+        if (typeof file.originalname === 'string') {
+          console.log(
+            `[附件上传] multer originalname (utf8 hex): ${Buffer.from(file.originalname, 'utf8').toString('hex')}`
+          );
+          console.log(
+            `[附件上传] multer originalname (latin1 hex): ${Buffer.from(file.originalname, 'latin1').toString('hex')}`
+          );
+
+          // 检查是否包含中文

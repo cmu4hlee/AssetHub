@@ -1,0 +1,9 @@
+{
+  "name": "assethub-deploy-scripts",
+  "version": "1.0.0",
+  "description": "AssetHub 部署辅助脚本",
+  "dependencies": {
+    "mysql2": "^3.6.5",
+    "bcryptjs": "^3.0.3"
+  }
+}

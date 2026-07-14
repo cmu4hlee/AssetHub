@@ -1,0 +1,1284 @@
+const express = require('express');
+const cors = require('cors');
+const compression = require('compression');
+const bodyParser = require('body-parser');
+const multer = require('multer');
+const path = require('path');
+require('dotenv').config();
+const { validateCriticalEnv } = require('./config/env-validator');
+
+try {
+  validateCriticalEnv({ throwOnError: true });
+} catch (error) {
+  console.error('[ENV] 启动失败：关键环境变量校验未通过');
+  (error.details || [error.message]).forEach(item => console.error(`[ENV] ${item}`));
+  process.exit(1);
+}
+
+// 加载日志服务
+const logger = require('./services/logger');
+const log = logger;
+
+// 加载统一端口配置
+const portConfigPath = path.resolve(__dirname, '../shared/port-config.js');
+let portConfig;
+try {
+  portConfig = require(portConfigPath);
+  log.info('统一端口配置已加载');
+} catch (error) {
+  log.warn('无法加载统一端口配置,使用环境变量');
+  portConfig = {
+    getBackendPort: () => parseInt(process.env.PORT) || 5174,
+    validatePortConfig: () => {},
+  };
+}
+
+// 调试：打印环境变量（仅开发环境）
+log.debug('环境变量:', {
+  DB_HOST: process.env.DB_HOST,
+  DB_PORT: process.env.DB_PORT,
+});
+
+const db = require('./config/database');
+const config = require('./config/app.config');
+
+// 调试：打印配置文件（仅开发环境）
+log.debug('配置:', {
+  host: config.database.master.host,
+  port: config.database.master.port,
+});
+
+// 优雅降级的Redis缓存服务
+let cacheService;
+let redis; // 保存到全局作用域
+
+try {
+  // 加载新的Redis服务
+  const redisService = require('./services/redis.service');
+  redis = redisService;
+  // 初始化Redis服务
+  redisService.init().catch(err => {
+    log.warn('Redis服务初始化失败:', err.message);
+  });
+
+  // 创建缓存服务接口
+  cacheService = {
+    set: async (key, value, expire = 3600, tenantId, options) => {
+      const cacheKey = tenantId ? `${tenantId}:${key}` : key;
+      return redisService.setCache(cacheKey, value, expire);
+    },
+    get: async (key, tenantId) => {
+      const cacheKey = tenantId ? `${tenantId}:${key}` : key;
+      return redisService.getCache(cacheKey);
+    },
+    delete: async (key, tenantId, cascade = true) => {
+      const cacheKey = tenantId ? `${tenantId}:${key}` : key;
+      return redisService.deleteCache(cacheKey);
+    },
+    flushAll: async (tenantId = null) => {
+      if (tenantId) {
+        return redisService.clearCacheByPattern(`${tenantId}:*`);
+      } else {
+        return redisService.clearCacheByPattern('*');
+      }
+    },
+    hset: async (key, field, value, tenantId) => {
+      const cacheKey = tenantId ? `${tenantId}:${key}` : key;
+      return redisService.setHashCache(cacheKey, field, value);
+    },
+    hget: async (key, field, tenantId) => {
+      const cacheKey = tenantId ? `${tenantId}:${key}` : key;
+      return redisService.getHashCache(cacheKey, field);
+    },
+    hdel: async (key, field, tenantId) => {
+      const cacheKey = tenantId ? `${tenantId}:${key}` : key;
+      return redisService.deleteHashCache(cacheKey, field);
+    },
+    getTenantKeys: async tenantId => {
+      const keys = await redisService.client.keys(`${redisService.generateKey(`${tenantId}:*`)}`);
+      return keys.map(key => key.replace(redisService.generateKey(''), ''));
+    },
+    cache() {
+      return function (target, propertyKey, descriptor) {
+        return descriptor; // 不修改原始方法
+      };
+    },
+    deleteByTags: async (tags, tenantId) => {
+      // 简化实现，实际项目中可能需要更复杂的标签管理
+      return true;
+    },
+    addDependency: async (key, dependentKey, tenantId) => {
+      // 简化实现，实际项目中可能需要更复杂的依赖管理
+      return true;
+    },
+    getDependencies: async (key, tenantId) => {
+      // 简化实现，实际项目中可能需要更复杂的依赖管理
+      return [];
+    },
+    removeDependency: async (key, dependentKey, tenantId) => {
+      // 简化实现，实际项目中可能需要更复杂的依赖管理
+      return true;
+    },
+    warmup: async (cacheItems, tenantId) => {
+      // 简化实现，实际项目中可能需要更复杂的预热逻辑
+      return { success: 0, failed: 0 };
+    },
+    refresh: async (keys, tenantId, loader) => {
+      // 简化实现，实际项目中可能需要更复杂的刷新逻辑
+      return { success: 0, failed: 0 };
+    },
+  };
+  log.info('Redis服务已加载，将使用真实缓存');
+} catch (error) {
+  log.warn('Redis服务加载失败，使用模拟缓存服务:', error.message);
+  // 创建模拟缓存服务，所有操作都返回失败或null
+  cacheService = {
+    set: async () => false,
+    get: async () => null,
+    delete: async () => false,
+    flushAll: async () => false,
+    hset: async () => false,
+    hget: async () => null,
+    hdel: async () => false,
+    getTenantKeys: async () => [],
+    cache() {
+      return function (target, propertyKey, descriptor) {
+        return descriptor; // 不修改原始方法
+      };
+    },
+    deleteByTags: async () => false,
+    addDependency: async () => false,
+    getDependencies: async () => [],
+    removeDependency: async () => false,
+    warmup: async () => ({ success: 0, failed: 0 }),
+    refresh: async () => ({ success: 0, failed: 0 }),
+  };
+}
+
+// ============================================
+// 加载异步任务队列服务
+// ============================================
+let asyncQueueService;
+let defaultQueue;
+
+try {
+  // 尝试加载异步任务队列服务
+  const { defaultQueue: queue } = require('./services/async-queue');
+  defaultQueue = queue;
+  asyncQueueService = {
+    defaultQueue,
+    // 注册默认任务处理器示例
+    registerHandler: (taskType, handler) => {
+      defaultQueue.registerHandler(taskType, handler);
+    },
+    // 添加任务到默认队列
+    addTask: (taskType, data, options) => {
+      return defaultQueue.addTask(taskType, data, options);
+    },
+    // 获取队列长度
+    getQueueLength: () => {
+      return defaultQueue.getQueueLength();
+    },
+  };
+  log.info('异步任务队列服务已加载');
+} catch (error) {
+  log.warn('异步任务队列服务加载失败:', error.message);
+  // 创建模拟异步任务队列服务
+  asyncQueueService = {
+    defaultQueue: null,
+    registerHandler: () => {},
+    addTask: async () => `task:${Date.now()}`,
+    getQueueLength: async () => 0,
+  };
+}
+
+// ============================================
+// 初始化数据库表结构
+// ============================================
+async function initDatabase() {
+  const db = require('./config/database');
+  try {
+    log.info('开始初始化数据库表结构...');
+
+    log.info('assets表字段和索引已存在');
+
+    // 创建维修维护相关表（如果不存在）
+    const maintenanceTables = [
+      {
+        name: 'maintenance_workorders',
+        sql: `CREATE TABLE IF NOT EXISTS maintenance_workorders (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          tenant_id INT DEFAULT 1,
+          work_order_no VARCHAR(50) NOT NULL COMMENT '工单编号',
+          asset_code VARCHAR(50) COMMENT '关联资产编号',
+          title VARCHAR(200) NOT NULL COMMENT '工单标题',
+          description TEXT COMMENT '工单描述',
+          priority INT DEFAULT 3 COMMENT '优先级：1-紧急，2-高，3-中，4-低',
+          status VARCHAR(20) DEFAULT 'pending' COMMENT '状态',
+          planned_start_date DATETIME COMMENT '计划开始时间',
+          planned_end_date DATETIME COMMENT '计划结束时间',
+          estimated_hours DECIMAL(10,2) COMMENT '预估工时',
+          actual_start_date DATETIME COMMENT '实际开始时间',
+          actual_end_date DATETIME COMMENT '实际结束时间',
+          actual_hours DECIMAL(10,2) COMMENT '实际工时',
+          assigned_to VARCHAR(50) COMMENT '负责人',
+          assigned_by VARCHAR(50) COMMENT '分配人',
+          assigned_at DATETIME COMMENT '分配时间',
+          completed_by VARCHAR(50) COMMENT '完成人',
+          completed_at DATETIME COMMENT '完成时间',
+          work_content TEXT COMMENT '实际工作内容',
+          materials TEXT COMMENT '材料清单',
+          labor_cost DECIMAL(12,2) DEFAULT 0 COMMENT '人工费',
+          outsourcing_cost DECIMAL(12,2) DEFAULT 0 COMMENT '外包费',
+          other_cost DECIMAL(12,2) DEFAULT 0 COMMENT '其他费用',
+          cancel_reason TEXT COMMENT '取消原因',
+          source_type VARCHAR(50) COMMENT '来源类型',
+          source_ref_id VARCHAR(100) COMMENT '来源引用ID',
+          source_event_at DATETIME COMMENT '来源事件时间',
+          source_payload TEXT COMMENT '来源上下文',
+          created_by VARCHAR(50) COMMENT '创建人',
+          created_at TIMESTAMP NULL,
+          updated_at TIMESTAMP NULL,
+          INDEX idx_work_order_no (work_order_no),
+          INDEX idx_asset_code (asset_code),
+          INDEX idx_status (status),
+          INDEX idx_priority (priority),
+          INDEX idx_tenant_id (tenant_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='维护工单表'`,
+      },
+      {
+        name: 'maintenance_logs',
+        sql: `CREATE TABLE IF NOT EXISTS maintenance_logs (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          asset_id INT NOT NULL COMMENT '资产ID',
+          asset_code VARCHAR(100) NOT NULL COMMENT '资产编号',
+          asset_name VARCHAR(200) COMMENT '资产名称',
+          maintenance_type ENUM('日常维护', '预防性维护', '故障维修', '定期保养', '其他') NOT NULL COMMENT '维护类型',
+          maintenance_date DATE NOT NULL COMMENT '维护日期',
+          maintenance_person VARCHAR(50) COMMENT '维护人员',
+          maintenance_content TEXT COMMENT '维护内容',
+          maintenance_cost DECIMAL(15, 2) DEFAULT 0 COMMENT '维护费用',
+          parts_replaced TEXT COMMENT '更换部件',
+          next_maintenance_date DATE COMMENT '下次维护日期',
+          status ENUM('已完成', '进行中', '已取消') DEFAULT '已完成' COMMENT '维护状态',
+          remark TEXT COMMENT '备注',
+          created_by VARCHAR(50) COMMENT '创建人',
+          tenant_id INT DEFAULT 1,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT NULL,
+          INDEX idx_asset (asset_id),
+          INDEX idx_asset_code (asset_code),
+          INDEX idx_maintenance_date (maintenance_date),
+          INDEX idx_maintenance_type (maintenance_type),
+          INDEX idx_status (status),
+          INDEX idx_tenant_id (tenant_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='维护日志记录表'`,
+      },
+      {
+        name: 'maintenance_requests',
+        sql: `CREATE TABLE IF NOT EXISTS maintenance_requests (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          request_no VARCHAR(100) UNIQUE NOT NULL COMMENT '申请单号',
+          asset_id INT COMMENT '资产ID',
+          asset_code VARCHAR(100) COMMENT '资产编号',
+          asset_name VARCHAR(200) COMMENT '资产名称',
+          fault_description TEXT NOT NULL COMMENT '故障描述',
+          fault_level ENUM('一般', '紧急', '严重') DEFAULT '一般' COMMENT '故障级别',
+          request_date DATE NOT NULL COMMENT '申请日期',
+          request_person VARCHAR(50) COMMENT '申请人',
+          request_department VARCHAR(100) COMMENT '申请部门',
+          contact_phone VARCHAR(20) COMMENT '联系电话',
+          expected_repair_date DATE COMMENT '期望维修日期',
+          status VARCHAR(20) DEFAULT 'pending' COMMENT '申请状态',
+          approver VARCHAR(50) COMMENT '审批人',
+          approve_date DATE COMMENT '审批日期',
+          approve_comment TEXT COMMENT '审批意见',
+          repair_person VARCHAR(50) COMMENT '维修人员',
+          repair_start_date DATE COMMENT '维修开始日期',
+          repair_end_date DATE COMMENT '维修结束日期',
+          repair_cost DECIMAL(15, 2) DEFAULT 0 COMMENT '维修费用',
+          repair_content TEXT COMMENT '维修内容',
+          parts_replaced TEXT COMMENT '更换部件',
+          remark TEXT COMMENT '备注',
+          created_by VARCHAR(50) COMMENT '创建人',
+          tenant_id INT DEFAULT 1,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT NULL,
+          INDEX idx_asset (asset_id),
+          INDEX idx_asset_code (asset_code),
+          INDEX idx_request_no (request_no),
+          INDEX idx_request_date (request_date),
+          INDEX idx_status (status),
+          INDEX idx_fault_level (fault_level),
+          INDEX idx_tenant_id (tenant_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='故障维修申请表'`,
+      },
+      {
+        name: 'maintenance_plans',
+        sql: `CREATE TABLE IF NOT EXISTS maintenance_plans (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          tenant_id INT DEFAULT 1,
+          plan_name VARCHAR(200) NOT NULL COMMENT '计划名称',
+          asset_id INT COMMENT '资产ID',
+          asset_code VARCHAR(100) COMMENT '资产编号',
+          asset_name VARCHAR(200) COMMENT '资产名称',
+          maintenance_type VARCHAR(50) NOT NULL COMMENT '维护类型',
+          cycle_type VARCHAR(20) NOT NULL COMMENT '周期类型',
+          cycle_value INT NOT NULL COMMENT '周期值',
+          next_maintenance_date DATE COMMENT '下次维护日期',
+          maintenance_content TEXT COMMENT '维护内容',
+          responsible_person VARCHAR(50) COMMENT '负责人',
+          status VARCHAR(20) DEFAULT 'active' COMMENT '计划状态',
+          last_maintenance_date DATE COMMENT '上次维护日期',
+          remark TEXT COMMENT '备注',
+          created_by VARCHAR(50) COMMENT '创建人',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT NULL,
+          INDEX idx_asset (asset_id),
+          INDEX idx_asset_code (asset_code),
+          INDEX idx_next_maintenance_date (next_maintenance_date),
+          INDEX idx_status (status),
+          INDEX idx_tenant_id (tenant_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预防性维护计划表'`,
+      },
+      {
+        name: 'uptime_statistics',
+        sql: `CREATE TABLE IF NOT EXISTS uptime_statistics (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          asset_id INT NOT NULL COMMENT '资产ID',
+          device_type ENUM('life_support', 'large_equipment', 'regular_equipment') NOT NULL COMMENT '设备类型',
+          statistics_date DATE NOT NULL COMMENT '统计日期',
+          planned_hours INT NOT NULL COMMENT '计划运行小时数',
+          actual_hours INT NOT NULL COMMENT '实际运行小时数',
+          downtime_hours INT DEFAULT 0 COMMENT '停机小时数',
+          uptime_rate DECIMAL(5,2) COMMENT '开机率(%)',
+          downtime_reason TEXT COMMENT '停机原因',
+          tenant_id INT DEFAULT 1 COMMENT '租户ID',
+          created_at DATETIME,
+          updated_at DATETIME,
+          INDEX idx_asset_id (asset_id),
+          INDEX idx_statistics_date (statistics_date),
+          INDEX idx_device_type (device_type),
+          INDEX idx_tenant_id (tenant_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='开机率统计表'`,
+      },
+    ];
+
+    for (const table of maintenanceTables) {
+      try {
+        await db.execute(table.sql);
+        log.info(`✓ ${table.name} 表检查/创建完成`);
+      } catch (err) {
+        if (err.code === 'ER_TABLE_EXISTS_ERROR') {
+          log.info(`✓ ${table.name} 表已存在`);
+        } else {
+          log.warn(`⚠ ${table.name} 表创建警告: ${err.message}`);
+        }
+      }
+    }
+
+    log.info('数据库表结构初始化完成');
+  } catch (error) {
+    log.error('数据库表结构初始化失败:', error.message);
+    log.error('这可能是因为数据库连接问题');
+  }
+}
+
+// 启动数据库初始化
+initDatabase();
+
+// ============================================
+// 全局错误处理 - 防止进程崩溃
+// ============================================
+process.on('uncaughtException', error => {
+  logger.error('未捕获的异常:', error);
+  logger.error('错误堆栈:', error.stack);
+  // 记录错误但不退出进程，保持服务运行
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('未处理的 Promise 拒绝:', reason);
+  // 记录错误但不退出进程
+});
+
+// ============================================
+// 配置multer中间件
+// ============================================
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+const app = express();
+
+// WebSocket配置已删除
+
+// ============================================
+// 中间件
+// ============================================
+// CORS 配置（开发环境允许任意来源，避免拒绝访问）
+app.use(
+  cors({
+    origin: config.env.NODE_ENV === 'development' ? true : config.cors.origin,
+    methods: config.cors.methods,
+    allowedHeaders: config.cors.allowedHeaders,
+    credentials: config.cors.credentials,
+    maxAge: config.cors.maxAge,
+  })
+);
+
+// 响应压缩（性能优化）
+app.use(compression());
+
+// i18n 国际化中间件 (已临时禁用)
+// const { i18nMiddleware } = require('./middleware/i18n.middleware');
+// app.use(i18nMiddleware);
+
+// 增加JSON请求体大小限制
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// 统一错误响应格式中间件
+const errorResponse = require('./middleware/errorResponse');
+app.use(errorResponse);
+
+// Swagger API文档
+const { setupSwagger } = require('./config/swagger');
+setupSwagger(app);
+
+// 请求频率限制（生产环境优化）
+const {
+  apiLimiter,
+  loginLimiter,
+  registerLimiter,
+  passwordResetLimiter,
+} = require('./middleware/rate-limit');
+app.use('/api/', apiLimiter);
+
+// 导出供登录路由使用
+module.exports.loginLimiter = loginLimiter;
+module.exports.registerLimiter = registerLimiter;
+module.exports.passwordResetLimiter = passwordResetLimiter;
+
+// 信任代理配置（用于获取真实客户端 IP）
+if (config.network.trustProxy) {
+  const trustProxySetting =
+    config.network.trustProxyIPs.length > 0 ? config.network.trustProxyIPs : 1;
+  app.set('trust proxy', trustProxySetting);
+  if (trustProxySetting === 1) {
+    log.warn('TRUST_PROXY=true 且未配置 TRUST_PROXY_IPS，已默认仅信任 1 跳代理');
+  }
+}
+
+// 访问控制中间件（IP 和域名白名单）- 开发环境下不启用，避免本地拒绝访问
+const { accessControlMiddleware } = require('./middleware/accessControl');
+const isDev = config.env.NODE_ENV === 'development';
+if (!isDev && (config.network.enableIPWhitelist || config.network.enableDomainWhitelist)) {
+  app.use(accessControlMiddleware);
+  log.info('访问控制已启用');
+  if (config.network.enableIPWhitelist) {
+    log.info(
+      `IP白名单: ${config.network.allowedIPs.length > 0 ? config.network.allowedIPs.join(', ') : '未配置（将拒绝所有访问）'}`
+    );
+  }
+  if (config.network.enableDomainWhitelist) {
+    log.info(
+      `域名白名单: ${config.network.allowedDomains.length > 0 ? config.network.allowedDomains.join(', ') : '未配置（将拒绝所有访问）'}`
+    );
+  }
+} else if (isDev) {
+  log.warn('开发环境：已跳过IP/域名访问控制');
+}
+
+// 请求日志中间件（仅开发环境）
+app.use((req, res, next) => {
+  log.api(req.method, req.path, 0, 0);
+  next();
+});
+
+// 高风险动作闸门：新增/更新/删除/审批必须二次确认 + 审计留痕 + 幂等键
+const { highRiskActionGate } = require('./middleware/high-risk-action-gate');
+
+// Redis缓存服务中间件 - 优雅降级
+// 添加标志位，避免重复输出相同的日志
+let redisMiddlewareLogEnabled = true;
+
+const resolveRequestTenantId = req => {
+  const tenantId = Number.parseInt(req?.user?.tenant_id, 10);
+  return Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 0;
+};
+
+// 增强的缓存服务包装器，自动处理租户隔离
+const createEnhancedCacheService = (originalCacheService, req) => {
+  return {
+    // 包装set方法，自动传递tenantId和options
+    set: async (key, value, expire = 3600, options = {}) => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.set(key, value, expire, tenantId, options);
+    },
+    // 包装get方法，自动传递tenantId
+    get: async key => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.get(key, tenantId);
+    },
+    // 包装delete方法，自动传递tenantId
+    delete: async (key, cascade = true) => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.delete(key, tenantId, cascade);
+    },
+    // 包装deleteByTags方法，自动传递tenantId
+    deleteByTags: async tags => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.deleteByTags(tags, tenantId);
+    },
+    // 包装flushAll方法，自动传递tenantId
+    flushAll: async (flushAllTenants = false) => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.flushAll(flushAllTenants ? null : tenantId);
+    },
+    // 包装hset方法，自动传递tenantId
+    hset: async (key, field, value) => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.hset(key, field, value, tenantId);
+    },
+    // 包装hget方法，自动传递tenantId
+    hget: async (key, field) => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.hget(key, field, tenantId);
+    },
+    // 包装hdel方法，自动传递tenantId
+    hdel: async (key, field) => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.hdel(key, field, tenantId);
+    },
+    // 包装getTenantKeys方法，自动传递tenantId
+    getTenantKeys: async () => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.getTenantKeys(tenantId);
+    },
+    // 包装缓存依赖管理方法
+    addDependency: async (key, dependentKey) => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.addDependency(key, dependentKey, tenantId);
+    },
+    getDependencies: async key => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.getDependencies(key, tenantId);
+    },
+    removeDependency: async (key, dependentKey) => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.removeDependency(key, dependentKey, tenantId);
+    },
+    // 包装缓存预热和刷新方法
+    warmup: async cacheItems => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.warmup(cacheItems, tenantId);
+    },
+    refresh: async (keys, loader) => {
+      const tenantId = resolveRequestTenantId(req);
+      return originalCacheService.refresh(keys, tenantId, loader);
+    },
+    // 保留原始cache装饰器
+    cache: originalCacheService.cache,
+  };
+};
+
+app.use((req, res, next) => {
+  try {
+    // 注入异步任务队列服务
+    req.asyncQueueService = asyncQueueService;
+
+    // 检查Redis是否可用
+    if (redis && (redis.status === 'connecting' || redis.status === 'ready')) {
+      // 创建增强的缓存服务，自动处理租户隔离
+      req.cacheService = createEnhancedCacheService(cacheService, req);
+      // 只在第一次启用Redis服务时输出日志
+      if (redisMiddlewareLogEnabled) {
+        console.log('✅ Redis缓存服务已启用，支持租户级缓存隔离');
+        redisMiddlewareLogEnabled = false;
+      }
+    } else {
+      // Redis不可用，提供一个模拟的缓存服务，所有方法都返回null或false
+      const mockCacheService = {
+        set: async () => false,
+        get: async () => null,
+        delete: async () => false,
+        flushAll: async () => false,
+        hset: async () => false,
+        hget: async () => null,
+        hdel: async () => false,
+        getTenantKeys: async () => [],
+        cache() {
+          return function (target, propertyKey, descriptor) {
+            return descriptor; // 装饰器直接返回原方法
+          };
+        },
+      };
+      req.cacheService = mockCacheService;
+      // 只在第一次降级为模拟服务时输出日志
+      if (redisMiddlewareLogEnabled) {
+        console.log('⚠️ Redis服务不可用，已启用模拟缓存服务');
+        redisMiddlewareLogEnabled = false;
+      }
+    }
+  } catch (error) {
+    const mockCacheService = {
+      set: async () => false,
+      get: async () => null,
+      delete: async () => false,
+      flushAll: async () => false,
+      hset: async () => false,
+      hget: async () => null,
+      hdel: async () => false,
+      getTenantKeys: async () => [],
+      cache() {
+        return function (target, propertyKey, descriptor) {
+          return descriptor;
+        };
+      },
+    };
+    req.cacheService = mockCacheService;
+    req.asyncQueueService = asyncQueueService;
+    logger.error('Redis服务初始化失败，已启用模拟缓存服务:', error.message);
+    redisMiddlewareLogEnabled = false;
+  }
+  next();
+});
+
+app.use('/api', highRiskActionGate);
+
+// 静态文件服务
+// 仅允许访问 uploads 根目录下的单层文件，阻断敏感子目录绕过业务鉴权下载。
+app.use(
+  '/uploads',
+  (req, res, next) => {
+    const normalizedPath = path.posix.normalize(`/${req.path || ''}`);
+    const segments = normalizedPath.split('/').filter(Boolean);
+
+    if (segments.length > 1) {
+      return res.status(403).json({
+        success: false,
+        message: '该文件仅支持通过业务接口访问',
+      });
+    }
+
+    return next();
+  },
+  express.static(path.join(__dirname, 'uploads'), {
+    dotfiles: 'deny',
+    index: false,
+  })
+);
+
+// 前端静态文件服务（生产环境）
+// 如果存在前端 dist 目录，则提供静态文件服务
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
+const fs = require('fs');
+if (fs.existsSync(frontendDistPath)) {
+  // 提供前端静态文件
+  app.use(express.static(frontendDistPath));
+  // 前端路由回退到 index.html（支持 React Router）
+  app.get('*', (req, res, next) => {
+    // 排除 API 路由和上传文件路由
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+  console.log('✅ 前端静态文件服务已启用:', frontendDistPath);
+}
+
+// ============================================
+// 路由
+// ============================================
+app.use('/api', require('./routes/asset-images'));
+app.use('/api/assets', require('./routes/assets'));
+app.use('/api/inventory', require('./routes/inventory'));
+app.use('/api/inventory-plans', require('./routes/inventory-plans'));
+app.use('/api/inventory-tasks', require('./routes/inventory-tasks'));
+app.use('/api/inventory-discrepancies', require('./routes/inventory-discrepancies'));
+app.use('/api/barcode-scan', require('./routes/barcode-scan'));
+app.use('/api/transfer', require('./routes/transfer'));
+app.use('/api/idle', require('./routes/idle'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/departments', require('./routes/departments'));
+
+app.use('/api/maintenance', require('./routes/maintenance'));
+app.use('/api/maintenance/ai', require('./routes/maintenance-ai'));
+app.use('/api/agent-mesh', require('./routes/agent-mesh'));
+// 兼容历史 IoT 接口路径，统一收敛到 iot-management 模块
+app.use('/api/asset-location', require('./routes/asset-location'));
+app.use('/api/iot-devices', require('./routes/iot-devices'));
+app.use('/api/location-alerts', require('./routes/location-alerts'));
+app.use('/api/iot', require('./modules/iot-management/routes/index.js'));
+app.use('/api/technical-documents', require('./routes/technical-documents'));
+app.use('/api/technical-documents/enhanced', require('./routes/technical-documents-enhanced'));
+app.use('/api/technical-documents/ai', require('./routes/technical-documents-ai'));
+app.use('/api/audit-logs', require('./routes/audit-logs'));
+app.use('/api/backup', require('./routes/backup'));
+app.use('/api/roles-permissions', require('./routes/roles-permissions'));
+app.use('/api/enhanced-permissions', require('./routes/enhanced-permissions'));
+app.use('/api/system-config', require('./routes/system-config'));
+app.use('/api/acceptance', require('./routes/acceptance'));
+app.use('/api/procurement', require('./routes/procurement'));
+app.use('/api/integration', require('./modules/message-integration/routes/index'));
+app.use('/api/integration', require('./routes/integration-channels'));
+app.use('/api/asset-ai-analysis', require('./routes/asset-ai-analysis'));
+app.use('/api/location-codes', require('./routes/location-codes'));
+app.use('/api/quality-control', require('./routes/quality-control'));
+// 兼容前端调用的 /api/quality 路径
+app.use('/api/quality', require('./routes/quality-control'));
+app.use('/api/workflow', require('./routes/workflow'));
+app.use('/api/analysis', require('./routes/analysis'));
+app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/adverse-reaction', require('./routes/adverse-reaction'));
+// 兼容模块配置中旧命名（adverse-events）
+app.use('/api/adverse-events', require('./routes/adverse-reaction'));
+app.use('/api/tenants', require('./routes/tenants'));
+app.use('/api/menus', require('./routes/menus'));
+app.use('/api/asset-labels', require('./routes/asset-labels'));
+app.use('/api/temp-assets', require('./routes/temp-assets'));
+app.use('/api/modules', require('./routes/modules'));
+app.use('/api/module-configs', require('./routes/module-configs'));
+
+app.use('/api/tenant-module-config', require('./routes/tenant-module-config'));
+app.use('/api/depreciation', require('./routes/depreciation'));
+app.use('/api/asset-depreciation', require('./routes/asset-depreciation'));
+app.use('/api/scrapping', require('./routes/scrapping'));
+app.use('/api/api-documentation', require('./routes/api-documentation'));
+
+// ============================================
+// 合规性管理路由 - 《医学装备整体运维管理服务规范》
+// ============================================
+app.use('/api/compliance', require('./modules/compliance-management/routes/index'));
+
+// ============================================
+// 特种设备管理路由（独立模块）
+// ============================================
+app.use('/api/special-equipment', require('./modules/special-equipment-management/routes/index'));
+// 兼容旧路径
+app.use(
+  '/api/compliance/special-equipment',
+  require('./modules/special-equipment-management/routes/index'),
+);
+
+// ============================================
+// 安全检测管理路由（独立模块）
+// ============================================
+app.use('/api/safety-inspection', require('./modules/safety-inspection-management/routes/index'));
+// 兼容旧路径（历史复数写法）
+app.use(
+  '/api/compliance/safety-inspections',
+  require('./modules/safety-inspection-management/routes/index'),
+);
+// 兼容旧路径（历史单数写法）
+app.use(
+  '/api/compliance/safety-inspection',
+  require('./modules/safety-inspection-management/routes/index'),
+);
+// ============================================
+// 资产风险管理路由
+// ============================================
+app.use('/api/risk', require('./modules/asset-risk-management/routes/index'));
+
+// ============================================
+// 人员资质管理路由
+// ============================================
+app.use('/api/staff', require('./modules/staff-qualification/routes/index'));
+
+// ============================================
+// 开机率管理路由
+// ============================================
+app.use('/api/uptime', require('./modules/uptime-management/routes/index'));
+
+// ============================================
+// 智能预警系统路由
+// ============================================
+app.use('/api/intelligent-alerts', require('./routes/intelligent-alerts'));
+// app.use('/api/i18n', require('./routes/i18n.routes')); // 国际化功能已临时禁用
+
+// ============================================
+// 动态模块加载系统
+// ============================================
+(async () => {
+  try {
+    const { getInstance } = require('./core/module-loader');
+    const moduleLoader = getInstance();
+
+    // 加载所有模块
+    const loadedModules = await moduleLoader.loadAllModules();
+    console.log(`📦 已加载 ${loadedModules.length} 个业务模块`);
+
+    // 注册模块路由
+    moduleLoader.registerRoutes(app);
+
+    // 显示模块列表
+    loadedModules.forEach(m => {
+      console.log(`  ✅ ${m.name} (${m.id}) v${m.version}`);
+    });
+  } catch (error) {
+    console.error('❌ 模块加载失败:', error.message);
+  }
+})();
+
+// ============================================
+// 健康检查（包含数据库连接检查）
+// ============================================
+const HEALTH_DEP_TIMEOUT_MS = Number.parseInt(process.env.HEALTH_DEP_TIMEOUT_MS || '3000', 10);
+
+const formatDependencyError = error => {
+  if (!error) return 'unknown_error';
+  const code = String(error.code || '').trim();
+  const message = String(error.message || '').trim();
+  return code || message || 'unknown_error';
+};
+
+const withTimeout = (promise, timeoutMs, timeoutCode) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      const timeoutError = new Error(timeoutCode);
+      timeoutError.code = timeoutCode;
+      setTimeout(() => reject(timeoutError), timeoutMs);
+    }),
+  ]);
+
+const checkDatabaseDependency = async (timeoutMs = HEALTH_DEP_TIMEOUT_MS) => {
+  const startedAt = Date.now();
+  let connection;
+
+  try {
+    connection = await withTimeout(db.getConnection(), timeoutMs, 'db_connect_timeout');
+    await withTimeout(connection.ping(), timeoutMs, 'db_ping_timeout');
+
+    return {
+      name: 'database',
+      status: 'up',
+      required: true,
+      latencyMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    return {
+      name: 'database',
+      status: 'down',
+      required: true,
+      latencyMs: Date.now() - startedAt,
+      error: formatDependencyError(error),
+    };
+  } finally {
+    if (connection) {
+      try {
+        connection.release();
+      } catch (releaseError) {
+        // 忽略释放连接异常，避免影响健康检查结果
+      }
+    }
+  }
+};
+
+const checkRedisDependency = async (timeoutMs = HEALTH_DEP_TIMEOUT_MS) => {
+  const startedAt = Date.now();
+  const redisEnabled = Boolean(config.redis?.enabled);
+
+  if (!redisEnabled) {
+    return {
+      name: 'redis',
+      status: 'disabled',
+      required: false,
+      latencyMs: 0,
+      detail: 'redis_disabled_by_config',
+    };
+  }
+
+  if (!redis) {
+    return {
+      name: 'redis',
+      status: 'down',
+      required: true,
+      latencyMs: Date.now() - startedAt,
+      error: 'redis_service_not_initialized',
+    };
+  }
+
+  try {
+    if (redis.isConnected && redis.client && typeof redis.client.ping === 'function') {
+      await withTimeout(redis.client.ping(), timeoutMs, 'redis_ping_timeout');
+      return {
+        name: 'redis',
+        status: 'up',
+        required: true,
+        latencyMs: Date.now() - startedAt,
+      };
+    }
+
+    if (redis.isConnected) {
+      return {
+        name: 'redis',
+        status: 'up',
+        required: true,
+        latencyMs: Date.now() - startedAt,
+      };
+    }
+
+    return {
+      name: 'redis',
+      status: 'down',
+      required: true,
+      latencyMs: Date.now() - startedAt,
+      error: redis.isMemoryCache ? 'redis_fallback_memory_cache' : 'redis_not_connected',
+    };
+  } catch (error) {
+    return {
+      name: 'redis',
+      status: 'down',
+      required: true,
+      latencyMs: Date.now() - startedAt,
+      error: formatDependencyError(error),
+    };
+  }
+};
+
+const collectDependencyHealth = async (timeoutMs = HEALTH_DEP_TIMEOUT_MS) => {
+  const [database, redisDependency] = await Promise.all([
+    checkDatabaseDependency(timeoutMs),
+    checkRedisDependency(timeoutMs),
+  ]);
+
+  const dependencies = {
+    database,
+    redis: redisDependency,
+  };
+
+  const failedRequiredDependencies = Object.values(dependencies).filter(
+    dependency => dependency.required && dependency.status !== 'up',
+  );
+
+  return {
+    status: failedRequiredDependencies.length === 0 ? 'ok' : 'error',
+    dependencies,
+    failedRequiredDependencies,
+    timeoutMs,
+  };
+};
+
+/**
+ * @swagger
+ * /api/health:
+ *   get:
+ *     tags:
+ *       - 系统
+ *     summary: 轻量健康检查
+ *     description: 快速返回服务存活状态（不阻塞等待外部依赖）
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: 服务进程存活
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: ok
+ *                 message:
+ *                   type: string
+ *                   example: 资产管理服务运行正常
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ */
+/**
+ * @swagger
+ * /api/health/dependencies:
+ *   get:
+ *     tags:
+ *       - 系统
+ *     summary: 依赖健康检查
+ *     description: 检查数据库和Redis等关键依赖，供运维告警与Readiness探针使用
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: 依赖正常
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: ok
+ *                 message:
+ *                   type: string
+ *                   example: 关键依赖运行正常
+ *                 timeoutMs:
+ *                   type: integer
+ *                   example: 3000
+ *                 dependencies:
+ *                   type: object
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *       503:
+ *         description: 关键依赖异常
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: error
+ *                 message:
+ *                   type: string
+ *                   example: 存在异常依赖，请关注告警
+ *                 failedDependencies:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 dependencies:
+ *                   type: object
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ */
+// 轻量健康检查：先立即返回 200，避免前端/代理因等待 DB 而一直转圈；后台再检查依赖并记录日志
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: '资产管理服务运行正常',
+    timestamp: new Date().toISOString(),
+  });
+
+  // 后台检查依赖（不阻塞响应），仅用于日志
+  setImmediate(async () => {
+    try {
+      const dependencyHealth = await collectDependencyHealth();
+      if (dependencyHealth.status === 'ok') {
+        console.log('✅ 健康检查后台: 关键依赖正常');
+      } else {
+        const failedDependencyNames = dependencyHealth.failedRequiredDependencies.map(
+          dependency => dependency.name,
+        );
+        console.warn(
+          `⚠️ 健康检查后台: 关键依赖异常(${failedDependencyNames.join(', ') || 'unknown'})`,
+        );
+      }
+    } catch (error) {
+      console.error('健康检查后台: 依赖检测异常', error.message);
+    }
+  });
+});
+
+// 真实依赖状态检查（供运维告警/Readiness使用）
+app.get('/api/health/dependencies', async (req, res) => {
+  try {
+    const dependencyHealth = await collectDependencyHealth();
+    const failedDependencies = dependencyHealth.failedRequiredDependencies.map(
+      dependency => dependency.name,
+    );
+    const httpStatus = dependencyHealth.status === 'ok' ? 200 : 503;
+
+    return res.status(httpStatus).json({
+      status: dependencyHealth.status,
+      message:
+        dependencyHealth.status === 'ok' ? '关键依赖运行正常' : '存在异常依赖，请关注告警',
+      timeoutMs: dependencyHealth.timeoutMs,
+      failedDependencies,
+      dependencies: dependencyHealth.dependencies,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return res.status(503).json({
+      status: 'error',
+      message: '依赖健康检查失败',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// 资产分享链接重定向（如果用户直接访问后端端口）
+app.get('/asset-share/:token', (req, res) => {
+  const { token } = req.params;
+  // 重定向到前端
+  const frontendUrl = config.frontend.url;
+  res.redirect(`${frontendUrl}/asset-share/${token}`);
+});
+
+// 404处理
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: '接口不存在',
+    path: req.path,
+  });
+});
+
+// 全局错误处理中间件（必须放在所有路由之后）
+const { globalErrorHandler } = require('./middleware/errorHandler');
+app.use(globalErrorHandler);
+
+// ============================================
+// 初始化用户系统（已注释，不再自动初始化）
+// ============================================
+// const createUserSystem = require('./scripts/create-user-system');
+// createUserSystem().catch((error) => {
+//   console.error('[用户系统] 初始化失败，但服务器将继续启动:', error.message);
+// });
+
+//     return;
+//   }
+
+//   // 数据库连接成功后，初始化表
+//   const initQualityManagementTables = require('./scripts/init-quality-management-tables');
+//   try {
+//     const success = await initQualityManagementTables();
+//     if (success) {
+//       console.log('[质量管理] ✅ 表初始化完成');
+//     } else {
+//       console.warn('[质量管理] ⚠️ 表初始化失败，将在首次访问时尝试创建');
+//     }
+//   } catch (error) {
+//     console.error('[质量管理] ❌ 表初始化异常:', error.message);
+//     console.warn('[质量管理] ⚠️ 将在首次访问时尝试创建表');
+//   }
+// }
+
+// 异步初始化（已注释，不再自动初始化表）
+// initializeQualityManagementTables();
+
+// WebSocket事件处理已删除
+
+// ============================================
+// 启动服务器
+// ============================================
+const PORT = config.server.port;
+const HOST = config.server.host;
+let server;
+
+// 聊天室服务已删除
+
+// 服务器启动成功后的回调函数
+const onServerStart = () => {
+  console.log(`✅ 服务器运行在端口 ${PORT}`);
+  console.log(`📡 健康检查: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/api/health`);
+  console.log(`⏰ 启动时间: ${new Date().toISOString()}`);
+
+  // 启动异步任务队列
+  if (defaultQueue) {
+    defaultQueue.start(5).catch(err => {
+      console.error('⚠️ 异步任务队列启动失败:', err.message);
+    });
+  }
+
+  // 运行缓存预热
+  try {
+    const { spawn } = require('child_process');
+    const warmupProcess = spawn('node', ['scripts/warmup-cache.js'], {
+      cwd: __dirname,
+      detached: true,
+      stdio: 'ignore',
+    });
+    warmupProcess.unref();
+    console.log('✅ 缓存预热任务已启动');
+  } catch (error) {
+    console.warn('⚠️ 缓存预热启动失败:', error.message);
+  }
+
+  // WebSocket服务已删除
+};
+
+// 检查是否启用HTTPS
+if (config.server.https && config.server.sslCert && config.server.sslKey) {
+  // 启用HTTPS
+  const https = require('https');
+  const fs = require('fs');
+
+  try {
+    // 读取SSL证书和私钥
+    const sslOptions = {
+      cert: fs.readFileSync(config.server.sslCert),
+      key: fs.readFileSync(config.server.sslKey),
+    };
+
+    // 创建HTTPS服务器
+    server = https.createServer(sslOptions, app);
+
+    // Socket.IO已删除
+
+    // 监听HTTPS端口
+    server.listen(PORT, HOST, () => {
+      console.log('✅ HTTPS服务器已启动');
+      onServerStart();
+    });
+  } catch (error) {
+    console.error('❌ HTTPS服务器启动失败:', error.message);
+    console.error('❌ 将回退到HTTP模式');
+
+    // 回退到HTTP模式
+    server = app.listen(PORT, HOST, () => {
+      onServerStart();
+    });
+  }
+} else {
+  // 继续使用HTTP模式
+  server = app.listen(PORT, HOST, () => {
+    onServerStart();
+  });
+
+  // Socket.IO已删除
+}
+
+// ============================================
+// 优雅关闭机制
+const gracefulShutdown = signal => {
+  console.log(`\n收到 ${signal} 信号，开始优雅关闭...`);
+
+  server.close(() => {
+    console.log('✅ HTTP 服务器已关闭');
+
+    // 关闭数据库连接池
+    if (db && typeof db.end === 'function') {
+      try {
+        db.end()
+          .then(() => {
+            console.log('✅ 数据库连接池已关闭');
+            console.log('✅ 服务器已完全关闭');
+            process.exit(0);
+          })
+          .catch(err => {
+            console.error('❌ 关闭数据库连接池时出错:', err);
+            console.log('✅ 服务器已完全关闭');
+            process.exit(0);
+          });
+      } catch (error) {
+        console.error('❌ 关闭数据库连接池时发生异常:', error);
+        console.log('✅ 服务器已完全关闭');
+        process.exit(0);
+      }
+    } else {
+      console.log('✅ 数据库连接池未初始化，跳过关闭');
+      console.log('✅ 服务器已完全关闭');
+      process.exit(0);
+    }
+  });
+
+  // 如果 10 秒内无法正常关闭，强制退出
+  setTimeout(() => {
+    console.error('❌ 强制退出进程');
+    process.exit(1);
+  }, 10000);
+};
+
+// 监听关闭信号
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// 处理服务器错误
+server.on('error', error => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ 端口 ${PORT} 已被占用`);
+  } else {
+    console.error('❌ 服务器错误:', error);
+  }
+  process.exit(1);
+});

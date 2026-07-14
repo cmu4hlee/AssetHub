@@ -1,0 +1,132 @@
+# AssetHub - 飞牛 NAS (fnOS) Docker 部署
+# 通过 http://192.168.1.132:5666/ 访问
+# 仅 MySQL/Redis/Backend/Frontend 四个服务容器化
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: assethub-mysql-fnnas
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-assethub2024}
+      MYSQL_DATABASE: zcgl
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-u', 'root', '-p${MYSQL_ROOT_PASSWORD:-assethub2024}']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max-connections=200
+      --innodb-buffer-pool-size=256M
+    networks:
+      - assethub-fnnas-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: assethub-redis-fnnas
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - assethub-fnnas-net
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy-fnnas/backend/Dockerfile
+    container_name: assethub-backend-fnnas
+    env_file:
+      - ./env/backend.env
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_PASSWORD=${MYSQL_ROOT_PASSWORD:-assethub2024}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_ENABLED=true
+    volumes:
+      - ./data/backend/uploads:/app/uploads
+      - ./data/backend/backups:/app/backups
+      - ./data/backend/logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:5183/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    # 让容器内能访问宿主机（NAS）的 OpenClaw
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - assethub-fnnas-net
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy-fnnas/frontend/Dockerfile
+    container_name: assethub-frontend-fnnas
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./frontend/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - '5666:80'
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 32M
+    logging:
+      driver: json-file
+      options:
+        max-size: '5m'
+        max-file: '3'
+    networks:
+      - assethub-fnnas-net
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  assethub-fnnas-net:
+    driver: bridge

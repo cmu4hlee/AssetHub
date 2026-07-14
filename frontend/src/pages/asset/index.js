@@ -1,0 +1,9 @@
+export { default as AssetOverview } from './AssetOverview';
+export { default as AssetImages } from './AssetImages';
+export { default as AssetLocation } from './AssetLocation';
+export { default as AssetDocuments } from './AssetDocuments';
+export { default as AssetStatusTransition } from './AssetStatusTransition';
+export { default as AssetShareLinks } from './AssetShareLinks';
+export { default as AssetChangeLogs } from './AssetChangeLogs';
+export { default as AssetMaintenanceRecords } from './AssetMaintenanceRecords';
+export { default as AssetQualityManagement } from './AssetQualityManagement';

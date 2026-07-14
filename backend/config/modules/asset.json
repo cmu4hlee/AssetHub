@@ -1,0 +1,8 @@
+{
+  "cacheEnabled": true,
+  "cacheTTL": 300,
+  "maxPageSize": 2000,
+  "defaultPageSize": 20,
+  "autoApproval": false,
+  "statusChangeNotification": true
+}

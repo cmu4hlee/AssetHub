@@ -1,0 +1,58 @@
+# AssetHub 后端 Dockerfile - 飞牛专用
+# 使用国内镜像源加速构建
+
+# 构建阶段
+FROM registry.cn-hangzhou.aliyuncs.com/library/node:20-alpine AS builder
+
+WORKDIR /app
+
+# 配置 npm 镜像加速
+RUN npm config set registry https://registry.npmmirror.com
+
+# 复制 package.json 和 package-lock.json
+COPY package*.json ./
+
+# 安装依赖
+RUN npm ci --production
+
+# 复制源代码
+COPY . .
+
+# 生产阶段
+FROM registry.cn-hangzhou.aliyuncs.com/library/node:20-alpine
+
+LABEL maintainer="AssetHub Team"
+LABEL description="AssetHub 资产管理系统后端服务"
+
+WORKDIR /app
+
+# 从构建阶段复制文件
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/ .
+
+# 安装 canvas 原生依赖
+RUN apk add --no-cache cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev
+
+# 创建必要的目录
+RUN mkdir -p /app/uploads /app/backups /app/logs
+
+# 设置时区
+RUN apk add --no-cache tzdata
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# 配置环境变量
+ENV NODE_ENV=production
+ENV PORT=5183
+ENV SERVER_HOST=0.0.0.0
+
+# 暴露端口
+EXPOSE 5183
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "const http = require('http'); const options = { hostname: 'localhost', port: 5183, path: '/api/health', timeout: 5000 }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.end();"
+
+# 启动命令
+CMD ["node", "server.js"]

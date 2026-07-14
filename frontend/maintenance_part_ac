@@ -1,0 +1,1000 @@
+    const [result] = await db.execute(
+      `INSERT INTO asset_usage_records (
+        tenant_id, asset_code, asset_name, usage_date, usage_value, usage_type,
+        cumulative_value, operator, remark
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        asset.asset_code,
+        asset.asset_name,
+        usage_date,
+        usage_value,
+        usage_type,
+        cumulative_value,
+        operator || null,
+        remark || null,
+      ]
+    );
+
+    // 更新预防性维护计划的当前使用量
+    await db.execute(
+      `UPDATE preventive_maintenance_plans
+       SET current_usage = ?
+       WHERE asset_code = ? AND trigger_type = 'usage' AND status = '启用'`,
+      [cumulative_value, asset.asset_code]
+    );
+
+    res.json({
+      success: true,
+      message: '资产使用量记录创建成功',
+      data: { id: result.insertId },
+    });
+  } catch (error) {
+    console.error('创建资产使用量记录失败:', error);
+    res
+      .status(500)
+      .json({ success: false, message: '创建资产使用量记录失败', error: error.message });
+  }
+});
+
+// 获取使用量触发的维护计划列表
+router.get('/usage-triggered', authenticate, async (req, res) => {
+  try {
+    const { page = 1, pageSize = 20, asset_code, status } = req.query;
+    const offset = (page - 1) * pageSize;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    // 添加租户过滤
+    const tenantFilter = addTenantFilter(req, 'utm');
+    whereClause += tenantFilter.whereClause;
+    params.push(...tenantFilter.params);
+
+    if (asset_code) {
+      whereClause += ' AND utm.asset_code LIKE ?';
+      params.push(`%${asset_code}%`);
+    }
+    if (status) {
+      whereClause += ' AND utm.status = ?';
+      params.push(status);
+    }
+
+    // 获取总数
+    const [countResult] = await db.execute(
+      `SELECT COUNT(*) as total FROM usage_triggered_maintenance utm ${whereClause}`,
+      params
+    );
+    const { total } = countResult[0];
+
+    // 获取数据
+    const [rows] = await db.execute(
+      `SELECT utm.* FROM usage_triggered_maintenance utm
+       ${whereClause}
+       ORDER BY utm.trigger_date DESC, utm.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, parseInt(pageSize), offset]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error('获取使用量触发的维护计划列表失败:', error);
+    res
+      .status(500)
+      .json({ success: false, message: '获取使用量触发的维护计划列表失败', error: error.message });
+  }
+});
+
+// 处理使用量触发的维护计划
+router.post('/usage-triggered/:id/process', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { work_order_id, remark } = req.body;
+
+    // 验证触发记录是否存在并验证租户
+    const tenantFilter = addTenantFilter(req, 'utm');
+    const [existing] = await db.execute(
+      `SELECT id, asset_code, asset_name, plan_id FROM usage_triggered_maintenance utm WHERE utm.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '使用量触发记录不存在' });
+    }
+
+    const triggerRecord = existing[0];
+
+    // 更新触发记录状态
+    await db.execute(
+      `UPDATE usage_triggered_maintenance
+       SET status = 'processed', work_order_id = ?, updated_at = NOW()
+       WHERE id = ?`,
+      [work_order_id || null, id]
+    );
+
+    // 如果关联了工单，更新工单信息
+    if (work_order_id) {
+      await db.execute(
+        `UPDATE work_orders
+         SET source_type = 'usage_triggered'
+         WHERE id = ?`,
+        [work_order_id]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: '使用量触发记录处理成功',
+    });
+  } catch (error) {
+    console.error('处理使用量触发记录失败:', error);
+    res
+      .status(500)
+      .json({ success: false, message: '处理使用量触发记录失败', error: error.message });
+  }
+});
+
+// 检查使用量触发的维护计划
+router.post('/usage-triggered/check', authenticate, async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+
+    // 查询需要检查的维护计划
+    const [plans] = await db.execute(
+      `SELECT
+        id, asset_code, asset_name, current_usage, usage_threshold, usage_type, plan_name
+      FROM preventive_maintenance_plans
+      WHERE tenant_id = ?
+      AND status = '启用'
+      AND trigger_type = 'usage'
+      AND usage_threshold IS NOT NULL
+      AND current_usage >= usage_threshold`,
+      [tenantId]
+    );
+
+    const triggeredPlans = [];
+
+    for (const plan of plans) {
+      // 检查是否已经创建过触发记录
+      const [existing] = await db.execute(
+        `SELECT id FROM usage_triggered_maintenance
+        WHERE tenant_id = ? AND plan_id = ? AND status = 'pending'`,
+        [tenantId, plan.id]
+      );
+
+      if (existing.length === 0) {
+        // 创建使用量触发记录
+        const [result] = await db.execute(
+          `INSERT INTO usage_triggered_maintenance (
+            tenant_id, asset_code, asset_name, plan_id,
+            trigger_date, current_usage, threshold_usage,
+            usage_type, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            tenantId,
+            plan.asset_code,
+            plan.asset_name,
+            plan.id,
+            new Date().toISOString().split('T')[0],
+            plan.current_usage,
+            plan.usage_threshold,
+            plan.usage_type,
+            'pending',
+          ]
+        );
+
+        triggeredPlans.push({
+          ...plan,
+          trigger_id: result.insertId,
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: '使用量触发检查完成',
+      data: {
+        checked_plans: plans.length,
+        triggered_plans: triggeredPlans.length,
+        triggered_details: triggeredPlans,
+      },
+    });
+  } catch (error) {
+    console.error('检查使用量触发的维护计划失败:', error);
+    res
+      .status(500)
+      .json({ success: false, message: '检查使用量触发的维护计划失败', error: error.message });
+  }
+});
+
+// ============================================
+// 维护成本管理相关接口
+// ============================================
+
+// 获取维护成本列表
+router.get('/costs', authenticate, async (req, res) => {
+  try {
+    const {
+      page = 1,
+      pageSize = 20,
+      asset_code,
+      cost_type,
+      start_date,
+      end_date,
+      department,
+    } = req.query;
+    const offset = (page - 1) * pageSize;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    // 添加租户过滤
+    const tenantFilter = addTenantFilter(req, 'mc');
+    whereClause += tenantFilter.whereClause;
+    params.push(...tenantFilter.params);
+
+    if (asset_code) {
+      whereClause += ' AND mc.asset_code LIKE ?';
+      params.push(`%${asset_code}%`);
+    }
+    if (cost_type) {
+      whereClause += ' AND mc.cost_type = ?';
+      params.push(cost_type);
+    }
+    if (start_date) {
+      whereClause += ' AND mc.cost_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND mc.cost_date <= ?';
+      params.push(end_date);
+    }
+    if (department) {
+      whereClause += ' AND mc.department LIKE ?';
+      params.push(`%${department}%`);
+    }
+
+    // 获取总数
+    const [countResult] = await db.execute(
+      `SELECT COUNT(*) as total FROM maintenance_costs mc ${whereClause}`,
+      params
+    );
+    const { total } = countResult[0];
+
+    // 获取数据
+    const [rows] = await db.execute(
+      `SELECT mc.* FROM maintenance_costs mc
+       ${whereClause}
+       ORDER BY mc.cost_date DESC, mc.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, parseInt(pageSize), offset]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error('获取维护成本列表失败:', error);
+    res.status(500).json({ success: false, message: '获取维护成本列表失败', error: error.message });
+  }
+});
+
+// 创建维护成本记录
+router.post('/costs', authenticate, async (req, res) => {
+  try {
+    const {
+      maintenance_log_id,
+      work_order_id,
+      asset_code,
+      cost_date,
+      cost_type,
+      amount,
+      description,
+      department,
+      location,
+    } = req.body;
+
+    if (!asset_code || !cost_date || !cost_type || !amount) {
+      return res
+        .status(400)
+        .json({ success: false, message: '资产编号、成本日期、成本类型和金额不能为空' });
+    }
+
+    // 获取资产信息
+    const assetTenantFilter = addTenantFilter(req, 'a');
+    const [assets] = await db.execute(
+      `SELECT a.asset_code, a.asset_name FROM assets a WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
+      [asset_code, ...assetTenantFilter.params]
+    );
+
+    if (assets.length === 0) {
+      return res.status(404).json({ success: false, message: '资产不存在' });
+    }
+
+    const asset = assets[0];
+    const createdBy = req.user.real_name || req.user.username || '系统管理员';
+    const tenantId = getTenantId(req);
+
+    const [result] = await db.execute(
+      `INSERT INTO maintenance_costs (
+        tenant_id, maintenance_log_id, work_order_id, asset_code, asset_name,
+        cost_date, cost_type, amount, description, department, location, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        maintenance_log_id || null,
+        work_order_id || null,
+        asset.asset_code,
+        asset.asset_name,
+        cost_date,
+        cost_type,
+        amount,
+        description || null,
+        department || null,
+        location || null,
+        createdBy,
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: '维护成本记录创建成功',
+      data: { id: result.insertId },
+    });
+  } catch (error) {
+    console.error('创建维护成本记录失败:', error);
+    res.status(500).json({ success: false, message: '创建维护成本记录失败', error: error.message });
+  }
+});
+
+// 更新维护成本记录
+router.put('/costs/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      maintenance_log_id,
+      work_order_id,
+      cost_date,
+      cost_type,
+      amount,
+      description,
+      department,
+      location,
+    } = req.body;
+
+    const updateFields = [];
+    const updateValues = [];
+
+    if (maintenance_log_id !== undefined) {
+      updateFields.push('maintenance_log_id = ?');
+      updateValues.push(maintenance_log_id);
+    }
+    if (work_order_id !== undefined) {
+      updateFields.push('work_order_id = ?');
+      updateValues.push(work_order_id);
+    }
+    if (cost_date !== undefined) {
+      updateFields.push('cost_date = ?');
+      updateValues.push(cost_date);
+    }
+    if (cost_type !== undefined) {
+      updateFields.push('cost_type = ?');
+      updateValues.push(cost_type);
+    }
+    if (amount !== undefined) {
+      updateFields.push('amount = ?');
+      updateValues.push(amount);
+    }
+    if (description !== undefined) {
+      updateFields.push('description = ?');
+      updateValues.push(description);
+    }
+    if (department !== undefined) {
+      updateFields.push('department = ?');
+      updateValues.push(department);
+    }
+    if (location !== undefined) {
+      updateFields.push('location = ?');
+      updateValues.push(location);
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: '没有要更新的字段' });
+    }
+
+    // 验证成本记录是否存在并验证租户
+    const tenantFilter = addTenantFilter(req, 'mc');
+    const [existing] = await db.execute(
+      `SELECT id FROM maintenance_costs mc WHERE mc.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '维护成本记录不存在' });
+    }
+
+    updateFields.push('updated_at = NOW()');
+    updateValues.push(id);
+
+    const [result] = await db.execute(
+      `UPDATE maintenance_costs mc SET ${updateFields.join(', ')} WHERE mc.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+      [...updateValues, ...tenantFilter.params]
+    );
+
+    res.json({ success: true, message: '维护成本记录更新成功' });
+  } catch (error) {
+    console.error('更新维护成本记录失败:', error);
+    res.status(500).json({ success: false, message: '更新维护成本记录失败', error: error.message });
+  }
+});
+
+// 删除维护成本记录
+router.delete('/costs/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 验证成本记录是否存在并验证租户
+    const tenantFilter = addTenantFilter(req, 'mc');
+    const [existing] = await db.execute(
+      `SELECT id FROM maintenance_costs mc WHERE mc.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '维护成本记录不存在' });
+    }
+
+    const [result] = await db.execute(
+      `DELETE mc FROM maintenance_costs mc WHERE mc.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+      [id, ...tenantFilter.params]
+    );
+
+    res.json({ success: true, message: '维护成本记录删除成功' });
+  } catch (error) {
+    console.error('删除维护成本记录失败:', error);
+    res.status(500).json({ success: false, message: '删除维护成本记录失败', error: error.message });
+  }
+});
+
+// 获取维护成本分析
+router.get('/costs/analysis', authenticate, async (req, res) => {
+  try {
+    const { start_date, end_date, department, asset_code } = req.query;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    // 添加租户过滤
+    const tenantFilter = addTenantFilter(req, 'mc');
+    whereClause += tenantFilter.whereClause;
+    params.push(...tenantFilter.params);
+
+    if (start_date) {
+      whereClause += ' AND mc.cost_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND mc.cost_date <= ?';
+      params.push(end_date);
+    }
+    if (department) {
+      whereClause += ' AND mc.department LIKE ?';
+      params.push(`%${department}%`);
+    }
+    if (asset_code) {
+      whereClause += ' AND mc.asset_code LIKE ?';
+      params.push(`%${asset_code}%`);
+    }
+
+    // 获取成本汇总
+    const [summary] = await db.execute(
+      `SELECT
+        SUM(CASE WHEN cost_type = 'labor' THEN amount ELSE 0 END) AS labor_cost,
+        SUM(CASE WHEN cost_type = 'material' THEN amount ELSE 0 END) AS material_cost,
+        SUM(CASE WHEN cost_type = 'external' THEN amount ELSE 0 END) AS external_cost,
+        SUM(CASE WHEN cost_type = 'other' THEN amount ELSE 0 END) AS other_cost,
+        SUM(amount) AS total_cost,
+        COUNT(*) AS cost_count
+      FROM maintenance_costs mc
+      ${whereClause}`,
+      params
+    );
+
+    // 获取按资产的成本分布
+    const [assetDistribution] = await db.execute(
+      `SELECT
+        asset_code,
+        asset_name,
+        SUM(amount) AS total_cost,
+        COUNT(*) AS maintenance_count
+      FROM maintenance_costs mc
+      ${whereClause}
+      GROUP BY asset_code, asset_name
+      ORDER BY total_cost DESC
+      LIMIT 10`,
+      params
+    );
+
+    // 获取按部门的成本分布
+    const [departmentDistribution] = await db.execute(
+      `SELECT
+        department,
+        SUM(amount) AS total_cost,
+        COUNT(*) AS maintenance_count
+      FROM maintenance_costs mc
+      ${whereClause}
+      GROUP BY department
+      ORDER BY total_cost DESC`,
+      params
+    );
+
+    // 获取月度成本趋势
+    const [monthlyTrend] = await db.execute(
+      `SELECT
+        DATE_FORMAT(cost_date, '%Y-%m') AS month,
+        SUM(amount) AS total_cost,
+        SUM(CASE WHEN cost_type = 'labor' THEN amount ELSE 0 END) AS labor_cost,
+        SUM(CASE WHEN cost_type = 'material' THEN amount ELSE 0 END) AS material_cost,
+        SUM(CASE WHEN cost_type = 'external' THEN amount ELSE 0 END) AS external_cost,
+        SUM(CASE WHEN cost_type = 'other' THEN amount ELSE 0 END) AS other_cost
+      FROM maintenance_costs mc
+      ${whereClause}
+      GROUP BY DATE_FORMAT(cost_date, '%Y-%m')
+      ORDER BY month ASC`,
+      params
+    );
+
+    res.json({
+      success: true,
+      data: {
+        summary: summary[0],
+        assetDistribution,
+        departmentDistribution,
+        monthlyTrend,
+      },
+    });
+  } catch (error) {
+    console.error('获取维护成本分析失败:', error);
+    res.status(500).json({ success: false, message: '获取维护成本分析失败', error: error.message });
+  }
+});
+
+// ============================================
+// 维护计划模板相关接口
+// ============================================
+
+// 获取维护计划模板列表
+router.get('/templates', authenticate, async (req, res) => {
+  try {
+    const { asset_type, brand, model, status, asset_code } = req.query;
+
+    // 检查表是否存在
+    try {
+      const [tables] = await db.execute(
+        `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'maintenance_templates'`
+      );
+
+      if (tables.length === 0) {
+        // 表不存在，返回空数组
+        return res.json({
+          success: true,
+          data: [],
+        });
+      }
+    } catch (checkError) {
+      console.warn('检查表结构失败:', checkError.message);
+      // 继续执行，如果表不存在会在查询时失败
+    }
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    // 添加租户过滤
+    const tenantFilter = addTenantFilter(req, 'mt');
+    whereClause += tenantFilter.whereClause;
+    params.push(...tenantFilter.params);
+
+    // 如果提供了资产编号，根据资产信息自动匹配模板
+    if (asset_code) {
+      // 获取资产信息
+      const assetTenantFilter = addTenantFilter(req, 'a');
+      const [assets] = await db.execute(
+        `SELECT a.asset_type, a.brand, a.model FROM assets a WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
+        [asset_code, ...assetTenantFilter.params]
+      );
+
+      if (assets.length > 0) {
+        const asset = assets[0];
+        if (asset.asset_type) {
+          whereClause += ' AND (mt.asset_type = ? OR mt.asset_type IS NULL)';
+          params.push(asset.asset_type);
+        }
+        if (asset.brand) {
+          whereClause += ' AND (mt.brand = ? OR mt.brand IS NULL)';
+          params.push(asset.brand);
+        }
+        if (asset.model) {
+          whereClause += ' AND (mt.model = ? OR mt.model IS NULL)';
+          params.push(asset.model);
+        }
+      }
+    } else {
+      // 否则使用查询参数
+      if (asset_type) {
+        whereClause += ' AND mt.asset_type = ?';
+        params.push(asset_type);
+      }
+      if (brand) {
+        whereClause += ' AND mt.brand = ?';
+        params.push(brand);
+      }
+      if (model) {
+        whereClause += ' AND mt.model = ?';
+        params.push(model);
+      }
+    }
+
+    if (status) {
+      whereClause += ' AND mt.status = ?';
+      params.push(status);
+    } else {
+      whereClause += ' AND mt.status = ?';
+      params.push('启用');
+    }
+
+    const [rows] = await db.execute(
+      `SELECT mt.* FROM maintenance_templates mt ${whereClause} ORDER BY mt.created_at DESC`,
+      params
+    );
+
+    // 解析JSON字段
+    const templates = rows.map(row => {
+      try {
+        return {
+          ...row,
+          maintenance_items: row.maintenance_items
+            ? typeof row.maintenance_items === 'string'
+              ? JSON.parse(row.maintenance_items)
+              : row.maintenance_items
+            : [],
+          required_materials: row.required_materials
+            ? typeof row.required_materials === 'string'
+              ? JSON.parse(row.required_materials)
+              : row.required_materials
+            : [],
+        };
+      } catch (e) {
+        console.warn('解析模板JSON字段失败:', e.message);
+        return {
+          ...row,
+          maintenance_items: [],
+          required_materials: [],
+        };
+      }
+    });
+
+    res.json({
+      success: true,
+      data: templates,
+    });
+  } catch (error) {
+    console.error('获取维护计划模板列表失败:', error);
+    console.error('错误详情:', {
+      message: error.message,
+      code: error.code,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage,
+    });
+
+    // 如果是表不存在的错误，返回空数组而不是错误
+    if (error.code === 'ER_NO_SUCH_TABLE' || error.message.includes("doesn't exist")) {
+      return res.json({
+        success: true,
+        data: [],
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: '获取维护计划模板列表失败',
+      error: error.message,
+    });
+  }
+});
+
+// 根据资产信息获取推荐模板
+router.get('/templates/recommend', authenticate, async (req, res) => {
+  try {
+    const { asset_code } = req.query;
+
+    if (!asset_code) {
+      return res.status(400).json({ success: false, message: '资产编号不能为空' });
+    }
+
+    // 检查表是否存在
+    try {
+      const [tables] = await db.execute(
+        `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'maintenance_templates'`
+      );
+
+      if (tables.length === 0) {
+        // 表不存在，返回空数组
+        return res.json({
+          success: true,
+          data: [],
+        });
+      }
+    } catch (checkError) {
+      console.warn('检查表结构失败:', checkError.message);
+      // 继续执行，如果表不存在会在查询时失败
+    }
+
+    // 获取资产信息
+    const assetTenantFilter = addTenantFilter(req, 'a');
+    const [assets] = await db.execute(
+      `SELECT a.asset_type, a.brand, a.model FROM assets a WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
+      [asset_code, ...assetTenantFilter.params]
+    );
+
+    if (assets.length === 0) {
+      return res.status(404).json({ success: false, message: '资产不存在' });
+    }
+
+    const asset = assets[0];
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    // 添加租户过滤
+    const tenantFilter = addTenantFilter(req, 'mt');
+    whereClause += tenantFilter.whereClause;
+    params.push(...tenantFilter.params);
+
+    whereClause += ' AND mt.status = ?';
+    params.push('启用');
+
+    // 构建匹配条件
+    const conditions = [];
+    if (asset.asset_type) {
+      conditions.push('mt.asset_type = ?');
+      params.push(asset.asset_type);
+    }
+    if (asset.brand) {
+      conditions.push('mt.brand = ?');
+      params.push(asset.brand);
+    }
+    if (asset.model) {
+      conditions.push('mt.model = ?');
+      params.push(asset.model);
+    }
+
+    if (conditions.length > 0) {
+      whereClause += ` AND (${conditions.join(' OR ')})`;
+    }
+
+    // 按匹配度排序
+    let orderBy = 'ORDER BY ';
+    const orderConditions = [];
+    if (asset.asset_type) {
+      orderConditions.push('(mt.asset_type = ?) DESC');
+      params.push(asset.asset_type);
+    }
+    if (asset.brand) {
+      orderConditions.push('(mt.brand = ?) DESC');
+      params.push(asset.brand);
+    }
+    if (asset.model) {
+      orderConditions.push('(mt.model = ?) DESC');
+      params.push(asset.model);
+    }
+    orderConditions.push('mt.created_at DESC');
+    orderBy += orderConditions.join(', ');
+
+    const [rows] = await db.execute(
+      `SELECT mt.* FROM maintenance_templates mt ${whereClause} ${orderBy}`,
+      params
+    );
+
+    // 解析JSON字段
+    const templates = rows.map(row => {
+      try {
+        return {
+          ...row,
+          maintenance_items: row.maintenance_items
+            ? typeof row.maintenance_items === 'string'
+              ? JSON.parse(row.maintenance_items)
+              : row.maintenance_items
+            : [],
+          required_materials: row.required_materials
+            ? typeof row.required_materials === 'string'
+              ? JSON.parse(row.required_materials)
+              : row.required_materials
+            : [],
+          match_score:
+            (row.asset_type === asset.asset_type ? 3 : 0) +
+            (row.brand === asset.brand ? 2 : 0) +
+            (row.model === asset.model ? 1 : 0),
+        };
+      } catch (e) {
+        console.warn('解析模板JSON字段失败:', e.message);
+        return {
+          ...row,
+          maintenance_items: [],
+          required_materials: [],
+          match_score: 0,
+        };
+      }
+    });
+
+    // 按匹配度排序
+    templates.sort((a, b) => b.match_score - a.match_score);
+
+    res.json({
+      success: true,
+      data: templates,
+      asset_info: asset,
+    });
+  } catch (error) {
+    console.error('获取推荐模板失败:', error);
+
+    // 如果是表不存在的错误，返回空数组而不是错误
+    if (error.code === 'ER_NO_SUCH_TABLE' || error.message.includes("doesn't exist")) {
+      return res.json({
+        success: true,
+        data: [],
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: '获取推荐模板失败',
+      error: error.message,
+    });
+  }
+});
+
+// 获取单个维护计划模板详情
+router.get('/templates/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 添加租户过滤验证
+    const tenantFilter = addTenantFilter(req, 'mt');
+    const [rows] = await db.execute(
+      `SELECT mt.* FROM maintenance_templates mt WHERE mt.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '维护计划模板不存在' });
+    }
+
+    const template = rows[0];
+    try {
+      template.maintenance_items = template.maintenance_items
+        ? typeof template.maintenance_items === 'string'
+          ? JSON.parse(template.maintenance_items)
+          : template.maintenance_items
+        : [];
+      template.required_materials = template.required_materials
+        ? typeof template.required_materials === 'string'
+          ? JSON.parse(template.required_materials)
+          : template.required_materials
+        : [];
+    } catch (e) {
+      console.warn('解析模板JSON字段失败:', e.message);
+      template.maintenance_items = [];
+      template.required_materials = [];
+    }
+
+    res.json({
+      success: true,
+      data: template,
+    });
+  } catch (error) {
+    console.error('获取维护计划模板详情失败:', error);
+    res
+      .status(500)
+      .json({ success: false, message: '获取维护计划模板详情失败', error: error.message });
+  }
+});
+
+// 创建维护计划模板
+router.post('/templates', authenticate, async (req, res) => {
+  try {
+    const {
+      template_name,
+      asset_type,
+      brand,
+      model,
+      maintenance_items,
+      cycle_type,
+      cycle_value,
+      estimated_hours,
+      required_materials,
+      maintenance_content,
+      status,
+    } = req.body;
+
+    if (!template_name) {
+      return res.status(400).json({ success: false, message: '模板名称不能为空' });
+    }
+
+    const createdBy = req.user.real_name || req.user.username || '系统管理员';
+    const tenantId = getTenantId(req);
+
+    const [result] = await db.execute(
+      `INSERT INTO maintenance_templates (
+        tenant_id, template_name, asset_type, brand, model, maintenance_items,
+        cycle_type, cycle_value, estimated_hours, required_materials,
+        maintenance_content, status, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        template_name,
+        asset_type || null,
+        brand || null,
+        model || null,
+        (() => {
+          try {
+            return maintenance_items ? JSON.stringify(maintenance_items) : null;
+          } catch (e) {
+            console.error('序列化维护项目JSON失败:', e);
+            return null;
+          }
+        })(),
+        cycle_type || null,
+        cycle_value || null,
+        estimated_hours || null,
+        (() => {
+          try {
+            return required_materials ? JSON.stringify(required_materials) : null;
+          } catch (e) {
+            console.error('序列化物料清单JSON失败:', e);
+            return null;
+          }
+        })(),
+        maintenance_content || null,
+        status || '启用',
+        createdBy,
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: '维护计划模板创建成功',
+      data: { id: result.insertId },
+    });
+  } catch (error) {
+    console.error('创建维护计划模板失败:', error);
+    res.status(500).json({ success: false, message: '创建维护计划模板失败', error: error.message });
+  }
+});
+
+// 更新维护计划模板
+router.put('/templates/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      template_name,
+      asset_type,
+      brand,

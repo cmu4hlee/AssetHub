@@ -1,0 +1,484 @@
+.ai-assistant-page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-assistant-toolbar {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid #e7ebf3;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.ai-assistant-toolbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-assistant-debug-panel {
+  flex-shrink: 0;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid #ffe7ba;
+  border-radius: 10px;
+  background: #fffbe6;
+}
+
+.ai-assistant-chat-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-assistant-messages-region {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  overscroll-behavior: contain;
+}
+
+.ai-assistant-messages-track {
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: 100%;
+  padding: 0 2px;
+}
+
+.ai-assistant-empty {
+  display: flex;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 4px 0;
+}
+
+.ai-assistant-message-item {
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.ai-assistant-message-row {
+  display: flex;
+  gap: 14px;
+}
+
+.ai-assistant-message-item.is-user .ai-assistant-message-row {
+  flex-direction: row-reverse;
+}
+
+.ai-assistant-message-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-assistant-message-item.is-user .ai-assistant-message-main {
+  text-align: right;
+}
+
+.ai-assistant-message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.ai-assistant-message-item.is-user .ai-assistant-message-meta {
+  justify-content: flex-end;
+}
+
+.ai-assistant-message-content {
+  margin-top: 6px;
+  background: #f5f8ff;
+  border: 1px solid #e2e9f8;
+  border-radius: 10px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.ai-assistant-message-item.is-user .ai-assistant-message-content {
+  background: #e6f4ff;
+  border-color: #c9e7ff;
+}
+
+.ai-assistant-message-actions {
+  margin-top: 8px;
+}
+
+.ai-assistant-message-item.is-user .ai-assistant-message-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ai-assistant-input-card {
+  margin-top: 4px;
+  position: relative;
+  bottom: auto;
+  z-index: 5;
+  flex-shrink: 0;
+  padding: 6px 8px;
+  border-top: 1px solid #e9edf5;
+  background: #fff;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  box-shadow: 0 -2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.ai-assistant-composer {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.ai-assistant-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.ai-assistant-debug-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.markdown-body {
+  color: #1f2937;
+  line-height: 1.7;
+  font-size: 14px;
+}
+
+.markdown-body p {
+  margin: 0 0 10px;
+}
+
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+.markdown-body li {
+  margin: 4px 0;
+}
+
+.markdown-body li + li {
+  margin-top: 4px;
+}
+
+/* 代码块 */
+.markdown-body code {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.markdown-body pre {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 10px 0;
+  overflow-x: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.markdown-body pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  color: #e2e8f0;
+  line-height: 1.6;
+}
+
+/* 引用块 */
+.markdown-body blockquote {
+  margin: 10px 0;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-left: 4px solid #3b82f6;
+  border-radius: 0 8px 8px 0;
+  color: #475569;
+}
+
+.markdown-body blockquote p {
+  margin: 0;
+}
+
+/* 标题样式 */
+.markdown-body h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 16px 0 10px;
+  color: #0f172a;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.markdown-body h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 14px 0 8px;
+  color: #1e293b;
+}
+
+.markdown-body h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 12px 0 6px;
+  color: #334155;
+}
+
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 10px 0 4px;
+  color: #475569;
+}
+
+/* 链接样式 */
+.markdown-body a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+/* 水平线 */
+.markdown-body hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #cbd5e1, transparent);
+  margin: 16px 0;
+}
+
+/* 强调文本 */
+.markdown-body strong {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.markdown-body em {
+  font-style: italic;
+  color: #475569;
+}
+
+.markdown-body .ai-markdown-table-wrap {
+  margin: 12px 0;
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+}
+
+.markdown-body .ai-markdown-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.markdown-body .ai-markdown-table thead th {
+  background: #f3f6fb;
+  color: #1d4f8c;
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 1px solid #d6e3f3;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.markdown-body .ai-markdown-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf2f7;
+  color: #111827;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.markdown-body .ai-markdown-table tbody tr:nth-child(even) {
+  background: #fbfdff;
+}
+
+.markdown-body .ai-markdown-table tbody tr:hover {
+  background: #eef6ff;
+}
+
+.markdown-body .ai-markdown-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 768px) {
+  .ai-assistant-toolbar {
+    padding: 4px 6px;
+    border-radius: 8px;
+  }
+
+  .ai-assistant-toolbar-inner {
+    gap: 6px;
+  }
+
+  .ai-assistant-messages-region {
+    padding: 1px 2px;
+  }
+
+  .ai-assistant-message-item {
+    padding: 8px 0;
+  }
+
+  .ai-assistant-message-row {
+    gap: 10px;
+  }
+
+  .ai-assistant-message-content {
+    border-radius: 8px;
+    padding: 7px 9px;
+  }
+
+  .ai-assistant-input-card {
+    margin-top: 2px;
+    padding: 4px 6px;
+    box-shadow: 0 -2px 8px rgba(15, 23, 42, 0.07);
+  }
+
+  .markdown-body .ai-markdown-table {
+    min-width: 420px;
+    font-size: 12px;
+  }
+
+  .markdown-body .ai-markdown-table thead th,
+  .markdown-body .ai-markdown-table td {
+    padding: 8px 10px;
+  }
+}
+
+body[data-theme='dark'] .ai-assistant-messages-region {
+  background: transparent;
+}
+
+body[data-theme='dark'] .ai-assistant-message-item {
+  border-bottom-color: #223043;
+}
+
+body[data-theme='dark'] .ai-assistant-message-content {
+  background: #13243a;
+  border-color: #244266;
+}
+
+body[data-theme='dark'] .ai-assistant-message-item.is-user .ai-assistant-message-content {
+  background: #08395f;
+  border-color: #1b5f93;
+}
+
+body[data-theme='dark'] .ai-assistant-toolbar {
+  background: #0f172a;
+  border-color: #2b3544;
+}
+
+body[data-theme='dark'] .ai-assistant-debug-panel {
+  background: #31260f;
+  border-color: #5b4c2b;
+}
+
+body[data-theme='dark'] .ai-assistant-input-card {
+  background: #0f172a;
+  border-top-color: #2b3544;
+}
+
+body[data-theme='dark'] .markdown-body {
+  color: #e5e7eb;
+}
+
+body[data-theme='dark'] .markdown-body .ai-markdown-table-wrap {
+  border-color: #364152;
+  background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+  box-shadow: none;
+}
+
+body[data-theme='dark'] .markdown-body .ai-markdown-table thead th {
+  background: #1f2937;
+  color: #93c5fd;
+  border-bottom-color: #334155;
+}
+
+body[data-theme='dark'] .markdown-body .ai-markdown-table td {
+  border-bottom-color: #273244;
+  color: #d1d5db;
+}
+
+body[data-theme='dark'] .markdown-body .ai-markdown-table tbody tr:nth-child(even) {
+  background: #111b2a;
+}
+
+body[data-theme='dark'] .markdown-body .ai-markdown-table tbody tr:hover {
+  background: #0f2a43;
+}
+
+/* 代码块深色模式 */
+body[data-theme='dark'] .markdown-body pre {
+  background: #0d1117;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+body[data-theme='dark'] .markdown-body pre code {
+  color: #c9d1d9;
+}
+
+body[data-theme='dark'] .markdown-body code {
+  background: #21262d;
+  border-color: #30363d;
+  color: #c9d1d9;
+}
+
+/* 引用块深色模式 */
+body[data-theme='dark'] .markdown-body blockquote {
+  background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+  border-left-color: #58a6ff;
+  color: #8b949e;
+}
+
+/* 标题深色模式 */
+body[data-theme='dark'] .markdown-body h1 {
+  color: #f0f6fc;
+  border-bottom-color: #30363d;
+}
+
+body[data-theme='dark'] .markdown-body h2,
+body[data-theme='dark'] .markdown-body h3,
+body[data-theme='dark'] .markdown-body h4,
+body[data-theme='dark'] .markdown-body h5,
+body[data-theme='dark'] .markdown-body h6 {
+  color: #c9d1d9;
+}
+
+body[data-theme='dark'] .markdown-body strong {
+  color: #f0f6fc;
+}
+
+body[data-theme='dark'] .markdown-body a {
+  color: #58a6ff;
+}
+
+body[data-theme='dark'] .markdown-body hr {
+  background: linear-gradient(90deg, transparent, #30363d, transparent);
+}

@@ -1,0 +1,80 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+    image: assetrob/backend:latest
+    container_name: assetrob-backend
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: 5183
+      SERVER_HOST: 0.0.0.0
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - backend-uploads:/app/uploads
+      - backend-backups:/app/backups
+      - backend-logs:/app/logs
+    ports:
+      - '25183:5183'
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget -qO- http://127.0.0.1:5183/api/health || exit 1',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - assetrob
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: assetrob/frontend:latest
+    container_name: assetrob-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - '25379:80'
+    restart: unless-stopped
+    networks:
+      - assetrob
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+volumes:
+  backend-uploads:
+    driver: local
+  backend-backups:
+    driver: local
+  backend-logs:
+    driver: local
+
+networks:
+  assetrob:
+    driver: bridge

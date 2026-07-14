@@ -1,0 +1,3379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AssetHost智能资产管理平台 源代码</title>
+<style>
+  @page { size: A4; margin: 20mm; }
+  body { font-family: "Courier New", Consolas, monospace; font-size: 10pt; line-height: 1.2; margin: 0; padding: 0; }
+  .page { width: 210mm; min-height: 277mm; padding: 15mm; box-sizing: border-box; page-break-after: always; position: relative; }
+  .page:last-child { page-break-after: auto; }
+  .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 10px; font-family: "SimSun", serif; font-size: 10.5pt; }
+  .header .title { font-weight: bold; }
+  .code { white-space: pre-wrap; word-break: break-all; }
+  .footer { position: absolute; bottom: 10mm; left: 0; right: 0; text-align: center; font-family: "SimSun", serif; font-size: 10pt; }
+  .line-num { display: inline-block; width: 30px; color: #666; text-align: right; margin-right: 10px; user-select: none; }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>// ===== FILE: backend/adapters/asset-module-adapter.js =====
+<span class="line-num">2</span>/**
+<span class="line-num">3</span> * 资产模块接口适配器
+<span class="line-num">4</span> *
+<span class="line-num">5</span> * 将现有资产服务适配为标准接口，实现模块独立性。
+<span class="line-num">6</span> */
+<span class="line-num">7</span>
+<span class="line-num">8</span>const db = require(&#039;../config/database&#039;);
+<span class="line-num">9</span>const logger = require(&#039;../config/logger&#039;);
+<span class="line-num">10</span>const cacheService = require(&#039;../services/cache.service&#039;);
+<span class="line-num">11</span>const { safeExecuteWithRetry, createModuleError } = require(&#039;../middleware/module-error-handler&#039;);
+<span class="line-num">12</span>const moduleRegistry = require(&#039;../config/module-registry&#039;);
+<span class="line-num">13</span>
+<span class="line-num">14</span>class AssetModuleAdapter {
+<span class="line-num">15</span>  constructor() {
+<span class="line-num">16</span>    this.name = &#039;asset&#039;;
+<span class="line-num">17</span>    this.version = &#039;1.0.0&#039;;
+<span class="line-num">18</span>    this.config = null;
+<span class="line-num">19</span>    this.initialized = false;
+<span class="line-num">20</span>  }
+<span class="line-num">21</span>
+<span class="line-num">22</span>  /**
+<span class="line-num">23</span>   * 模块初始化
+<span class="line-num">24</span>   *
+<span class="line-num">25</span>   * @param {Object} config - 模块配置
+<span class="line-num">26</span>   */
+<span class="line-num">27</span>  async initialize(config = {}) {
+<span class="line-num">28</span>    this.config = {
+<span class="line-num">29</span>      cacheEnabled: true,
+<span class="line-num">30</span>      cacheTTL: 300,
+<span class="line-num">31</span>      maxPageSize: 2000,
+<span class="line-num">32</span>      defaultPageSize: 20,
+<span class="line-num">33</span>      ...config,
+<span class="line-num">34</span>    };
+<span class="line-num">35</span>    this.initialized = true;
+<span class="line-num">36</span>    logger.info(&#039;资产模块初始化完成&#039;);
+<span class="line-num">37</span>  }
+<span class="line-num">38</span>
+<span class="line-num">39</span>  /**
+<span class="line-num">40</span>   * 根据ID查找资产
+<span class="line-num">41</span>   *
+<span class="line-num">42</span>   * @param {number} id - 资产ID
+<span class="line-num">43</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">44</span>   * @returns {Promise&lt;Object|null&gt;}
+<span class="line-num">45</span>   */
+<span class="line-num">46</span>  async findById(id, tenantId) {
+<span class="line-num">47</span>    const cacheKey = `asset:${tenantId}:${id}`;
+<span class="line-num">48</span>    const cached = await safeExecuteWithRetry(
+<span class="line-num">49</span>      () =&gt; cacheService.get(cacheKey),
+<span class="line-num">50</span>      1,
+</div>
+<div class="footer">第 1 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>      1000,
+<span class="line-num">2</span>      null,
+<span class="line-num">3</span>    );
+<span class="line-num">4</span>    if (cached) return cached;
+<span class="line-num">5</span>
+<span class="line-num">6</span>    const [rows] = await db.execute(
+<span class="line-num">7</span>      &#039;SELECT * FROM assets WHERE id = ? AND tenant_id = ? AND is_deleted = 0&#039;,
+<span class="line-num">8</span>      [id, tenantId],
+<span class="line-num">9</span>    );
+<span class="line-num">10</span>
+<span class="line-num">11</span>    if (rows.length === 0) return null;
+<span class="line-num">12</span>
+<span class="line-num">13</span>    await safeExecuteWithRetry(
+<span class="line-num">14</span>      () =&gt; cacheService.set(cacheKey, rows[0], this.config.cacheTTL),
+<span class="line-num">15</span>      1,
+<span class="line-num">16</span>      1000,
+<span class="line-num">17</span>      null,
+<span class="line-num">18</span>    );
+<span class="line-num">19</span>
+<span class="line-num">20</span>    return rows[0];
+<span class="line-num">21</span>  }
+<span class="line-num">22</span>
+<span class="line-num">23</span>  /**
+<span class="line-num">24</span>   * 查询资产列表
+<span class="line-num">25</span>   *
+<span class="line-num">26</span>   * @param {Object} filters - 过滤条件
+<span class="line-num">27</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">28</span>   * @param {Object} pagination - 分页参数
+<span class="line-num">29</span>   * @returns {Promise&lt;{data: Array, total: number}&gt;}
+<span class="line-num">30</span>   */
+<span class="line-num">31</span>  async findAll(filters, tenantId, pagination = {}) {
+<span class="line-num">32</span>    const { page = 1, pageSize = this.config.defaultPageSize } = pagination;
+<span class="line-num">33</span>    const offset = (page - 1) * pageSize;
+<span class="line-num">34</span>
+<span class="line-num">35</span>    let whereClause = &#039;WHERE a.tenant_id = ? AND a.is_deleted = 0&#039;;
+<span class="line-num">36</span>    const params = [tenantId];
+<span class="line-num">37</span>
+<span class="line-num">38</span>    if (filters.status) {
+<span class="line-num">39</span>      whereClause += &#039; AND a.status = ?&#039;;
+<span class="line-num">40</span>      params.push(filters.status);
+<span class="line-num">41</span>    }
+<span class="line-num">42</span>    if (filters.department) {
+<span class="line-num">43</span>      whereClause += &#039; AND a.department_new = ?&#039;;
+<span class="line-num">44</span>      params.push(filters.department);
+<span class="line-num">45</span>    }
+<span class="line-num">46</span>    if (filters.categoryId) {
+<span class="line-num">47</span>      whereClause += &#039; AND a.category_id = ?&#039;;
+<span class="line-num">48</span>      params.push(filters.categoryId);
+<span class="line-num">49</span>    }
+<span class="line-num">50</span>    if (filters.keyword) {
+</div>
+<div class="footer">第 2 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>      whereClause += &#039; AND (a.asset_code LIKE ? OR a.name LIKE ?)&#039;;
+<span class="line-num">2</span>      params.push(`%${filters.keyword}%`, `%${filters.keyword}%`);
+<span class="line-num">3</span>    }
+<span class="line-num">4</span>
+<span class="line-num">5</span>    const [countResult] = await db.execute(
+<span class="line-num">6</span>      `SELECT COUNT(*) as total FROM assets a ${whereClause}`,
+<span class="line-num">7</span>      params,
+<span class="line-num">8</span>    );
+<span class="line-num">9</span>
+<span class="line-num">10</span>    const [rows] = await db.execute(
+<span class="line-num">11</span>      `SELECT a.* FROM assets a ${whereClause} ORDER BY a.created_at DESC LIMIT ? OFFSET ?`,
+<span class="line-num">12</span>      [...params, pageSize, offset],
+<span class="line-num">13</span>    );
+<span class="line-num">14</span>
+<span class="line-num">15</span>    return {
+<span class="line-num">16</span>      data: rows,
+<span class="line-num">17</span>      total: countResult[0].total,
+<span class="line-num">18</span>      page,
+<span class="line-num">19</span>      pageSize,
+<span class="line-num">20</span>    };
+<span class="line-num">21</span>  }
+<span class="line-num">22</span>
+<span class="line-num">23</span>  /**
+<span class="line-num">24</span>   * 创建资产
+<span class="line-num">25</span>   *
+<span class="line-num">26</span>   * @param {Object} data - 资产数据
+<span class="line-num">27</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">28</span>   * @param {string} createdBy - 创建人
+<span class="line-num">29</span>   * @returns {Promise&lt;Object&gt;}
+<span class="line-num">30</span>   */
+<span class="line-num">31</span>  async create(data, tenantId, createdBy) {
+<span class="line-num">32</span>    const { asset_code, name, category_id, purchase_price, status, department_new } = data;
+<span class="line-num">33</span>
+<span class="line-num">34</span>    const [result] = await db.execute(
+<span class="line-num">35</span>      `INSERT INTO assets (tenant_id, asset_code, name, category_id, purchase_price, status, department_new, created_by, created_at)
+<span class="line-num">36</span>       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+<span class="line-num">37</span>      [tenantId, asset_code, name, category_id, purchase_price, status || &#039;闲置&#039;, department_new, createdBy],
+<span class="line-num">38</span>    );
+<span class="line-num">39</span>
+<span class="line-num">40</span>    const asset = await this.findById(result.insertId, tenantId);
+<span class="line-num">41</span>
+<span class="line-num">42</span>    // 触发事件
+<span class="line-num">43</span>    moduleRegistry.emitEvent(&#039;asset&#039;, &#039;created&#039;, {
+<span class="line-num">44</span>      id: result.insertId,
+<span class="line-num">45</span>      assetCode: asset_code,
+<span class="line-num">46</span>      tenantId,
+<span class="line-num">47</span>      createdBy,
+<span class="line-num">48</span>    });
+<span class="line-num">49</span>
+<span class="line-num">50</span>    return asset;
+</div>
+<div class="footer">第 3 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>  }
+<span class="line-num">2</span>
+<span class="line-num">3</span>  /**
+<span class="line-num">4</span>   * 更新资产
+<span class="line-num">5</span>   *
+<span class="line-num">6</span>   * @param {number} id - 资产ID
+<span class="line-num">7</span>   * @param {Object} data - 更新数据
+<span class="line-num">8</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">9</span>   * @param {string} updatedBy - 更新人
+<span class="line-num">10</span>   * @returns {Promise&lt;Object&gt;}
+<span class="line-num">11</span>   */
+<span class="line-num">12</span>  async update(id, data, tenantId, updatedBy) {
+<span class="line-num">13</span>    const existing = await this.findById(id, tenantId);
+<span class="line-num">14</span>    if (!existing) {
+<span class="line-num">15</span>      throw createModuleError(&#039;NOT_FOUND&#039;, `资产 ${id} 不存在`);
+<span class="line-num">16</span>    }
+<span class="line-num">17</span>
+<span class="line-num">18</span>    const updates = [];
+<span class="line-num">19</span>    const values = [];
+<span class="line-num">20</span>    const allowedFields = [&#039;name&#039;, &#039;status&#039;, &#039;department_new&#039;, &#039;location&#039;, &#039;category_id&#039;, &#039;purchase_price&#039;, &#039;current_value&#039;];
+<span class="line-num">21</span>
+<span class="line-num">22</span>    for (const [key, value] of Object.entries(data)) {
+<span class="line-num">23</span>      if (allowedFields.includes(key) &amp;&amp; value !== undefined) {
+<span class="line-num">24</span>        updates.push(`${key} = ?`);
+<span class="line-num">25</span>        values.push(value);
+<span class="line-num">26</span>      }
+<span class="line-num">27</span>    }
+<span class="line-num">28</span>
+<span class="line-num">29</span>    updates.push(&#039;updated_at = NOW()&#039;);
+<span class="line-num">30</span>    updates.push(&#039;updated_by = ?&#039;);
+<span class="line-num">31</span>    values.push(updatedBy);
+<span class="line-num">32</span>    values.push(id);
+<span class="line-num">33</span>    values.push(tenantId);
+<span class="line-num">34</span>
+<span class="line-num">35</span>    await db.execute(
+<span class="line-num">36</span>      `UPDATE assets SET ${updates.join(&#039;, &#039;)} WHERE id = ? AND tenant_id = ?`,
+<span class="line-num">37</span>      values,
+<span class="line-num">38</span>    );
+<span class="line-num">39</span>
+<span class="line-num">40</span>    // 清除缓存
+<span class="line-num">41</span>    await safeExecuteWithRetry(
+<span class="line-num">42</span>      () =&gt; cacheService.deleteByPattern(`asset:${tenantId}:${id}`),
+<span class="line-num">43</span>      1,
+<span class="line-num">44</span>      1000,
+<span class="line-num">45</span>      null,
+<span class="line-num">46</span>    );
+<span class="line-num">47</span>
+<span class="line-num">48</span>    const asset = await this.findById(id, tenantId);
+<span class="line-num">49</span>
+<span class="line-num">50</span>    // 触发事件
+</div>
+<div class="footer">第 4 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    moduleRegistry.emitEvent(&#039;asset&#039;, &#039;updated&#039;, {
+<span class="line-num">2</span>      id,
+<span class="line-num">3</span>      tenantId,
+<span class="line-num">4</span>      updatedBy,
+<span class="line-num">5</span>      changes: data,
+<span class="line-num">6</span>    });
+<span class="line-num">7</span>
+<span class="line-num">8</span>    return asset;
+<span class="line-num">9</span>  }
+<span class="line-num">10</span>
+<span class="line-num">11</span>  /**
+<span class="line-num">12</span>   * 删除资产（软删除）
+<span class="line-num">13</span>   *
+<span class="line-num">14</span>   * @param {number} id - 资产ID
+<span class="line-num">15</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">16</span>   * @returns {Promise&lt;boolean&gt;}
+<span class="line-num">17</span>   */
+<span class="line-num">18</span>  async delete(id, tenantId) {
+<span class="line-num">19</span>    const existing = await this.findById(id, tenantId);
+<span class="line-num">20</span>    if (!existing) {
+<span class="line-num">21</span>      throw createModuleError(&#039;NOT_FOUND&#039;, `资产 ${id} 不存在`);
+<span class="line-num">22</span>    }
+<span class="line-num">23</span>
+<span class="line-num">24</span>    if (existing.status === &#039;在用&#039;) {
+<span class="line-num">25</span>      throw createModuleError(&#039;CONFLICT&#039;, &#039;在用资产不能删除&#039;);
+<span class="line-num">26</span>    }
+<span class="line-num">27</span>
+<span class="line-num">28</span>    await db.execute(
+<span class="line-num">29</span>      &#039;UPDATE assets SET is_deleted = 1, deleted_at = NOW() WHERE id = ? AND tenant_id = ?&#039;,
+<span class="line-num">30</span>      [id, tenantId],
+<span class="line-num">31</span>    );
+<span class="line-num">32</span>
+<span class="line-num">33</span>    // 清除缓存
+<span class="line-num">34</span>    await safeExecuteWithRetry(
+<span class="line-num">35</span>      () =&gt; cacheService.deleteByPattern(`asset:${tenantId}:${id}`),
+<span class="line-num">36</span>      1,
+<span class="line-num">37</span>      1000,
+<span class="line-num">38</span>      null,
+<span class="line-num">39</span>    );
+<span class="line-num">40</span>
+<span class="line-num">41</span>    // 触发事件
+<span class="line-num">42</span>    moduleRegistry.emitEvent(&#039;asset&#039;, &#039;deleted&#039;, {
+<span class="line-num">43</span>      id,
+<span class="line-num">44</span>      tenantId,
+<span class="line-num">45</span>      assetCode: existing.asset_code,
+<span class="line-num">46</span>    });
+<span class="line-num">47</span>
+<span class="line-num">48</span>    return true;
+<span class="line-num">49</span>  }
+<span class="line-num">50</span>
+</div>
+<div class="footer">第 5 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>  /**
+<span class="line-num">2</span>   * 统计资产数量
+<span class="line-num">3</span>   *
+<span class="line-num">4</span>   * @param {Object} filters - 过滤条件
+<span class="line-num">5</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">6</span>   * @returns {Promise&lt;number&gt;}
+<span class="line-num">7</span>   */
+<span class="line-num">8</span>  async count(filters, tenantId) {
+<span class="line-num">9</span>    let whereClause = &#039;WHERE tenant_id = ? AND is_deleted = 0&#039;;
+<span class="line-num">10</span>    const params = [tenantId];
+<span class="line-num">11</span>
+<span class="line-num">12</span>    if (filters.status) {
+<span class="line-num">13</span>      whereClause += &#039; AND status = ?&#039;;
+<span class="line-num">14</span>      params.push(filters.status);
+<span class="line-num">15</span>    }
+<span class="line-num">16</span>
+<span class="line-num">17</span>    const [result] = await db.execute(
+<span class="line-num">18</span>      `SELECT COUNT(*) as total FROM assets ${whereClause}`,
+<span class="line-num">19</span>      params,
+<span class="line-num">20</span>    );
+<span class="line-num">21</span>
+<span class="line-num">22</span>    return result[0].total;
+<span class="line-num">23</span>  }
+<span class="line-num">24</span>
+<span class="line-num">25</span>  /**
+<span class="line-num">26</span>   * 模块启动
+<span class="line-num">27</span>   */
+<span class="line-num">28</span>  async start() {
+<span class="line-num">29</span>    logger.info(&#039;资产模块已启动&#039;);
+<span class="line-num">30</span>  }
+<span class="line-num">31</span>
+<span class="line-num">32</span>  /**
+<span class="line-num">33</span>   * 模块停止
+<span class="line-num">34</span>   */
+<span class="line-num">35</span>  async stop() {
+<span class="line-num">36</span>    logger.info(&#039;资产模块已停止&#039;);
+<span class="line-num">37</span>  }
+<span class="line-num">38</span>
+<span class="line-num">39</span>  /**
+<span class="line-num">40</span>   * 模块销毁
+<span class="line-num">41</span>   */
+<span class="line-num">42</span>  async destroy() {
+<span class="line-num">43</span>    this.initialized = false;
+<span class="line-num">44</span>    logger.info(&#039;资产模块已销毁&#039;);
+<span class="line-num">45</span>  }
+<span class="line-num">46</span>}
+<span class="line-num">47</span>
+<span class="line-num">48</span>module.exports = AssetModuleAdapter;
+<span class="line-num">49</span>
+<span class="line-num">50</span>
+</div>
+<div class="footer">第 6 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>// ===== FILE: backend/adapters/quality-control-module-adapter.js =====
+<span class="line-num">2</span>/**
+<span class="line-num">3</span> * 质量控制模块接口适配器
+<span class="line-num">4</span> *
+<span class="line-num">5</span> * 将现有质量控制服务适配为标准接口，实现模块独立性。
+<span class="line-num">6</span> */
+<span class="line-num">7</span>
+<span class="line-num">8</span>const db = require(&#039;../config/database&#039;);
+<span class="line-num">9</span>const logger = require(&#039;../config/logger&#039;);
+<span class="line-num">10</span>const { safeExecuteWithRetry, createModuleError } = require(&#039;../middleware/module-error-handler&#039;);
+<span class="line-num">11</span>const moduleRegistry = require(&#039;../config/module-registry&#039;);
+<span class="line-num">12</span>
+<span class="line-num">13</span>class QualityControlModuleAdapter {
+<span class="line-num">14</span>  constructor() {
+<span class="line-num">15</span>    this.name = &#039;quality-control&#039;;
+<span class="line-num">16</span>    this.version = &#039;1.0.0&#039;;
+<span class="line-num">17</span>    this.config = null;
+<span class="line-num">18</span>    this.initialized = false;
+<span class="line-num">19</span>  }
+<span class="line-num">20</span>
+<span class="line-num">21</span>  /**
+<span class="line-num">22</span>   * 模块初始化
+<span class="line-num">23</span>   *
+<span class="line-num">24</span>   * @param {Object} config - 模块配置
+<span class="line-num">25</span>   */
+<span class="line-num">26</span>  async initialize(config = {}) {
+<span class="line-num">27</span>    this.config = {
+<span class="line-num">28</span>      warningDays: 30,
+<span class="line-num">29</span>      autoRemind: true,
+<span class="line-num">30</span>      maxPageSize: 2000,
+<span class="line-num">31</span>      defaultPageSize: 20,
+<span class="line-num">32</span>      ...config,
+<span class="line-num">33</span>    };
+<span class="line-num">34</span>    this.initialized = true;
+<span class="line-num">35</span>    logger.info(&#039;质量控制模块初始化完成&#039;);
+<span class="line-num">36</span>  }
+<span class="line-num">37</span>
+<span class="line-num">38</span>  /**
+<span class="line-num">39</span>   * 根据ID查找质控记录
+<span class="line-num">40</span>   *
+<span class="line-num">41</span>   * @param {number} id - 记录ID
+<span class="line-num">42</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">43</span>   * @returns {Promise&lt;Object|null&gt;}
+<span class="line-num">44</span>   */
+<span class="line-num">45</span>  async findById(id, tenantId) {
+<span class="line-num">46</span>    const [rows] = await db.execute(
+<span class="line-num">47</span>      &#039;SELECT * FROM quality_control_records WHERE id = ? AND tenant_id = ? AND is_deleted = 0&#039;,
+<span class="line-num">48</span>      [id, tenantId],
+<span class="line-num">49</span>    );
+<span class="line-num">50</span>    return rows.length &gt; 0 ? rows[0] : null;
+</div>
+<div class="footer">第 7 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>  }
+<span class="line-num">2</span>
+<span class="line-num">3</span>  /**
+<span class="line-num">4</span>   * 查询质控记录列表
+<span class="line-num">5</span>   *
+<span class="line-num">6</span>   * @param {Object} filters - 过滤条件
+<span class="line-num">7</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">8</span>   * @param {Object} pagination - 分页参数
+<span class="line-num">9</span>   * @returns {Promise&lt;{data: Array, total: number}&gt;}
+<span class="line-num">10</span>   */
+<span class="line-num">11</span>  async findAll(filters, tenantId, pagination = {}) {
+<span class="line-num">12</span>    const { page = 1, pageSize = this.config.defaultPageSize } = pagination;
+<span class="line-num">13</span>    const offset = (page - 1) * pageSize;
+<span class="line-num">14</span>
+<span class="line-num">15</span>    let whereClause = &#039;WHERE tenant_id = ? AND is_deleted = 0&#039;;
+<span class="line-num">16</span>    const params = [tenantId];
+<span class="line-num">17</span>
+<span class="line-num">18</span>    if (filters.status) {
+<span class="line-num">19</span>      whereClause += &#039; AND status = ?&#039;;
+<span class="line-num">20</span>      params.push(filters.status);
+<span class="line-num">21</span>    }
+<span class="line-num">22</span>    if (filters.result) {
+<span class="line-num">23</span>      whereClause += &#039; AND result = ?&#039;;
+<span class="line-num">24</span>      params.push(filters.result);
+<span class="line-num">25</span>    }
+<span class="line-num">26</span>    if (filters.qcType) {
+<span class="line-num">27</span>      whereClause += &#039; AND qc_type = ?&#039;;
+<span class="line-num">28</span>      params.push(filters.qcType);
+<span class="line-num">29</span>    }
+<span class="line-num">30</span>    if (filters.assetCode) {
+<span class="line-num">31</span>      whereClause += &#039; AND asset_code LIKE ?&#039;;
+<span class="line-num">32</span>      params.push(`%${filters.assetCode}%`);
+<span class="line-num">33</span>    }
+<span class="line-num">34</span>    if (filters.startDate) {
+<span class="line-num">35</span>      whereClause += &#039; AND qc_date &gt;= ?&#039;;
+<span class="line-num">36</span>      params.push(filters.startDate);
+<span class="line-num">37</span>    }
+<span class="line-num">38</span>    if (filters.endDate) {
+<span class="line-num">39</span>      whereClause += &#039; AND qc_date &lt;= ?&#039;;
+<span class="line-num">40</span>      params.push(filters.endDate);
+<span class="line-num">41</span>    }
+<span class="line-num">42</span>
+<span class="line-num">43</span>    const [countResult] = await db.execute(
+<span class="line-num">44</span>      `SELECT COUNT(*) as total FROM quality_control_records ${whereClause}`,
+<span class="line-num">45</span>      params,
+<span class="line-num">46</span>    );
+<span class="line-num">47</span>
+<span class="line-num">48</span>    const [rows] = await db.execute(
+<span class="line-num">49</span>      `SELECT * FROM quality_control_records ${whereClause} ORDER BY qc_date DESC LIMIT ? OFFSET ?`,
+<span class="line-num">50</span>      [...params, pageSize, offset],
+</div>
+<div class="footer">第 8 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    );
+<span class="line-num">2</span>
+<span class="line-num">3</span>    return {
+<span class="line-num">4</span>      data: rows,
+<span class="line-num">5</span>      total: countResult[0].total,
+<span class="line-num">6</span>      page,
+<span class="line-num">7</span>      pageSize,
+<span class="line-num">8</span>    };
+<span class="line-num">9</span>  }
+<span class="line-num">10</span>
+<span class="line-num">11</span>  /**
+<span class="line-num">12</span>   * 创建质控记录
+<span class="line-num">13</span>   *
+<span class="line-num">14</span>   * @param {Object} data - 质控数据
+<span class="line-num">15</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">16</span>   * @param {string} createdBy - 创建人
+<span class="line-num">17</span>   * @returns {Promise&lt;Object&gt;}
+<span class="line-num">18</span>   */
+<span class="line-num">19</span>  async create(data, tenantId, createdBy) {
+<span class="line-num">20</span>    const { record_no, asset_code, asset_name, qc_type, qc_date, qc_item, qc_method } = data;
+<span class="line-num">21</span>
+<span class="line-num">22</span>    // 自动生成下次质控日期
+<span class="line-num">23</span>    let nextQcDate = data.next_qc_date;
+<span class="line-num">24</span>    if (!nextQcDate &amp;&amp; data.qc_cycle) {
+<span class="line-num">25</span>      nextQcDate = new Date(qc_date);
+<span class="line-num">26</span>      nextQcDate.setMonth(nextQcDate.getMonth() + data.qc_cycle);
+<span class="line-num">27</span>    }
+<span class="line-num">28</span>
+<span class="line-num">29</span>    const [result] = await db.execute(
+<span class="line-num">30</span>      `INSERT INTO quality_control_records 
+<span class="line-num">31</span>       (tenant_id, record_no, asset_code, asset_name, qc_type, qc_date, next_qc_date, 
+<span class="line-num">32</span>        qc_item, qc_method, qc_standard, qc_person, department, created_by, created_at)
+<span class="line-num">33</span>       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+<span class="line-num">34</span>      [
+<span class="line-num">35</span>        tenantId, record_no, asset_code, asset_name, qc_type, qc_date, nextQcDate,
+<span class="line-num">36</span>        qc_item, qc_method, data.qc_standard, data.qc_person, data.department, createdBy,
+<span class="line-num">37</span>      ],
+<span class="line-num">38</span>    );
+<span class="line-num">39</span>
+<span class="line-num">40</span>    const record = await this.findById(result.insertId, tenantId);
+<span class="line-num">41</span>
+<span class="line-num">42</span>    // 触发事件
+<span class="line-num">43</span>    moduleRegistry.emitEvent(&#039;quality-control&#039;, &#039;created&#039;, {
+<span class="line-num">44</span>      id: result.insertId,
+<span class="line-num">45</span>      recordNo: record_no,
+<span class="line-num">46</span>      assetCode: asset_code,
+<span class="line-num">47</span>      tenantId,
+<span class="line-num">48</span>      createdBy,
+<span class="line-num">49</span>    });
+<span class="line-num">50</span>
+</div>
+<div class="footer">第 9 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    return record;
+<span class="line-num">2</span>  }
+<span class="line-num">3</span>
+<span class="line-num">4</span>  /**
+<span class="line-num">5</span>   * 更新质控记录
+<span class="line-num">6</span>   *
+<span class="line-num">7</span>   * @param {number} id - 记录ID
+<span class="line-num">8</span>   * @param {Object} data - 更新数据
+<span class="line-num">9</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">10</span>   * @param {string} updatedBy - 更新人
+<span class="line-num">11</span>   * @returns {Promise&lt;Object&gt;}
+<span class="line-num">12</span>   */
+<span class="line-num">13</span>  async update(id, data, tenantId, updatedBy) {
+<span class="line-num">14</span>    const existing = await this.findById(id, tenantId);
+<span class="line-num">15</span>    if (!existing) {
+<span class="line-num">16</span>      throw createModuleError(&#039;NOT_FOUND&#039;, `质控记录 ${id} 不存在`);
+<span class="line-num">17</span>    }
+<span class="line-num">18</span>
+<span class="line-num">19</span>    const updates = [];
+<span class="line-num">20</span>    const values = [];
+<span class="line-num">21</span>    const allowedFields = [
+<span class="line-num">22</span>      &#039;qc_type&#039;, &#039;qc_date&#039;, &#039;next_qc_date&#039;, &#039;qc_item&#039;, &#039;qc_method&#039;,
+<span class="line-num">23</span>      &#039;qc_standard&#039;, &#039;qc_value&#039;, &#039;standard_value&#039;, &#039;deviation&#039;, &#039;tolerance&#039;,
+<span class="line-num">24</span>      &#039;result&#039;, &#039;qc_person&#039;, &#039;department&#039;, &#039;status&#039;, &#039;remark&#039;,
+<span class="line-num">25</span>      &#039;reviewer&#039;, &#039;review_date&#039;, &#039;qc_cycle&#039;, &#039;warning_days&#039;, &#039;is_auto_remind&#039;,
+<span class="line-num">26</span>    ];
+<span class="line-num">27</span>
+<span class="line-num">28</span>    for (const [key, value] of Object.entries(data)) {
+<span class="line-num">29</span>      if (allowedFields.includes(key) &amp;&amp; value !== undefined) {
+<span class="line-num">30</span>        updates.push(`${key} = ?`);
+<span class="line-num">31</span>        values.push(value);
+<span class="line-num">32</span>      }
+<span class="line-num">33</span>    }
+<span class="line-num">34</span>
+<span class="line-num">35</span>    if (updates.length === 0) {
+<span class="line-num">36</span>      return existing;
+<span class="line-num">37</span>    }
+<span class="line-num">38</span>
+<span class="line-num">39</span>    updates.push(&#039;updated_at = NOW()&#039;);
+<span class="line-num">40</span>    updates.push(&#039;updated_by = ?&#039;);
+<span class="line-num">41</span>    values.push(updatedBy);
+<span class="line-num">42</span>    values.push(id);
+<span class="line-num">43</span>    values.push(tenantId);
+<span class="line-num">44</span>
+<span class="line-num">45</span>    await db.execute(
+<span class="line-num">46</span>      `UPDATE quality_control_records SET ${updates.join(&#039;, &#039;)} WHERE id = ? AND tenant_id = ?`,
+<span class="line-num">47</span>      values,
+<span class="line-num">48</span>    );
+<span class="line-num">49</span>
+<span class="line-num">50</span>    const record = await this.findById(id, tenantId);
+</div>
+<div class="footer">第 10 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>    // 触发事件
+<span class="line-num">3</span>    moduleRegistry.emitEvent(&#039;quality-control&#039;, &#039;updated&#039;, {
+<span class="line-num">4</span>      id,
+<span class="line-num">5</span>      tenantId,
+<span class="line-num">6</span>      updatedBy,
+<span class="line-num">7</span>      changes: data,
+<span class="line-num">8</span>    });
+<span class="line-num">9</span>
+<span class="line-num">10</span>    return record;
+<span class="line-num">11</span>  }
+<span class="line-num">12</span>
+<span class="line-num">13</span>  /**
+<span class="line-num">14</span>   * 删除质控记录（软删除）
+<span class="line-num">15</span>   *
+<span class="line-num">16</span>   * @param {number} id - 记录ID
+<span class="line-num">17</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">18</span>   * @returns {Promise&lt;boolean&gt;}
+<span class="line-num">19</span>   */
+<span class="line-num">20</span>  async delete(id, tenantId) {
+<span class="line-num">21</span>    const existing = await this.findById(id, tenantId);
+<span class="line-num">22</span>    if (!existing) {
+<span class="line-num">23</span>      throw createModuleError(&#039;NOT_FOUND&#039;, `质控记录 ${id} 不存在`);
+<span class="line-num">24</span>    }
+<span class="line-num">25</span>
+<span class="line-num">26</span>    await db.execute(
+<span class="line-num">27</span>      &#039;UPDATE quality_control_records SET is_deleted = 1 WHERE id = ? AND tenant_id = ?&#039;,
+<span class="line-num">28</span>      [id, tenantId],
+<span class="line-num">29</span>    );
+<span class="line-num">30</span>
+<span class="line-num">31</span>    // 触发事件
+<span class="line-num">32</span>    moduleRegistry.emitEvent(&#039;quality-control&#039;, &#039;deleted&#039;, {
+<span class="line-num">33</span>      id,
+<span class="line-num">34</span>      tenantId,
+<span class="line-num">35</span>      recordNo: existing.record_no,
+<span class="line-num">36</span>    });
+<span class="line-num">37</span>
+<span class="line-num">38</span>    return true;
+<span class="line-num">39</span>  }
+<span class="line-num">40</span>
+<span class="line-num">41</span>  /**
+<span class="line-num">42</span>   * 统计质控记录数量
+<span class="line-num">43</span>   *
+<span class="line-num">44</span>   * @param {Object} filters - 过滤条件
+<span class="line-num">45</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">46</span>   * @returns {Promise&lt;number&gt;}
+<span class="line-num">47</span>   */
+<span class="line-num">48</span>  async count(filters, tenantId) {
+<span class="line-num">49</span>    let whereClause = &#039;WHERE tenant_id = ? AND is_deleted = 0&#039;;
+<span class="line-num">50</span>    const params = [tenantId];
+</div>
+<div class="footer">第 11 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>    if (filters.status) {
+<span class="line-num">3</span>      whereClause += &#039; AND status = ?&#039;;
+<span class="line-num">4</span>      params.push(filters.status);
+<span class="line-num">5</span>    }
+<span class="line-num">6</span>    if (filters.result) {
+<span class="line-num">7</span>      whereClause += &#039; AND result = ?&#039;;
+<span class="line-num">8</span>      params.push(filters.result);
+<span class="line-num">9</span>    }
+<span class="line-num">10</span>
+<span class="line-num">11</span>    const [result] = await db.execute(
+<span class="line-num">12</span>      `SELECT COUNT(*) as total FROM quality_control_records ${whereClause}`,
+<span class="line-num">13</span>      params,
+<span class="line-num">14</span>    );
+<span class="line-num">15</span>
+<span class="line-num">16</span>    return result[0].total;
+<span class="line-num">17</span>  }
+<span class="line-num">18</span>
+<span class="line-num">19</span>  /**
+<span class="line-num">20</span>   * 获取统计信息
+<span class="line-num">21</span>   *
+<span class="line-num">22</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">23</span>   * @returns {Promise&lt;Object&gt;}
+<span class="line-num">24</span>   */
+<span class="line-num">25</span>  async getStatistics(tenantId) {
+<span class="line-num">26</span>    const [result] = await db.execute(
+<span class="line-num">27</span>      `SELECT 
+<span class="line-num">28</span>        COUNT(*) as total,
+<span class="line-num">29</span>        COUNT(CASE WHEN status = &#039;已完成&#039; THEN 1 END) as completed,
+<span class="line-num">30</span>        COUNT(CASE WHEN status = &#039;待检&#039; THEN 1 END) as pending,
+<span class="line-num">31</span>        COUNT(CASE WHEN result = &#039;合格&#039; THEN 1 END) as passed,
+<span class="line-num">32</span>        COUNT(CASE WHEN result = &#039;不合格&#039; THEN 1 END) as failed,
+<span class="line-num">33</span>        COUNT(CASE WHEN next_qc_date &lt;= DATE_ADD(NOW(), INTERVAL ? DAY) AND next_qc_date &gt;= NOW() THEN 1 END) as upcoming,
+<span class="line-num">34</span>        COUNT(CASE WHEN next_qc_date &lt; NOW() AND status != &#039;已完成&#039; THEN 1 END) as overdue
+<span class="line-num">35</span>       FROM quality_control_records
+<span class="line-num">36</span>       WHERE tenant_id = ? AND is_deleted = 0`,
+<span class="line-num">37</span>      [this.config.warningDays, tenantId],
+<span class="line-num">38</span>    );
+<span class="line-num">39</span>
+<span class="line-num">40</span>    return result[0];
+<span class="line-num">41</span>  }
+<span class="line-num">42</span>
+<span class="line-num">43</span>  /**
+<span class="line-num">44</span>   * 模块启动
+<span class="line-num">45</span>   */
+<span class="line-num">46</span>  async start() {
+<span class="line-num">47</span>    logger.info(&#039;质量控制模块已启动&#039;);
+<span class="line-num">48</span>  }
+<span class="line-num">49</span>
+<span class="line-num">50</span>  /**
+</div>
+<div class="footer">第 12 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>   * 模块停止
+<span class="line-num">2</span>   */
+<span class="line-num">3</span>  async stop() {
+<span class="line-num">4</span>    logger.info(&#039;质量控制模块已停止&#039;);
+<span class="line-num">5</span>  }
+<span class="line-num">6</span>
+<span class="line-num">7</span>  /**
+<span class="line-num">8</span>   * 模块销毁
+<span class="line-num">9</span>   */
+<span class="line-num">10</span>  async destroy() {
+<span class="line-num">11</span>    this.initialized = false;
+<span class="line-num">12</span>    logger.info(&#039;质量控制模块已销毁&#039;);
+<span class="line-num">13</span>  }
+<span class="line-num">14</span>}
+<span class="line-num">15</span>
+<span class="line-num">16</span>module.exports = QualityControlModuleAdapter;
+<span class="line-num">17</span>
+<span class="line-num">18</span>
+<span class="line-num">19</span>// ===== FILE: backend/architecture/module-interfaces.js =====
+<span class="line-num">20</span>/**
+<span class="line-num">21</span> * 模块化架构规范定义
+<span class="line-num">22</span> *
+<span class="line-num">23</span> * 本文件定义了 AssetHub 系统的模块化架构标准，
+<span class="line-num">24</span> * 确保每个模块能够独立运行、维护和扩展。
+<span class="line-num">25</span> */
+<span class="line-num">26</span>
+<span class="line-num">27</span>// ============================================
+<span class="line-num">28</span>// 1. 标准模块接口定义
+<span class="line-num">29</span>// ============================================
+<span class="line-num">30</span>
+<span class="line-num">31</span>/**
+<span class="line-num">32</span> * 标准服务接口
+<span class="line-num">33</span> *
+<span class="line-num">34</span> * 每个业务服务模块应实现以下接口：
+<span class="line-num">35</span> *
+<span class="line-num">36</span> * @interface
+<span class="line-num">37</span> * @property {Function} findById - 根据ID查找记录
+<span class="line-num">38</span> * @property {Function} findAll - 查询记录列表（支持分页和过滤）
+<span class="line-num">39</span> * @property {Function} create - 创建新记录
+<span class="line-num">40</span> * @property {Function} update - 更新现有记录
+<span class="line-num">41</span> * @property {Function} delete - 删除记录（软删除）
+<span class="line-num">42</span> * @property {Function} count - 统计记录数量
+<span class="line-num">43</span> */
+<span class="line-num">44</span>const StandardServiceInterface = {
+<span class="line-num">45</span>  /**
+<span class="line-num">46</span>   * @param {number} id - 记录ID
+<span class="line-num">47</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">48</span>   * @returns {Promise&lt;Object|null&gt;} 记录对象或null
+<span class="line-num">49</span>   */
+<span class="line-num">50</span>  async findById(id, tenantId) {},
+</div>
+<div class="footer">第 13 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>  /**
+<span class="line-num">3</span>   * @param {Object} filters - 过滤条件
+<span class="line-num">4</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">5</span>   * @param {Object} pagination - 分页参数 {page, pageSize}
+<span class="line-num">6</span>   * @returns {Promise&lt;{data: Array, total: number}&gt;}
+<span class="line-num">7</span>   */
+<span class="line-num">8</span>  async findAll(filters, tenantId, pagination) {},
+<span class="line-num">9</span>
+<span class="line-num">10</span>  /**
+<span class="line-num">11</span>   * @param {Object} data - 记录数据
+<span class="line-num">12</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">13</span>   * @param {string} createdBy - 创建人
+<span class="line-num">14</span>   * @returns {Promise&lt;Object&gt;} 创建的记录
+<span class="line-num">15</span>   */
+<span class="line-num">16</span>  async create(data, tenantId, createdBy) {},
+<span class="line-num">17</span>
+<span class="line-num">18</span>  /**
+<span class="line-num">19</span>   * @param {number} id - 记录ID
+<span class="line-num">20</span>   * @param {Object} data - 更新数据
+<span class="line-num">21</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">22</span>   * @param {string} updatedBy - 更新人
+<span class="line-num">23</span>   * @returns {Promise&lt;Object&gt;} 更新后的记录
+<span class="line-num">24</span>   */
+<span class="line-num">25</span>  async update(id, data, tenantId, updatedBy) {},
+<span class="line-num">26</span>
+<span class="line-num">27</span>  /**
+<span class="line-num">28</span>   * @param {number} id - 记录ID
+<span class="line-num">29</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">30</span>   * @returns {Promise&lt;boolean&gt;} 是否删除成功
+<span class="line-num">31</span>   */
+<span class="line-num">32</span>  async delete(id, tenantId) {},
+<span class="line-num">33</span>
+<span class="line-num">34</span>  /**
+<span class="line-num">35</span>   * @param {Object} filters - 过滤条件
+<span class="line-num">36</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">37</span>   * @returns {Promise&lt;number&gt;} 记录数量
+<span class="line-num">38</span>   */
+<span class="line-num">39</span>  async count(filters, tenantId) {},
+<span class="line-num">40</span>};
+<span class="line-num">41</span>
+<span class="line-num">42</span>// ============================================
+<span class="line-num">43</span>// 2. 模块配置接口定义
+<span class="line-num">44</span>// ============================================
+<span class="line-num">45</span>
+<span class="line-num">46</span>/**
+<span class="line-num">47</span> * 标准模块配置接口
+<span class="line-num">48</span> *
+<span class="line-num">49</span> * 每个模块应提供以下配置项：
+<span class="line-num">50</span> *
+</div>
+<div class="footer">第 14 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span> * @interface
+<span class="line-num">2</span> * @property {string} name - 模块名称
+<span class="line-num">3</span> * @property {string} version - 模块版本
+<span class="line-num">4</span> * @property {boolean} enabled - 是否启用
+<span class="line-num">5</span> * @property {Object} defaults - 默认配置
+<span class="line-num">6</span> * @property {Array&lt;string&gt;} dependencies - 依赖的其他模块
+<span class="line-num">7</span> * @property {Object} validation - 配置验证规则
+<span class="line-num">8</span> */
+<span class="line-num">9</span>const ModuleConfigInterface = {
+<span class="line-num">10</span>  name: &#039;&#039;,
+<span class="line-num">11</span>  version: &#039;1.0.0&#039;,
+<span class="line-num">12</span>  enabled: true,
+<span class="line-num">13</span>  defaults: {},
+<span class="line-num">14</span>  dependencies: [],
+<span class="line-num">15</span>  validation: {},
+<span class="line-num">16</span>};
+<span class="line-num">17</span>
+<span class="line-num">18</span>// ============================================
+<span class="line-num">19</span>// 3. 事件接口定义
+<span class="line-num">20</span>// ============================================
+<span class="line-num">21</span>
+<span class="line-num">22</span>/**
+<span class="line-num">23</span> * 标准模块事件接口
+<span class="line-num">24</span> *
+<span class="line-num">25</span> * 模块间通过事件进行松耦合通信：
+<span class="line-num">26</span> *
+<span class="line-num">27</span> * @interface
+<span class="line-num">28</span> * @property {string} MODULE_NAME - 模块名称前缀
+<span class="line-num">29</span> * @property {Function} emit - 触发事件
+<span class="line-num">30</span> * @property {Function} on - 监听事件
+<span class="line-num">31</span> * @property {Function} off - 移除监听
+<span class="line-num">32</span> */
+<span class="line-num">33</span>const ModuleEventInterface = {
+<span class="line-num">34</span>  MODULE_NAME: &#039;module&#039;,
+<span class="line-num">35</span>
+<span class="line-num">36</span>  /**
+<span class="line-num">37</span>   * 触发模块事件
+<span class="line-num">38</span>   * @param {string} eventName - 事件名称（不含前缀）
+<span class="line-num">39</span>   * @param {Object} payload - 事件数据
+<span class="line-num">40</span>   */
+<span class="line-num">41</span>  emit(eventName, payload) {},
+<span class="line-num">42</span>
+<span class="line-num">43</span>  /**
+<span class="line-num">44</span>   * 监听模块事件
+<span class="line-num">45</span>   * @param {string} eventName - 事件名称（不含前缀）
+<span class="line-num">46</span>   * @param {Function} handler - 事件处理函数
+<span class="line-num">47</span>   */
+<span class="line-num">48</span>  on(eventName, handler) {},
+<span class="line-num">49</span>
+<span class="line-num">50</span>  /**
+</div>
+<div class="footer">第 15 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>   * 移除事件监听
+<span class="line-num">2</span>   * @param {string} eventName - 事件名称（不含前缀）
+<span class="line-num">3</span>   * @param {Function} handler - 事件处理函数
+<span class="line-num">4</span>   */
+<span class="line-num">5</span>  off(eventName, handler) {},
+<span class="line-num">6</span>};
+<span class="line-num">7</span>
+<span class="line-num">8</span>// ============================================
+<span class="line-num">9</span>// 4. 错误处理接口定义
+<span class="line-num">10</span>// ============================================
+<span class="line-num">11</span>
+<span class="line-num">12</span>/**
+<span class="line-num">13</span> * 标准模块错误类型
+<span class="line-num">14</span> */
+<span class="line-num">15</span>const ModuleError = {
+<span class="line-num">16</span>  /** 参数错误 */
+<span class="line-num">17</span>  VALIDATION_ERROR: &#039;VALIDATION_ERROR&#039;,
+<span class="line-num">18</span>  /** 记录不存在 */
+<span class="line-num">19</span>  NOT_FOUND: &#039;NOT_FOUND&#039;,
+<span class="line-num">20</span>  /** 权限不足 */
+<span class="line-num">21</span>  FORBIDDEN: &#039;FORBIDDEN&#039;,
+<span class="line-num">22</span>  /** 业务规则冲突 */
+<span class="line-num">23</span>  CONFLICT: &#039;CONFLICT&#039;,
+<span class="line-num">24</span>  /** 外部依赖失败 */
+<span class="line-num">25</span>  DEPENDENCY_ERROR: &#039;DEPENDENCY_ERROR&#039;,
+<span class="line-num">26</span>  /** 系统内部错误 */
+<span class="line-num">27</span>  INTERNAL_ERROR: &#039;INTERNAL_ERROR&#039;,
+<span class="line-num">28</span>};
+<span class="line-num">29</span>
+<span class="line-num">30</span>/**
+<span class="line-num">31</span> * 标准模块异常类
+<span class="line-num">32</span> */
+<span class="line-num">33</span>class ModuleException extends Error {
+<span class="line-num">34</span>  /**
+<span class="line-num">35</span>   * @param {string} code - 错误代码
+<span class="line-num">36</span>   * @param {string} message - 错误消息
+<span class="line-num">37</span>   * @param {Object} details - 详细信息
+<span class="line-num">38</span>   * @param {Error} cause - 原始异常
+<span class="line-num">39</span>   */
+<span class="line-num">40</span>  constructor(code, message, details = {}, cause = null) {
+<span class="line-num">41</span>    super(message);
+<span class="line-num">42</span>    this.name = &#039;ModuleException&#039;;
+<span class="line-num">43</span>    this.code = code;
+<span class="line-num">44</span>    this.details = details;
+<span class="line-num">45</span>    this.cause = cause;
+<span class="line-num">46</span>    this.timestamp = new Date().toISOString();
+<span class="line-num">47</span>  }
+<span class="line-num">48</span>
+<span class="line-num">49</span>  /** 转换为API响应格式 */
+<span class="line-num">50</span>  toResponse() {
+</div>
+<div class="footer">第 16 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    return {
+<span class="line-num">2</span>      success: false,
+<span class="line-num">3</span>      code: this.code,
+<span class="line-num">4</span>      message: this.message,
+<span class="line-num">5</span>      details: this.details,
+<span class="line-num">6</span>      timestamp: this.timestamp,
+<span class="line-num">7</span>    };
+<span class="line-num">8</span>  }
+<span class="line-num">9</span>}
+<span class="line-num">10</span>
+<span class="line-num">11</span>// ============================================
+<span class="line-num">12</span>// 5. 模块生命周期接口
+<span class="line-num">13</span>// ============================================
+<span class="line-num">14</span>
+<span class="line-num">15</span>/**
+<span class="line-num">16</span> * 模块生命周期钩子
+<span class="line-num">17</span> *
+<span class="line-num">18</span> * @interface
+<span class="line-num">19</span> * @property {Function} initialize - 模块初始化
+<span class="line-num">20</span> * @property {Function} validate - 配置验证
+<span class="line-num">21</span> * @property {Function} start - 模块启动
+<span class="line-num">22</span> * @property {Function} stop - 模块停止
+<span class="line-num">23</span> * @property {Function} destroy - 模块销毁
+<span class="line-num">24</span> */
+<span class="line-num">25</span>const ModuleLifecycleInterface = {
+<span class="line-num">26</span>  /**
+<span class="line-num">27</span>   * 初始化模块（加载配置、建立连接等）
+<span class="line-num">28</span>   * @param {Object} config - 模块配置
+<span class="line-num">29</span>   * @returns {Promise&lt;void&gt;}
+<span class="line-num">30</span>   */
+<span class="line-num">31</span>  async initialize(config) {},
+<span class="line-num">32</span>
+<span class="line-num">33</span>  /**
+<span class="line-num">34</span>   * 验证模块配置是否有效
+<span class="line-num">35</span>   * @param {Object} config - 模块配置
+<span class="line-num">36</span>   * @returns {Promise&lt;boolean&gt;} 是否有效
+<span class="line-num">37</span>   */
+<span class="line-num">38</span>  async validate(config) {},
+<span class="line-num">39</span>
+<span class="line-num">40</span>  /**
+<span class="line-num">41</span>   * 启动模块（开始处理请求、启动定时任务等）
+<span class="line-num">42</span>   * @returns {Promise&lt;void&gt;}
+<span class="line-num">43</span>   */
+<span class="line-num">44</span>  async start() {},
+<span class="line-num">45</span>
+<span class="line-num">46</span>  /**
+<span class="line-num">47</span>   * 停止模块（停止处理请求、清理资源等）
+<span class="line-num">48</span>   * @returns {Promise&lt;void&gt;}
+<span class="line-num">49</span>   */
+<span class="line-num">50</span>  async stop() {},
+</div>
+<div class="footer">第 17 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>  /**
+<span class="line-num">3</span>   * 销毁模块（释放所有资源）
+<span class="line-num">4</span>   * @returns {Promise&lt;void&gt;}
+<span class="line-num">5</span>   */
+<span class="line-num">6</span>  async destroy() {},
+<span class="line-num">7</span>};
+<span class="line-num">8</span>
+<span class="line-num">9</span>// ============================================
+<span class="line-num">10</span>// 6. 数据访问接口定义
+<span class="line-num">11</span>// ============================================
+<span class="line-num">12</span>
+<span class="line-num">13</span>/**
+<span class="line-num">14</span> * 标准数据访问接口（Repository模式）
+<span class="line-num">15</span> *
+<span class="line-num">16</span> * @interface
+<span class="line-num">17</span> * @property {Function} findById - 根据ID查询
+<span class="line-num">18</span> * @property {Function} findWhere - 条件查询
+<span class="line-num">19</span> * @property {Function} insert - 插入记录
+<span class="line-num">20</span> * @property {Function} updateById - 根据ID更新
+<span class="line-num">21</span> * @property {Function} deleteById - 根据ID删除
+<span class="line-num">22</span> * @property {Function} transaction - 执行事务
+<span class="line-num">23</span> */
+<span class="line-num">24</span>const RepositoryInterface = {
+<span class="line-num">25</span>  /**
+<span class="line-num">26</span>   * @param {number} id - 记录ID
+<span class="line-num">27</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">28</span>   * @returns {Promise&lt;Object|null&gt;}
+<span class="line-num">29</span>   */
+<span class="line-num">30</span>  async findById(id, tenantId) {},
+<span class="line-num">31</span>
+<span class="line-num">32</span>  /**
+<span class="line-num">33</span>   * @param {Object} where - 查询条件
+<span class="line-num">34</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">35</span>   * @param {Object} options - 查询选项 {orderBy, limit, offset}
+<span class="line-num">36</span>   * @returns {Promise&lt;Array&gt;}
+<span class="line-num">37</span>   */
+<span class="line-num">38</span>  async findWhere(where, tenantId, options = {}) {},
+<span class="line-num">39</span>
+<span class="line-num">40</span>  /**
+<span class="line-num">41</span>   * @param {Object} data - 记录数据
+<span class="line-num">42</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">43</span>   * @returns {Promise&lt;Object&gt;}
+<span class="line-num">44</span>   */
+<span class="line-num">45</span>  async insert(data, tenantId) {},
+<span class="line-num">46</span>
+<span class="line-num">47</span>  /**
+<span class="line-num">48</span>   * @param {number} id - 记录ID
+<span class="line-num">49</span>   * @param {Object} data - 更新数据
+<span class="line-num">50</span>   * @param {number} tenantId - 租户ID
+</div>
+<div class="footer">第 18 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>   * @returns {Promise&lt;boolean&gt;}
+<span class="line-num">2</span>   */
+<span class="line-num">3</span>  async updateById(id, data, tenantId) {},
+<span class="line-num">4</span>
+<span class="line-num">5</span>  /**
+<span class="line-num">6</span>   * @param {number} id - 记录ID
+<span class="line-num">7</span>   * @param {number} tenantId - 租户ID
+<span class="line-num">8</span>   * @returns {Promise&lt;boolean&gt;}
+<span class="line-num">9</span>   */
+<span class="line-num">10</span>  async deleteById(id, tenantId) {},
+<span class="line-num">11</span>
+<span class="line-num">12</span>  /**
+<span class="line-num">13</span>   * @param {Function} callback - 事务回调
+<span class="line-num">14</span>   * @returns {Promise&lt;any&gt;}
+<span class="line-num">15</span>   */
+<span class="line-num">16</span>  async transaction(callback) {},
+<span class="line-num">17</span>};
+<span class="line-num">18</span>
+<span class="line-num">19</span>// ============================================
+<span class="line-num">20</span>// 7. 导出
+<span class="line-num">21</span>// ============================================
+<span class="line-num">22</span>
+<span class="line-num">23</span>module.exports = {
+<span class="line-num">24</span>  StandardServiceInterface,
+<span class="line-num">25</span>  ModuleConfigInterface,
+<span class="line-num">26</span>  ModuleEventInterface,
+<span class="line-num">27</span>  ModuleLifecycleInterface,
+<span class="line-num">28</span>  RepositoryInterface,
+<span class="line-num">29</span>  ModuleError,
+<span class="line-num">30</span>  ModuleException,
+<span class="line-num">31</span>};
+<span class="line-num">32</span>
+<span class="line-num">33</span>
+<span class="line-num">34</span>// ===== FILE: backend/calculate-token-count.js =====
+<span class="line-num">35</span>const fs = require(&#039;fs&#039;);
+<span class="line-num">36</span>
+<span class="line-num">37</span>/**
+<span class="line-num">38</span> * 计算token数量的简单估算函数
+<span class="line-num">39</span> * 基于OpenAI的估算：1个token ≈ 4个字符
+<span class="line-num">40</span> * @param {string} text - 文本内容
+<span class="line-num">41</span> * @returns {number} 估算的token数量
+<span class="line-num">42</span> */
+<span class="line-num">43</span>function estimateTokenCount(text) {
+<span class="line-num">44</span>  if (!text) return 0;
+<span class="line-num">45</span>  // 简单估算：1 token ≈ 4 characters
+<span class="line-num">46</span>  return Math.ceil(text.length / 4);
+<span class="line-num">47</span>}
+<span class="line-num">48</span>
+<span class="line-num">49</span>/**
+<span class="line-num">50</span> * 模拟构建AI分析提示词的过程
+</div>
+<div class="footer">第 19 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span> */
+<span class="line-num">2</span>async function calculateAIPromptTokenCount() {
+<span class="line-num">3</span>  try {
+<span class="line-num">4</span>    console.log(&#039;=== 计算AI分析提示词Token数量 ===\n&#039;);
+<span class="line-num">5</span>
+<span class="line-num">6</span>    // 从MD文件读取数据库结构
+<span class="line-num">7</span>    const mdFilePath =
+<span class="line-num">8</span>      &#039;/Users/cjlee/Desktop/Mac_Win_share/AssetHub/资产管理vite/zcgl-database-structure.md&#039;;
+<span class="line-num">9</span>    let dbStructureContent;
+<span class="line-num">10</span>    try {
+<span class="line-num">11</span>      dbStructureContent = fs.readFileSync(mdFilePath, &#039;utf8&#039;);
+<span class="line-num">12</span>      console.log(`成功读取数据库结构文件: ${mdFilePath}`);
+<span class="line-num">13</span>    } catch (error) {
+<span class="line-num">14</span>      console.log(`数据库结构文件不存在，使用默认结构描述: ${error.message}`);
+<span class="line-num">15</span>      // 使用默认的数据库结构描述
+<span class="line-num">16</span>      dbStructureContent = `# 资产管理系统数据库结构
+<span class="line-num">17</span>
+<span class="line-num">18</span>## 核心表结构
+<span class="line-num">19</span>
+<span class="line-num">20</span>### 资产主表（assets）
+<span class="line-num">21</span>- id: 资产ID，主键
+<span class="line-num">22</span>- asset_code: 资产编号
+<span class="line-num">23</span>- asset_name: 资产名称
+<span class="line-num">24</span>- brand: 品牌
+<span class="line-num">25</span>- model: 型号
+<span class="line-num">26</span>- specification: 规格
+<span class="line-num">27</span>- department: 所属科室
+<span class="line-num">28</span>- department_new: 新所属科室
+<span class="line-num">29</span>- status: 资产状态
+<span class="line-num">30</span>- purchase_date: 购买日期
+<span class="line-num">31</span>- purchase_price: 购买价格
+<span class="line-num">32</span>
+<span class="line-num">33</span>### 科室表（departments）
+<span class="line-num">34</span>- id: 科室ID，主键
+<span class="line-num">35</span>- department_code: 科室编码
+<span class="line-num">36</span>- department_name: 科室名称
+<span class="line-num">37</span>- tenant_id: 租户ID
+<span class="line-num">38</span>
+<span class="line-num">39</span>### 资产分类表（asset_categories）
+<span class="line-num">40</span>- id: 分类ID，主键
+<span class="line-num">41</span>- category_code: 分类编码
+<span class="line-num">42</span>- category_name: 分类名称
+<span class="line-num">43</span>
+<span class="line-num">44</span>### 资产变更日志表（asset_change_logs）
+<span class="line-num">45</span>- id: 日志ID，主键
+<span class="line-num">46</span>- asset_id: 资产ID
+<span class="line-num">47</span>- change_type: 变更类型
+<span class="line-num">48</span>- change_content: 变更内容
+<span class="line-num">49</span>- created_at: 创建时间`;
+<span class="line-num">50</span>    }
+</div>
+<div class="footer">第 20 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>    console.log(`1. 原始数据库结构文件大小: ${dbStructureContent.length} 字符`);
+<span class="line-num">3</span>    console.log(`   估算token数: ${estimateTokenCount(dbStructureContent)}`);
+<span class="line-num">4</span>
+<span class="line-num">5</span>    // 只保留与资产分析相关的核心表结构
+<span class="line-num">6</span>    const coreTables = [
+<span class="line-num">7</span>      &#039;资产主表（assets）&#039;,
+<span class="line-num">8</span>      &#039;科室表（departments）&#039;,
+<span class="line-num">9</span>      &#039;资产分类表（asset_categories）&#039;,
+<span class="line-num">10</span>      &#039;资产变更日志表（asset_change_logs）&#039;,
+<span class="line-num">11</span>    ];
+<span class="line-num">12</span>
+<span class="line-num">13</span>    // 解析并过滤数据库结构，只保留核心表
+<span class="line-num">14</span>    const lines = dbStructureContent.split(&#039;\n&#039;);
+<span class="line-num">15</span>    const filteredLines = [];
+<span class="line-num">16</span>    let includeLine = false;
+<span class="line-num">17</span>
+<span class="line-num">18</span>    for (const line of lines) {
+<span class="line-num">19</span>      // 检查是否是表定义行
+<span class="line-num">20</span>      const tableMatch = line.match(/^表\d+：(.*?)$/);
+<span class="line-num">21</span>      if (tableMatch) {
+<span class="line-num">22</span>        const tableName = tableMatch[1];
+<span class="line-num">23</span>        includeLine = coreTables.some(coreTable =&gt; tableName.includes(coreTable));
+<span class="line-num">24</span>      }
+<span class="line-num">25</span>
+<span class="line-num">26</span>      // 如果包含当前行或者是标题行，添加到过滤后的内容中
+<span class="line-num">27</span>      if (includeLine || line.startsWith(&#039;#&#039;) || line.startsWith(&#039;数据库名：&#039;)) {
+<span class="line-num">28</span>        filteredLines.push(line);
+<span class="line-num">29</span>      }
+<span class="line-num">30</span>    }
+<span class="line-num">31</span>
+<span class="line-num">32</span>    // 重新构建过滤后的数据库结构内容
+<span class="line-num">33</span>    dbStructureContent = filteredLines.join(&#039;\n&#039;);
+<span class="line-num">34</span>
+<span class="line-num">35</span>    console.log(`\n2. 过滤后核心表结构大小: ${dbStructureContent.length} 字符`);
+<span class="line-num">36</span>    console.log(`   估算token数: ${estimateTokenCount(dbStructureContent)}`);
+<span class="line-num">37</span>
+<span class="line-num">38</span>    // 构建约束条件
+<span class="line-num">39</span>    const constraints = `
+<span class="line-num">40</span>## 指令约束
+<span class="line-num">41</span>0.不可以生成增加、删除和更新的数据库语句
+<span class="line-num">42</span>1. 严格根据上述数据库结构生成SQL，禁止使用未定义的表/字段/关联关系；
+<span class="line-num">43</span>2. 生成的SQL为标准[MySQL]语法，适配对应数据库版本，无需额外注释；
+<span class="line-num">44</span>3. 处理时间/数值字段时保留原字段类型，无需类型转换，条件判断使用精准运算符；
+<span class="line-num">45</span>4. 若用户需求涉及多表关联，必须使用显式JOIN（INNER JOIN/LEFT JOIN），禁止隐式连接；
+<span class="line-num">46</span>5. 若用户需求模糊（如未指定时间范围），仅生成基础SQL框架，不随意补充条件；
+<span class="line-num">47</span>6. 直接输出SQL语句，无其他多余文字（如&quot;以下是生成的SQL&quot;）；
+<span class="line-num">48</span>7. 当需要查询科室资产时，科室的匹配使用LIKE而不使用=。
+<span class="line-num">49</span>
+<span class="line-num">50</span>### 示例查询
+</div>
+<div class="footer">第 21 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>1.查询某资产明细，以病理科为例：SELECT a.*
+<span class="line-num">2</span> FROM assets a
+<span class="line-num">3</span> INNER JOIN departments d ON a.department = d.department_name
+<span class="line-num">4</span> WHERE d.department_name LIKE &#039;%病理科%&#039;;
+<span class="line-num">5</span>
+<span class="line-num">6</span>2.查询资产总明细，以显微镜为例：SELECT 
+<span class="line-num">7</span>     a.asset_name,
+<span class="line-num">8</span>     a.asset_code,
+<span class="line-num">9</span>     a.brand,
+<span class="line-num">10</span>     a.model,
+<span class="line-num">11</span>     a.department,
+<span class="line-num">12</span>     a.use_department,
+<span class="line-num">13</span>     a.location,
+<span class="line-num">14</span>     a.status,
+<span class="line-num">15</span>     a.purchase_date,
+<span class="line-num">16</span>     a.purchase_price,
+<span class="line-num">17</span>     a.current_value,
+<span class="line-num">18</span>     a.depreciation_method,
+<span class="line-num">19</span>     a.depreciation_years,
+<span class="line-num">20</span>     a.warranty_period,
+<span class="line-num">21</span>     a.warranty_end_date,
+<span class="line-num">22</span>     a.created_at
+<span class="line-num">23</span> FROM assets a
+<span class="line-num">24</span> WHERE a.asset_name LIKE &#039;%显微镜%&#039;
+<span class="line-num">25</span>    `.trim();
+<span class="line-num">26</span>
+<span class="line-num">27</span>    console.log(`\n3. 指令约束和示例查询大小: ${constraints.length} 字符`);
+<span class="line-num">28</span>    console.log(`   估算token数: ${estimateTokenCount(constraints)}`);
+<span class="line-num">29</span>
+<span class="line-num">30</span>    // 用户问题
+<span class="line-num">31</span>    const userPrompt = &#039;病理科资产情况&#039;;
+<span class="line-num">32</span>
+<span class="line-num">33</span>    console.log(`\n4. 用户问题大小: ${userPrompt.length} 字符`);
+<span class="line-num">34</span>    console.log(`   估算token数: ${estimateTokenCount(userPrompt)}`);
+<span class="line-num">35</span>
+<span class="line-num">36</span>    // 构建完整提示词
+<span class="line-num">37</span>    const fullPrompt = `
+<span class="line-num">38</span>## 数据库结构信息
+<span class="line-num">39</span>${dbStructureContent}
+<span class="line-num">40</span>
+<span class="line-num">41</span>${constraints}
+<span class="line-num">42</span>
+<span class="line-num">43</span>## 用户问题
+<span class="line-num">44</span>${userPrompt}
+<span class="line-num">45</span>    `.trim();
+<span class="line-num">46</span>
+<span class="line-num">47</span>    console.log(`\n5. 完整提示词大小: ${fullPrompt.length} 字符`);
+<span class="line-num">48</span>    console.log(`   估算token数: ${estimateTokenCount(fullPrompt)}`);
+<span class="line-num">49</span>
+<span class="line-num">50</span>    // 计算总token数
+</div>
+<div class="footer">第 22 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    const totalTokens = estimateTokenCount(fullPrompt);
+<span class="line-num">2</span>
+<span class="line-num">3</span>    console.log(&#039;\n=== 最终估算结果 ===&#039;);
+<span class="line-num">4</span>    console.log(`发送&quot;病理科资产情况&quot;分析请求需要上传的token数: ${totalTokens}`);
+<span class="line-num">5</span>    console.log(&#039;\n注意: 这是基于字符数的估算值，实际token数可能会有所不同。&#039;);
+<span class="line-num">6</span>    console.log(&#039;不同AI模型的token计算方式可能略有差异。&#039;);
+<span class="line-num">7</span>  } catch (error) {
+<span class="line-num">8</span>    console.error(&#039;计算token数量失败:&#039;, error.message);
+<span class="line-num">9</span>  }
+<span class="line-num">10</span>}
+<span class="line-num">11</span>
+<span class="line-num">12</span>// 运行计算
+<span class="line-num">13</span>calculateAIPromptTokenCount();
+<span class="line-num">14</span>
+<span class="line-num">15</span>
+<span class="line-num">16</span>// ===== FILE: backend/check_module_tables.js =====
+<span class="line-num">17</span>const db = require(&#039;./config/database&#039;);
+<span class="line-num">18</span>
+<span class="line-num">19</span>async function checkTables() {
+<span class="line-num">20</span>  try {
+<span class="line-num">21</span>    const result = await db.execute(&#039;SHOW TABLES LIKE &quot;%module%&quot;&#039;);
+<span class="line-num">22</span>    console.log(&#039;模块相关表:&#039;);
+<span class="line-num">23</span>    result[0].forEach(t =&gt; {
+<span class="line-num">24</span>      console.log(&#039;  -&#039;, Object.values(t)[0]);
+<span class="line-num">25</span>    });
+<span class="line-num">26</span>  } catch (error) {
+<span class="line-num">27</span>    console.error(&#039;Error:&#039;, error.message);
+<span class="line-num">28</span>  }
+<span class="line-num">29</span>  process.exit(0);
+<span class="line-num">30</span>}
+<span class="line-num">31</span>
+<span class="line-num">32</span>checkTables();
+<span class="line-num">33</span>
+<span class="line-num">34</span>
+<span class="line-num">35</span>// ===== FILE: backend/check_modules_db.js =====
+<span class="line-num">36</span>const mysql = require(&#039;mysql2/promise&#039;);
+<span class="line-num">37</span>
+<span class="line-num">38</span>async function checkModulesDatabase() {
+<span class="line-num">39</span>  console.log(&#039;🔍 检查远程数据库中的系统模块表...&#039;);
+<span class="line-num">40</span>
+<span class="line-num">41</span>  // 数据库连接配置
+<span class="line-num">42</span>  const dbConfig = {
+<span class="line-num">43</span>    host: &#039;101.37.236.101&#039;,
+<span class="line-num">44</span>    port: 3306,
+<span class="line-num">45</span>    user: &#039;root&#039;,
+<span class="line-num">46</span>    password: &quot;***&quot;,
+<span class="line-num">47</span>    database: &#039;zcgl&#039;,
+<span class="line-num">48</span>  };
+<span class="line-num">49</span>
+<span class="line-num">50</span>  let connection;
+</div>
+<div class="footer">第 23 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>  try {
+<span class="line-num">3</span>    // 连接数据库
+<span class="line-num">4</span>    console.log(&#039;📡 正在连接数据库...&#039;);
+<span class="line-num">5</span>    connection = await mysql.createConnection(dbConfig);
+<span class="line-num">6</span>    console.log(&#039;✅ 数据库连接成功!&#039;);
+<span class="line-num">7</span>
+<span class="line-num">8</span>    // 检查是否存在system_modules表
+<span class="line-num">9</span>    console.log(&#039;\n📋 检查system_modules表是否存在:&#039;);
+<span class="line-num">10</span>    const [tables] = await connection.execute(&#039;SHOW TABLES LIKE &quot;system_modules&quot;&#039;);
+<span class="line-num">11</span>
+<span class="line-num">12</span>    if (tables.length === 0) {
+<span class="line-num">13</span>      console.error(&#039;❌ system_modules表不存在!&#039;);
+<span class="line-num">14</span>
+<span class="line-num">15</span>      // 检查是否有其他system_开头的表
+<span class="line-num">16</span>      console.log(&#039;\n🔍 检查其他system_开头的表:&#039;);
+<span class="line-num">17</span>      const [systemTables] = await connection.execute(&#039;SHOW TABLES LIKE &quot;system%&quot;&#039;);
+<span class="line-num">18</span>
+<span class="line-num">19</span>      if (systemTables.length === 0) {
+<span class="line-num">20</span>        console.log(&#039;⚠️  没有找到任何system_开头的表&#039;);
+<span class="line-num">21</span>      } else {
+<span class="line-num">22</span>        console.log(&#039;✅ 找到的system_开头的表:&#039;);
+<span class="line-num">23</span>        systemTables.forEach((table, index) =&gt; {
+<span class="line-num">24</span>          console.log(`${index + 1}. ${Object.values(table)[0]}`);
+<span class="line-num">25</span>        });
+<span class="line-num">26</span>      }
+<span class="line-num">27</span>    } else {
+<span class="line-num">28</span>      console.log(&#039;✅ system_modules表存在!&#039;);
+<span class="line-num">29</span>
+<span class="line-num">30</span>      // 查看表结构
+<span class="line-num">31</span>      console.log(&#039;\n📊 查看system_modules表结构:&#039;);
+<span class="line-num">32</span>      const [structure] = await connection.execute(&#039;DESCRIBE system_modules&#039;);
+<span class="line-num">33</span>      structure.forEach(field =&gt; {
+<span class="line-num">34</span>        console.log(
+<span class="line-num">35</span>          `${field.Field} (${field.Type}) - ${field.Null === &#039;YES&#039; ? &#039;NULL&#039; : &#039;NOT NULL&#039;} - ${field.Default || &#039;无默认值&#039;} - ${field.Key}`,
+<span class="line-num">36</span>        );
+<span class="line-num">37</span>      });
+<span class="line-num">38</span>
+<span class="line-num">39</span>      // 查看表数据
+<span class="line-num">40</span>      console.log(&#039;\n📈 查看system_modules表数据:&#039;);
+<span class="line-num">41</span>      const [data] = await connection.execute(&#039;SELECT * FROM system_modules&#039;);
+<span class="line-num">42</span>
+<span class="line-num">43</span>      if (data.length === 0) {
+<span class="line-num">44</span>        console.warn(&#039;⚠️  system_modules表为空!&#039;);
+<span class="line-num">45</span>      } else {
+<span class="line-num">46</span>        console.log(`✅ 找到 ${data.length} 条记录:`);
+<span class="line-num">47</span>        data.forEach((module, index) =&gt; {
+<span class="line-num">48</span>          console.log(`\n${index + 1}. 模块ID: ${module.id}`);
+<span class="line-num">49</span>          console.log(`   模块名称: ${module.module_name}`);
+<span class="line-num">50</span>          console.log(`   模块代码: ${module.module_code}`);
+</div>
+<div class="footer">第 24 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>          console.log(`   模块路径: ${module.module_path}`);
+<span class="line-num">2</span>          console.log(`   排序: ${module.sort_order}`);
+<span class="line-num">3</span>          console.log(`   状态: ${module.status}`);
+<span class="line-num">4</span>        });
+<span class="line-num">5</span>      }
+<span class="line-num">6</span>    }
+<span class="line-num">7</span>
+<span class="line-num">8</span>    // 检查是否存在system_module_roles表
+<span class="line-num">9</span>    console.log(&#039;\n📋 检查system_module_roles表是否存在:&#039;);
+<span class="line-num">10</span>    const [rolesTables] = await connection.execute(&#039;SHOW TABLES LIKE &quot;system_module_roles&quot;&#039;);
+<span class="line-num">11</span>
+<span class="line-num">12</span>    if (rolesTables.length === 0) {
+<span class="line-num">13</span>      console.warn(&#039;⚠️  system_module_roles表不存在!&#039;);
+<span class="line-num">14</span>    } else {
+<span class="line-num">15</span>      console.log(&#039;✅ system_module_roles表存在!&#039;);
+<span class="line-num">16</span>
+<span class="line-num">17</span>      // 查看表数据
+<span class="line-num">18</span>      const [rolesData] = await connection.execute(&#039;SELECT * FROM system_module_roles&#039;);
+<span class="line-num">19</span>      console.log(`📈 system_module_roles表有 ${rolesData.length} 条记录`);
+<span class="line-num">20</span>    }
+<span class="line-num">21</span>
+<span class="line-num">22</span>    // 检查是否存在system_module_menus表
+<span class="line-num">23</span>    console.log(&#039;\n📋 检查system_module_menus表是否存在:&#039;);
+<span class="line-num">24</span>    const [menusTables] = await connection.execute(&#039;SHOW TABLES LIKE &quot;system_module_menus&quot;&#039;);
+<span class="line-num">25</span>
+<span class="line-num">26</span>    if (menusTables.length === 0) {
+<span class="line-num">27</span>      console.warn(&#039;⚠️  system_module_menus表不存在!&#039;);
+<span class="line-num">28</span>    } else {
+<span class="line-num">29</span>      console.log(&#039;✅ system_module_menus表存在!&#039;);
+<span class="line-num">30</span>
+<span class="line-num">31</span>      // 查看表数据
+<span class="line-num">32</span>      const [menusData] = await connection.execute(&#039;SELECT * FROM system_module_menus&#039;);
+<span class="line-num">33</span>      console.log(`📈 system_module_menus表有 ${menusData.length} 条记录`);
+<span class="line-num">34</span>    }
+<span class="line-num">35</span>  } catch (error) {
+<span class="line-num">36</span>    console.error(&#039;❌ 数据库操作失败:&#039;, error.message);
+<span class="line-num">37</span>  } finally {
+<span class="line-num">38</span>    if (connection) {
+<span class="line-num">39</span>      await connection.end();
+<span class="line-num">40</span>      console.log(&#039;\n🔌 数据库连接已关闭&#039;);
+<span class="line-num">41</span>    }
+<span class="line-num">42</span>  }
+<span class="line-num">43</span>}
+<span class="line-num">44</span>
+<span class="line-num">45</span>// 运行检查
+<span class="line-num">46</span>checkModulesDatabase();
+<span class="line-num">47</span>
+<span class="line-num">48</span>
+<span class="line-num">49</span>// ===== FILE: backend/check_remote_tables.js =====
+<span class="line-num">50</span>const mysql = require(&#039;mysql2/promise&#039;);
+</div>
+<div class="footer">第 25 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>// 远程数据库配置
+<span class="line-num">3</span>const config = {
+<span class="line-num">4</span>  host: &#039;101.37.236.101&#039;,
+<span class="line-num">5</span>  port: 3306,
+<span class="line-num">6</span>  user: &#039;root&#039;,
+<span class="line-num">7</span>  password: &quot;***&quot;,
+<span class="line-num">8</span>  database: &#039;zcgl&#039;,
+<span class="line-num">9</span>};
+<span class="line-num">10</span>
+<span class="line-num">11</span>async function checkRemoteTables() {
+<span class="line-num">12</span>  let connection;
+<span class="line-num">13</span>
+<span class="line-num">14</span>  try {
+<span class="line-num">15</span>    // 连接到远程数据库
+<span class="line-num">16</span>    connection = await mysql.createConnection(config);
+<span class="line-num">17</span>    console.log(&#039;✅ 成功连接到远程数据库&#039;);
+<span class="line-num">18</span>
+<span class="line-num">19</span>    // 获取所有表名
+<span class="line-num">20</span>    console.log(&#039;\n📋 获取所有表名...&#039;);
+<span class="line-num">21</span>    const [tables] = await connection.execute(`
+<span class="line-num">22</span>      SHOW TABLES
+<span class="line-num">23</span>    `);
+<span class="line-num">24</span>
+<span class="line-num">25</span>    console.log(&#039;现有表名:&#039;);
+<span class="line-num">26</span>    tables.forEach((table, index) =&gt; {
+<span class="line-num">27</span>      const tableName = table[`Tables_in_${config.database}`];
+<span class="line-num">28</span>      console.log(`  ${index + 1}. ${tableName}`);
+<span class="line-num">29</span>    });
+<span class="line-num">30</span>
+<span class="line-num">31</span>    // 查找包含部门相关的表
+<span class="line-num">32</span>    const departmentLikeTables = tables.filter(table =&gt; {
+<span class="line-num">33</span>      const tableName = table[`Tables_in_${config.database}`].toLowerCase();
+<span class="line-num">34</span>      return tableName.includes(&#039;dept&#039;) || tableName.includes(&#039;department&#039;);
+<span class="line-num">35</span>    });
+<span class="line-num">36</span>
+<span class="line-num">37</span>    if (departmentLikeTables.length &gt; 0) {
+<span class="line-num">38</span>      console.log(&#039;\n🔍 发现部门相关表:&#039;);
+<span class="line-num">39</span>      for (const table of departmentLikeTables) {
+<span class="line-num">40</span>        const tableName = table[`Tables_in_${config.database}`];
+<span class="line-num">41</span>        console.log(`\n📊 ${tableName} 表结构:`);
+<span class="line-num">42</span>        const [columns] = await connection.execute(`DESCRIBE ${tableName}`);
+<span class="line-num">43</span>        console.table(columns);
+<span class="line-num">44</span>
+<span class="line-num">45</span>        console.log(`📋 ${tableName} 示例数据:`);
+<span class="line-num">46</span>        const [data] = await connection.execute(`SELECT * FROM ${tableName} LIMIT 5`);
+<span class="line-num">47</span>        console.table(data);
+<span class="line-num">48</span>      }
+<span class="line-num">49</span>    } else {
+<span class="line-num">50</span>      console.log(&#039;\n❌ 未发现部门相关表&#039;);
+</div>
+<div class="footer">第 26 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    }
+<span class="line-num">2</span>
+<span class="line-num">3</span>    // 检查assets表结构以确认新字段已添加
+<span class="line-num">4</span>    console.log(&#039;\n🔍 assets表结构:&#039;);
+<span class="line-num">5</span>    const [assetsColumns] = await connection.execute(&#039;DESCRIBE assets&#039;);
+<span class="line-num">6</span>    console.table(assetsColumns);
+<span class="line-num">7</span>  } catch (error) {
+<span class="line-num">8</span>    console.error(&#039;❌ 操作失败:&#039;, error.message);
+<span class="line-num">9</span>  } finally {
+<span class="line-num">10</span>    if (connection) {
+<span class="line-num">11</span>      await connection.end();
+<span class="line-num">12</span>      console.log(&#039;\n✅ 数据库连接已关闭&#039;);
+<span class="line-num">13</span>    }
+<span class="line-num">14</span>  }
+<span class="line-num">15</span>}
+<span class="line-num">16</span>
+<span class="line-num">17</span>// 执行检查
+<span class="line-num">18</span>checkRemoteTables();
+<span class="line-num">19</span>
+<span class="line-num">20</span>
+<span class="line-num">21</span>// ===== FILE: backend/check_workorder_consistency.js =====
+<span class="line-num">22</span>const db = require(&#039;./config/database&#039;);
+<span class="line-num">23</span>
+<span class="line-num">24</span>async function checkWorkOrderConsistency() {
+<span class="line-num">25</span>  console.log(&#039;=&#039;.repeat(60));
+<span class="line-num">26</span>  console.log(&#039;AssetHub 工单与成本数据一致性检查&#039;);
+<span class="line-num">27</span>  console.log(&#039;=&#039;.repeat(60));
+<span class="line-num">28</span>
+<span class="line-num">29</span>  const results = {
+<span class="line-num">30</span>    workOrders: { total: 0, tableOk: false },
+<span class="line-num">31</span>    workOrderHistory: { total: 0, orphaned: 0 },
+<span class="line-num">32</span>    maintenanceRequests: { total: 0 },
+<span class="line-num">33</span>    maintenanceCosts: { total: 0, orphaned: 0 },
+<span class="line-num">34</span>    workOrderMaterialCosts: { total: 0, orphaned: 0 },
+<span class="line-num">35</span>    statusTransitions: [],
+<span class="line-num">36</span>    relationshipChecks: [],
+<span class="line-num">37</span>  };
+<span class="line-num">38</span>
+<span class="line-num">39</span>  try {
+<span class="line-num">40</span>    // 1. 检查 work_orders 表结构和数据
+<span class="line-num">41</span>    console.log(&#039;\n[1] 检查 work_orders 表...&#039;);
+<span class="line-num">42</span>
+<span class="line-num">43</span>    const [woTable] = await db.execute(&#039;DESCRIBE work_orders&#039;);
+<span class="line-num">44</span>    console.log(`   表结构字段数: ${woTable.length}`);
+<span class="line-num">45</span>    const requiredFields = [&#039;id&#039;, &#039;work_order_no&#039;, &#039;tenant_id&#039;, &#039;asset_code&#039;, &#039;status&#039;, &#039;title&#039;, &#039;source_type&#039;, &#039;created_at&#039;];
+<span class="line-num">46</span>    const missingFields = requiredFields.filter(f =&gt; !woTable.find(t =&gt; t.Field === f));
+<span class="line-num">47</span>    if (missingFields.length &gt; 0) {
+<span class="line-num">48</span>      console.log(`   ❌ 缺少字段: ${missingFields.join(&#039;, &#039;)}`);
+<span class="line-num">49</span>    } else {
+<span class="line-num">50</span>      console.log(&#039;   ✓ 所有必要字段存在&#039;);
+</div>
+<div class="footer">第 27 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    }
+<span class="line-num">2</span>
+<span class="line-num">3</span>    const [woCount] = await db.execute(&#039;SELECT COUNT(*) as cnt FROM work_orders&#039;);
+<span class="line-num">4</span>    results.workOrders.total = woCount[0].cnt;
+<span class="line-num">5</span>    console.log(`   总工单数: ${results.workOrders.total}`);
+<span class="line-num">6</span>    results.workOrders.tableOk = true;
+<span class="line-num">7</span>
+<span class="line-num">8</span>    // 2. 检查状态分布
+<span class="line-num">9</span>    console.log(&#039;\n[2] 检查工单状态分布...&#039;);
+<span class="line-num">10</span>    const [statusDist] = await db.execute(`
+<span class="line-num">11</span>      SELECT status, COUNT(*) as cnt 
+<span class="line-num">12</span>      FROM work_orders 
+<span class="line-num">13</span>      GROUP BY status 
+<span class="line-num">14</span>      ORDER BY cnt DESC
+<span class="line-num">15</span>    `);
+<span class="line-num">16</span>    statusDist.forEach(s =&gt; console.log(`   ${s.status}: ${s.cnt}个`));
+<span class="line-num">17</span>    results.statusTransitions = statusDist;
+<span class="line-num">18</span>
+<span class="line-num">19</span>    // 3. 检查 work_order_history 表
+<span class="line-num">20</span>    console.log(&#039;\n[3] 检查 work_order_history 表...&#039;);
+<span class="line-num">21</span>    const [histTable] = await db.execute(&#039;DESCRIBE work_order_history&#039;);
+<span class="line-num">22</span>    console.log(`   表结构字段数: ${histTable.length}`);
+<span class="line-num">23</span>
+<span class="line-num">24</span>    const [histCount] = await db.execute(&#039;SELECT COUNT(*) as cnt FROM work_order_history&#039;);
+<span class="line-num">25</span>    results.workOrderHistory.total = histCount[0].cnt;
+<span class="line-num">26</span>    console.log(`   总历史记录数: ${results.workOrderHistory.total}`);
+<span class="line-num">27</span>
+<span class="line-num">28</span>    // 检查孤立的history记录（work_order_id不存在）
+<span class="line-num">29</span>    const [orphanedHist] = await db.execute(`
+<span class="line-num">30</span>      SELECT COUNT(*) as cnt 
+<span class="line-num">31</span>      FROM work_order_history h 
+<span class="line-num">32</span>      LEFT JOIN work_orders w ON h.work_order_id = w.id 
+<span class="line-num">33</span>      WHERE w.id IS NULL
+<span class="line-num">34</span>    `);
+<span class="line-num">35</span>    results.workOrderHistory.orphaned = orphanedHist[0].cnt;
+<span class="line-num">36</span>    if (orphanedHist[0].cnt &gt; 0) {
+<span class="line-num">37</span>      console.log(`   ⚠️ 孤立历史记录: ${orphanedHist[0].cnt}条`);
+<span class="line-num">38</span>    } else {
+<span class="line-num">39</span>      console.log(&#039;   ✓ 无孤立历史记录&#039;);
+<span class="line-num">40</span>    }
+<span class="line-num">41</span>
+<span class="line-num">42</span>    // 检查没有历史记录的工单
+<span class="line-num">43</span>    const [noHistWo] = await db.execute(`
+<span class="line-num">44</span>      SELECT COUNT(*) as cnt 
+<span class="line-num">45</span>      FROM work_orders w 
+<span class="line-num">46</span>      LEFT JOIN work_order_history h ON w.id = h.work_order_id 
+<span class="line-num">47</span>      WHERE h.id IS NULL
+<span class="line-num">48</span>    `);
+<span class="line-num">49</span>    console.log(`   无历史记录的工单: ${noHistWo[0].cnt}个`);
+<span class="line-num">50</span>
+</div>
+<div class="footer">第 28 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    // 4. 检查 maintenance_requests 表
+<span class="line-num">2</span>    console.log(&#039;\n[4] 检查 maintenance_requests 表...&#039;);
+<span class="line-num">3</span>    const [reqCount] = await db.execute(&#039;SELECT COUNT(*) as cnt FROM maintenance_requests&#039;);
+<span class="line-num">4</span>    results.maintenanceRequests.total = reqCount[0].cnt;
+<span class="line-num">5</span>    console.log(`   总维修申请数: ${results.maintenanceRequests.total}`);
+<span class="line-num">6</span>
+<span class="line-num">7</span>    // 状态分布
+<span class="line-num">8</span>    const [reqStatusDist] = await db.execute(`
+<span class="line-num">9</span>      SELECT status, COUNT(*) as cnt 
+<span class="line-num">10</span>      FROM maintenance_requests 
+<span class="line-num">11</span>      GROUP BY status 
+<span class="line-num">12</span>      ORDER BY cnt DESC
+<span class="line-num">13</span>    `);
+<span class="line-num">14</span>    reqStatusDist.forEach(s =&gt; console.log(`   ${s.status}: ${s.cnt}个`));
+<span class="line-num">15</span>
+<span class="line-num">16</span>    // 5. 检查 maintenance_costs 表
+<span class="line-num">17</span>    console.log(&#039;\n[5] 检查 maintenance_costs 表...&#039;);
+<span class="line-num">18</span>    const [costCount] = await db.execute(&#039;SELECT COUNT(*) as cnt FROM maintenance_costs&#039;);
+<span class="line-num">19</span>    results.maintenanceCosts.total = costCount[0].cnt;
+<span class="line-num">20</span>    console.log(`   总成本记录数: ${results.maintenanceCosts.total}`);
+<span class="line-num">21</span>
+<span class="line-num">22</span>    // 检查关联字段
+<span class="line-num">23</span>    const [costWithLog] = await db.execute(`
+<span class="line-num">24</span>      SELECT COUNT(*) as cnt FROM maintenance_costs WHERE maintenance_log_id IS NOT NULL
+<span class="line-num">25</span>    `);
+<span class="line-num">26</span>    const [costWithWo] = await db.execute(`
+<span class="line-num">27</span>      SELECT COUNT(*) as cnt FROM maintenance_costs WHERE work_order_id IS NOT NULL
+<span class="line-num">28</span>    `);
+<span class="line-num">29</span>    console.log(`   关联维修日志的记录: ${costWithLog[0].cnt}`);
+<span class="line-num">30</span>    console.log(`   关联工单的记录: ${costWithWo[0].cnt}`);
+<span class="line-num">31</span>
+<span class="line-num">32</span>    // 6. 检查 maintenance_workorders（旧表）
+<span class="line-num">33</span>    console.log(&#039;\n[6] 检查 maintenance_workorders 表（旧工单表）...&#039;);
+<span class="line-num">34</span>    const [legacyCount] = await db.execute(&#039;SELECT COUNT(*) as cnt FROM maintenance_workorders&#039;);
+<span class="line-num">35</span>    console.log(`   旧工单数: ${legacyCount[0].cnt}`);
+<span class="line-num">36</span>
+<span class="line-num">37</span>    const [legacyStatusDist] = await db.execute(`
+<span class="line-num">38</span>      SELECT status, COUNT(*) as cnt 
+<span class="line-num">39</span>      FROM maintenance_workorders 
+<span class="line-num">40</span>      GROUP BY status 
+<span class="line-num">41</span>      ORDER BY cnt DESC
+<span class="line-num">42</span>    `);
+<span class="line-num">43</span>    legacyStatusDist.forEach(s =&gt; console.log(`   ${s.status}: ${s.cnt}个`));
+<span class="line-num">44</span>
+<span class="line-num">45</span>    // 7. 检查工单与维修申请的关联
+<span class="line-num">46</span>    console.log(&#039;\n[7] 检查工单与维修申请关联...&#039;);
+<span class="line-num">47</span>
+<span class="line-num">48</span>    // 从维修申请创建的工单
+<span class="line-num">49</span>    const [woFromRequests] = await db.execute(`
+<span class="line-num">50</span>      SELECT COUNT(*) as cnt 
+</div>
+<div class="footer">第 29 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>      FROM work_orders 
+<span class="line-num">2</span>      WHERE source_type = &#039;repair_request&#039;
+<span class="line-num">3</span>    `);
+<span class="line-num">4</span>    console.log(`   来源为维修申请的工单: ${woFromRequests[0].cnt}`);
+<span class="line-num">5</span>
+<span class="line-num">6</span>    // 8. 检查成本数据与维修日志关联
+<span class="line-num">7</span>    console.log(&#039;\n[8] 检查成本数据与维修日志关联...&#039;);
+<span class="line-num">8</span>    const [logCount] = await db.execute(&#039;SELECT COUNT(*) as cnt FROM maintenance_logs&#039;);
+<span class="line-num">9</span>    console.log(`   维修日志总数: ${logCount[0].cnt}`);
+<span class="line-num">10</span>
+<span class="line-num">11</span>    // 成本趋势数据（从维修日志计算）
+<span class="line-num">12</span>    const [costTrendFromLogs] = await db.execute(`
+<span class="line-num">13</span>      SELECT COUNT(*) as cnt, SUM(maintenance_cost) as total 
+<span class="line-num">14</span>      FROM maintenance_logs
+<span class="line-num">15</span>    `);
+<span class="line-num">16</span>    console.log(`   维修日志成本汇总: ${costTrendFromLogs[0].cnt}条记录, 总金额 ${costTrendFromLogs[0].total || 0}`);
+<span class="line-num">17</span>
+<span class="line-num">18</span>    // 9. 检查数据完整性问题
+<span class="line-num">19</span>    console.log(&#039;\n[9] 检查数据完整性问题...&#039;);
+<span class="line-num">20</span>
+<span class="line-num">21</span>    // 检查没有关联资产的工单
+<span class="line-num">22</span>    const [woNoAsset] = await db.execute(`
+<span class="line-num">23</span>      SELECT COUNT(*) as cnt 
+<span class="line-num">24</span>      FROM work_orders w 
+<span class="line-num">25</span>      LEFT JOIN assets a ON w.asset_code = a.asset_code AND w.tenant_id = a.tenant_id 
+<span class="line-num">26</span>      WHERE a.id IS NULL
+<span class="line-num">27</span>    `);
+<span class="line-num">28</span>    console.log(`   无效资产关联的工单: ${woNoAsset[0].cnt}`);
+<span class="line-num">29</span>
+<span class="line-num">30</span>    // 检查缺失关键字段的工单
+<span class="line-num">31</span>    const [woNoTitle] = await db.execute(`
+<span class="line-num">32</span>      SELECT COUNT(*) as cnt FROM work_orders WHERE title IS NULL OR title = &#039;&#039;
+<span class="line-num">33</span>    `);
+<span class="line-num">34</span>    console.log(`   缺失标题的工单: ${woNoTitle[0].cnt}`);
+<span class="line-num">35</span>
+<span class="line-num">36</span>    // 检查缺失负责人的工单（但状态不是pending）
+<span class="line-num">37</span>    const [woNoAssignNoPending] = await db.execute(`
+<span class="line-num">38</span>      SELECT COUNT(*) as cnt 
+<span class="line-num">39</span>      FROM work_orders 
+<span class="line-num">40</span>      WHERE (assigned_to IS NULL OR assigned_to = &#039;&#039;) 
+<span class="line-num">41</span>      AND status != &#039;pending&#039;
+<span class="line-num">42</span>    `);
+<span class="line-num">43</span>    console.log(`   非待处理但无负责人的工单: ${woNoAssignNoPending[0].cnt}`);
+<span class="line-num">44</span>
+<span class="line-num">45</span>    // 10. 检查状态流转逻辑
+<span class="line-num">46</span>    console.log(&#039;\n[10] 检查状态流转逻辑...&#039;);
+<span class="line-num">47</span>
+<span class="line-num">48</span>    // 检查不应存在的状态组合
+<span class="line-num">49</span>    const [invalidStatus1] = await db.execute(`
+<span class="line-num">50</span>      SELECT COUNT(*) as cnt 
+</div>
+<div class="footer">第 30 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    }
+<span class="line-num">2</span>  }
+<span class="line-num">3</span>
+<span class="line-num">4</span>  trace(...args) {
+<span class="line-num">5</span>    if (this.enabled) {
+<span class="line-num">6</span>      console.trace(&#039;[TRACE]&#039;, ...args);
+<span class="line-num">7</span>    }
+<span class="line-num">8</span>  }
+<span class="line-num">9</span>
+<span class="line-num">10</span>  assert(condition, ...args) {
+<span class="line-num">11</span>    if (!condition) {
+<span class="line-num">12</span>      this.error(&#039;Assertion failed:&#039;, ...args);
+<span class="line-num">13</span>    }
+<span class="line-num">14</span>  }
+<span class="line-num">15</span>
+<span class="line-num">16</span>  clear() {
+<span class="line-num">17</span>    if (this.enabled) {
+<span class="line-num">18</span>      console.clear();
+<span class="line-num">19</span>    }
+<span class="line-num">20</span>  }
+<span class="line-num">21</span>
+<span class="line-num">22</span>  dir(obj) {
+<span class="line-num">23</span>    if (this.enabled) {
+<span class="line-num">24</span>      console.dir(obj);
+<span class="line-num">25</span>    }
+<span class="line-num">26</span>  }
+<span class="line-num">27</span>
+<span class="line-num">28</span>  dirxml(obj) {
+<span class="line-num">29</span>    if (this.enabled) {
+<span class="line-num">30</span>      console.dirxml(obj);
+<span class="line-num">31</span>    }
+<span class="line-num">32</span>  }
+<span class="line-num">33</span>}
+<span class="line-num">34</span>
+<span class="line-num">35</span>class SimpleErrorReporter {
+<span class="line-num">36</span>  constructor() {
+<span class="line-num">37</span>    this.errors = [];
+<span class="line-num">38</span>    this.warnings = [];
+<span class="line-num">39</span>    this.maxErrors = 100;
+<span class="line-num">40</span>    this.maxWarnings = 50;
+<span class="line-num">41</span>  }
+<span class="line-num">42</span>
+<span class="line-num">43</span>  error(...args) {
+<span class="line-num">44</span>    const errorEntry = {
+<span class="line-num">45</span>      timestamp: new Date().toISOString(),
+<span class="line-num">46</span>      level: &#039;error&#039;,
+<span class="line-num">47</span>      message: args.map(arg =&gt; 
+<span class="line-num">48</span>        typeof arg === &#039;object&#039; ? JSON.stringify(arg) : String(arg)
+<span class="line-num">49</span>      ).join(&#039; &#039;),
+<span class="line-num">50</span>      stack: new Error().stack,
+</div>
+<div class="footer">第 31 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>      url: window.location.href,
+<span class="line-num">2</span>      userAgent: navigator.userAgent,
+<span class="line-num">3</span>    };
+<span class="line-num">4</span>    
+<span class="line-num">5</span>    this.errors.push(errorEntry);
+<span class="line-num">6</span>    
+<span class="line-num">7</span>    // 保持错误数量在限制内
+<span class="line-num">8</span>    if (this.errors.length &gt; this.maxErrors) {
+<span class="line-num">9</span>      this.errors.shift();
+<span class="line-num">10</span>    }
+<span class="line-num">11</span>    
+<span class="line-num">12</span>    // 可以在这里发送到服务器
+<span class="line-num">13</span>    this.sendToServer(errorEntry);
+<span class="line-num">14</span>  }
+<span class="line-num">15</span>
+<span class="line-num">16</span>  warn(...args) {
+<span class="line-num">17</span>    const warningEntry = {
+<span class="line-num">18</span>      timestamp: new Date().toISOString(),
+<span class="line-num">19</span>      level: &#039;warning&#039;,
+<span class="line-num">20</span>      message: args.map(arg =&gt; 
+<span class="line-num">21</span>        typeof arg === &#039;object&#039; ? JSON.stringify(arg) : String(arg)
+<span class="line-num">22</span>      ).join(&#039; &#039;),
+<span class="line-num">23</span>      url: window.location.href,
+<span class="line-num">24</span>    };
+<span class="line-num">25</span>    
+<span class="line-num">26</span>    this.warnings.push(warningEntry);
+<span class="line-num">27</span>    
+<span class="line-num">28</span>    if (this.warnings.length &gt; this.maxWarnings) {
+<span class="line-num">29</span>      this.warnings.shift();
+<span class="line-num">30</span>    }
+<span class="line-num">31</span>    
+<span class="line-num">32</span>    this.sendToServer(warningEntry);
+<span class="line-num">33</span>  }
+<span class="line-num">34</span>
+<span class="line-num">35</span>  sendToServer(entry) {
+<span class="line-num">36</span>    // 生产环境发送到错误收集服务
+<span class="line-num">37</span>    if (isProduction) {
+<span class="line-num">38</span>      try {
+<span class="line-num">39</span>        // 这里可以集成到 Sentry、Bugsnag 等服务
+<span class="line-num">40</span>        // 或者发送到自己的错误收集 API
+<span class="line-num">41</span>        // fetch(&#039;/api/client-errors&#039;, {
+<span class="line-num">42</span>        //   method: &#039;POST&#039;,
+<span class="line-num">43</span>        //   headers: { &#039;Content-Type&#039;: &#039;application/json&#039; },
+<span class="line-num">44</span>        //   body: JSON.stringify(entry),
+<span class="line-num">45</span>        //   keepalive: true,
+<span class="line-num">46</span>        // });
+<span class="line-num">47</span>      } catch (e) {
+<span class="line-num">48</span>        // 避免错误上报本身导致更多错误
+<span class="line-num">49</span>      }
+<span class="line-num">50</span>    }
+</div>
+<div class="footer">第 32 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>  }
+<span class="line-num">2</span>
+<span class="line-num">3</span>  getErrors() {
+<span class="line-num">4</span>    return this.errors;
+<span class="line-num">5</span>  }
+<span class="line-num">6</span>
+<span class="line-num">7</span>  getWarnings() {
+<span class="line-num">8</span>    return this.warnings;
+<span class="line-num">9</span>  }
+<span class="line-num">10</span>
+<span class="line-num">11</span>  clearErrors() {
+<span class="line-num">12</span>    this.errors = [];
+<span class="line-num">13</span>  }
+<span class="line-num">14</span>
+<span class="line-num">15</span>  clearWarnings() {
+<span class="line-num">16</span>    this.warnings = [];
+<span class="line-num">17</span>  }
+<span class="line-num">18</span>
+<span class="line-num">19</span>  getReport() {
+<span class="line-num">20</span>    return {
+<span class="line-num">21</span>      errors: this.errors,
+<span class="line-num">22</span>      warnings: this.warnings,
+<span class="line-num">23</span>      summary: {
+<span class="line-num">24</span>        totalErrors: this.errors.length,
+<span class="line-num">25</span>        totalWarnings: this.warnings.length,
+<span class="line-num">26</span>        firstError: this.errors[0]?.timestamp,
+<span class="line-num">27</span>        lastError: this.errors[this.errors.length - 1]?.timestamp,
+<span class="line-num">28</span>      },
+<span class="line-num">29</span>    };
+<span class="line-num">30</span>  }
+<span class="line-num">31</span>}
+<span class="line-num">32</span>
+<span class="line-num">33</span>// 创建全局单例
+<span class="line-num">34</span>const productionLogger = new ProductionLogger();
+<span class="line-num">35</span>const errorReporter = new SimpleErrorReporter();
+<span class="line-num">36</span>
+<span class="line-num">37</span>// 设置错误上报器
+<span class="line-num">38</span>productionLogger.setErrorReporter(errorReporter);
+<span class="line-num">39</span>
+<span class="line-num">40</span>// 导出
+<span class="line-num">41</span>export const logger = productionLogger;
+<span class="line-num">42</span>export const reporter = errorReporter;
+<span class="line-num">43</span>
+<span class="line-num">44</span>// 设置全局错误处理器
+<span class="line-num">45</span>if (isProduction) {
+<span class="line-num">46</span>  window.onerror = (message, source, lineno, colno, error) =&gt; {
+<span class="line-num">47</span>    productionLogger.error(&#039;全局错误:&#039;, {
+<span class="line-num">48</span>      message,
+<span class="line-num">49</span>      source,
+<span class="line-num">50</span>      lineno,
+</div>
+<div class="footer">第 33 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>      colno,
+<span class="line-num">2</span>      stack: error?.stack,
+<span class="line-num">3</span>    });
+<span class="line-num">4</span>  };
+<span class="line-num">5</span>
+<span class="line-num">6</span>  window.onunhandledrejection = (event) =&gt; {
+<span class="line-num">7</span>    productionLogger.error(&#039;未处理的Promise拒绝:&#039;, {
+<span class="line-num">8</span>      reason: event.reason,
+<span class="line-num">9</span>    });
+<span class="line-num">10</span>  };
+<span class="line-num">11</span>}
+<span class="line-num">12</span>
+<span class="line-num">13</span>// Vue/React 组件错误边界（React示例）
+<span class="line-num">14</span>export const withErrorBoundary = (Component, fallback) =&gt; {
+<span class="line-num">15</span>  return class ErrorBoundary extends React.Component {
+<span class="line-num">16</span>    constructor(props) {
+<span class="line-num">17</span>      super(props);
+<span class="line-num">18</span>      this.state = { hasError: false };
+<span class="line-num">19</span>    }
+<span class="line-num">20</span>
+<span class="line-num">21</span>    static getDerivedStateFromError(error) {
+<span class="line-num">22</span>      productionLogger.error(&#039;组件渲染错误:&#039;, error);
+<span class="line-num">23</span>      return { hasError: true };
+<span class="line-num">24</span>    }
+<span class="line-num">25</span>
+<span class="line-num">26</span>    componentDidCatch(error, errorInfo) {
+<span class="line-num">27</span>      productionLogger.error(&#039;组件错误:&#039;, error, errorInfo);
+<span class="line-num">28</span>    }
+<span class="line-num">29</span>
+<span class="line-num">30</span>    render() {
+<span class="line-num">31</span>      if (this.state.hasError) {
+<span class="line-num">32</span>        return fallback || &lt;div&gt;组件加载失败&lt;/div&gt;;
+<span class="line-num">33</span>      }
+<span class="line-num">34</span>      return &lt;Component {...this.props} /&gt;;
+<span class="line-num">35</span>    }
+<span class="line-num">36</span>  };
+<span class="line-num">37</span>};
+<span class="line-num">38</span>
+<span class="line-num">39</span>export default productionLogger;
+<span class="line-num">40</span>
+<span class="line-num">41</span>
+<span class="line-num">42</span>// ===== FILE: frontend/src/utils/request-batcher.js =====
+<span class="line-num">43</span>/**
+<span class="line-num">44</span> * API 请求合并工具
+<span class="line-num">45</span> * 将多个相似的请求合并为一个批量请求，减少服务器压力
+<span class="line-num">46</span> */
+<span class="line-num">47</span>
+<span class="line-num">48</span>import { api } from &#039;../api/client&#039;;
+<span class="line-num">49</span>
+<span class="line-num">50</span>class RequestBatcher {
+</div>
+<div class="footer">第 34 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>  constructor(options = {}) {
+<span class="line-num">2</span>    this.batchWindow = options.batchWindow || 50; // 合并窗口期（毫秒）
+<span class="line-num">3</span>    this.maxBatchSize = options.maxBatchSize || 50; // 最大批量大小
+<span class="line-num">4</span>    this.batches = new Map(); // 待处理的批次
+<span class="line-num">5</span>    this.timeouts = new Map(); // 批次超时
+<span class="line-num">6</span>  }
+<span class="line-num">7</span>
+<span class="line-num">8</span>  /**
+<span class="line-num">9</span>   * 生成批次键
+<span class="line-num">10</span>   */
+<span class="line-num">11</span>  generateBatchKey(method, url) {
+<span class="line-num">12</span>    return `${method}:${url}`;
+<span class="line-num">13</span>  }
+<span class="line-num">14</span>
+<span class="line-num">15</span>  /**
+<span class="line-num">16</span>   * 添加到批次
+<span class="line-num">17</span>   */
+<span class="line-num">18</span>  addToBatch(method, url, data, resolve, reject) {
+<span class="line-num">19</span>    const key = this.generateBatchKey(method, url);
+<span class="line-num">20</span>    
+<span class="line-num">21</span>    if (!this.batches.has(key)) {
+<span class="line-num">22</span>      this.batches.set(key, {
+<span class="line-num">23</span>        method,
+<span class="line-num">24</span>        url,
+<span class="line-num">25</span>        items: [],
+<span class="line-num">26</span>        promises: [],
+<span class="line-num">27</span>      });
+<span class="line-num">28</span>    }
+<span class="line-num">29</span>
+<span class="line-num">30</span>    const batch = this.batches.get(key);
+<span class="line-num">31</span>    batch.items.push(data);
+<span class="line-num">32</span>    batch.promises.push({ resolve, reject });
+<span class="line-num">33</span>
+<span class="line-num">34</span>    // 如果达到最大批次大小，立即执行
+<span class="line-num">35</span>    if (batch.items.length &gt;= this.maxBatchSize) {
+<span class="line-num">36</span>      this.executeBatch(key);
+<span class="line-num">37</span>    } else {
+<span class="line-num">38</span>      // 否则设置延迟执行
+<span class="line-num">39</span>      this.scheduleBatch(key);
+<span class="line-num">40</span>    }
+<span class="line-num">41</span>  }
+<span class="line-num">42</span>
+<span class="line-num">43</span>  /**
+<span class="line-num">44</span>   * 设置批次执行计划
+<span class="line-num">45</span>   */
+<span class="line-num">46</span>  scheduleBatch(key) {
+<span class="line-num">47</span>    // 清除现有的超时
+<span class="line-num">48</span>    if (this.timeouts.has(key)) {
+<span class="line-num">49</span>      clearTimeout(this.timeouts.get(key));
+<span class="line-num">50</span>    }
+</div>
+<div class="footer">第 35 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>    // 设置新的超时
+<span class="line-num">3</span>    const timeout = setTimeout(() =&gt; {
+<span class="line-num">4</span>      this.executeBatch(key);
+<span class="line-num">5</span>    }, this.batchWindow);
+<span class="line-num">6</span>
+<span class="line-num">7</span>    this.timeouts.set(key, timeout);
+<span class="line-num">8</span>  }
+<span class="line-num">9</span>
+<span class="line-num">10</span>  /**
+<span class="line-num">11</span>   * 执行批次请求
+<span class="line-num">12</span>   */
+<span class="line-num">13</span>  async executeBatch(key) {
+<span class="line-num">14</span>    const batch = this.batches.get(key);
+<span class="line-num">15</span>    if (!batch || batch.items.length === 0) return;
+<span class="line-num">16</span>
+<span class="line-num">17</span>    // 从待处理中移除
+<span class="line-num">18</span>    this.batches.delete(key);
+<span class="line-num">19</span>    this.timeouts.delete(key);
+<span class="line-num">20</span>
+<span class="line-num">21</span>    try {
+<span class="line-num">22</span>      // 发送批量请求
+<span class="line-num">23</span>      const response = await api.post(batch.url, {
+<span class="line-num">24</span>        batch: true,
+<span class="line-num">25</span>        items: batch.items,
+<span class="line-num">26</span>      });
+<span class="line-num">27</span>
+<span class="line-num">28</span>      // 分发响应到各个 Promise
+<span class="line-num">29</span>      if (response &amp;&amp; response.results) {
+<span class="line-num">30</span>        batch.promises.forEach((promise, index) =&gt; {
+<span class="line-num">31</span>          const result = response.results[index];
+<span class="line-num">32</span>          if (result &amp;&amp; result.success !== false) {
+<span class="line-num">33</span>            promise.resolve(result);
+<span class="line-num">34</span>          } else {
+<span class="line-num">35</span>            promise.reject(new Error(result?.message || &#039;Batch request failed&#039;));
+<span class="line-num">36</span>          }
+<span class="line-num">37</span>        });
+<span class="line-num">38</span>      } else {
+<span class="line-num">39</span>        // 如果没有单独的结果，全部使用同一响应
+<span class="line-num">40</span>        batch.promises.forEach(promise =&gt; {
+<span class="line-num">41</span>          promise.resolve(response);
+<span class="line-num">42</span>        });
+<span class="line-num">43</span>      }
+<span class="line-num">44</span>    } catch (error) {
+<span class="line-num">45</span>      // 所有 Promise 都失败
+<span class="line-num">46</span>      batch.promises.forEach(promise =&gt; {
+<span class="line-num">47</span>        promise.reject(error);
+<span class="line-num">48</span>      });
+<span class="line-num">49</span>    }
+<span class="line-num">50</span>  }
+</div>
+<div class="footer">第 36 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>  /**
+<span class="line-num">3</span>   * 批量请求方法
+<span class="line-num">4</span>   */
+<span class="line-num">5</span>  async batchRequest(method, url, data) {
+<span class="line-num">6</span>    return new Promise((resolve, reject) =&gt; {
+<span class="line-num">7</span>      this.addToBatch(method, url, data, resolve, reject);
+<span class="line-num">8</span>    });
+<span class="line-num">9</span>  }
+<span class="line-num">10</span>
+<span class="line-num">11</span>  /**
+<span class="line-num">12</span>   * 清除所有待处理的批次
+<span class="line-num">13</span>   */
+<span class="line-num">14</span>  clear() {
+<span class="line-num">15</span>    for (const timeout of this.timeouts.values()) {
+<span class="line-num">16</span>      clearTimeout(timeout);
+<span class="line-num">17</span>    }
+<span class="line-num">18</span>    this.batches.clear();
+<span class="line-num">19</span>    this.timeouts.clear();
+<span class="line-num">20</span>  }
+<span class="line-num">21</span>}
+<span class="line-num">22</span>
+<span class="line-num">23</span>// 创建全局实例
+<span class="line-num">24</span>const requestBatcher = new RequestBatcher();
+<span class="line-num">25</span>
+<span class="line-num">26</span>export default requestBatcher;
+<span class="line-num">27</span>
+<span class="line-num">28</span>/**
+<span class="line-num">29</span> * 自动批量请求 Hook
+<span class="line-num">30</span> * 用于 React 组件中自动合并请求
+<span class="line-num">31</span> */
+<span class="line-num">32</span>export const useBatchedRequest = () =&gt; {
+<span class="line-num">33</span>  const batchRequest = async (url, data) =&gt; {
+<span class="line-num">34</span>    return requestBatcher.batchRequest(&#039;POST&#039;, url, data);
+<span class="line-num">35</span>  };
+<span class="line-num">36</span>
+<span class="line-num">37</span>  return { batchRequest };
+<span class="line-num">38</span>};
+<span class="line-num">39</span>
+<span class="line-num">40</span>/**
+<span class="line-num">41</span> * 批量操作工具
+<span class="line-num">42</span> * 用于批量更新、删除等操作
+<span class="line-num">43</span> */
+<span class="line-num">44</span>export class BatchOperation {
+<span class="line-num">45</span>  constructor(options = {}) {
+<span class="line-num">46</span>    this.items = [];
+<span class="line-num">47</span>    this.batchSize = options.batchSize || 100;
+<span class="line-num">48</span>    this.onProgress = options.onProgress || (() =&gt; {});
+<span class="line-num">49</span>    this.onComplete = options.onComplete || (() =&gt; {});
+<span class="line-num">50</span>    this.onError = options.onError || (() =&gt; {});
+</div>
+<div class="footer">第 37 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>  }
+<span class="line-num">2</span>
+<span class="line-num">3</span>  /**
+<span class="line-num">4</span>   * 添加操作项
+<span class="line-num">5</span>   */
+<span class="line-num">6</span>  add(item) {
+<span class="line-num">7</span>    this.items.push(item);
+<span class="line-num">8</span>  }
+<span class="line-num">9</span>
+<span class="line-num">10</span>  /**
+<span class="line-num">11</span>   * 执行批量操作
+<span class="line-num">12</span>   */
+<span class="line-num">13</span>  async execute(asyncFn) {
+<span class="line-num">14</span>    const results = [];
+<span class="line-num">15</span>    const errors = [];
+<span class="line-num">16</span>    const total = this.items.length;
+<span class="line-num">17</span>
+<span class="line-num">18</span>    for (let i = 0; i &lt; total; i += this.batchSize) {
+<span class="line-num">19</span>      const batch = this.items.slice(i, i + this.batchSize);
+<span class="line-num">20</span>      
+<span class="line-num">21</span>      try {
+<span class="line-num">22</span>        const batchResults = await Promise.all(
+<span class="line-num">23</span>          batch.map(item =&gt; asyncFn(item).catch(error =&gt; ({ error, item })))
+<span class="line-num">24</span>        );
+<span class="line-num">25</span>
+<span class="line-num">26</span>        batchResults.forEach((result, index) =&gt; {
+<span class="line-num">27</span>          if (result &amp;&amp; result.error) {
+<span class="line-num">28</span>            errors.push({ item: batch[index], error: result.error });
+<span class="line-num">29</span>          } else {
+<span class="line-num">30</span>            results.push(result);
+<span class="line-num">31</span>          }
+<span class="line-num">32</span>        });
+<span class="line-num">33</span>
+<span class="line-num">34</span>        this.onProgress({
+<span class="line-num">35</span>          completed: Math.min(i + this.batchSize, total),
+<span class="line-num">36</span>          total,
+<span class="line-num">37</span>          percentage: Math.round((Math.min(i + this.batchSize, total) / total) * 100),
+<span class="line-num">38</span>        });
+<span class="line-num">39</span>      } catch (error) {
+<span class="line-num">40</span>        this.onError(error);
+<span class="line-num">41</span>        errors.push(...batch.map(item =&gt; ({ item, error })));
+<span class="line-num">42</span>      }
+<span class="line-num">43</span>    }
+<span class="line-num">44</span>
+<span class="line-num">45</span>    this.onComplete({ results, errors });
+<span class="line-num">46</span>    return { results, errors };
+<span class="line-num">47</span>  }
+<span class="line-num">48</span>}
+<span class="line-num">49</span>
+<span class="line-num">50</span>/**
+</div>
+<div class="footer">第 38 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span> * 使用示例：
+<span class="line-num">2</span> * 
+<span class="line-num">3</span> * // 1. 请求缓存
+<span class="line-num">4</span> * import requestCache, { CACHE_CONFIG } from &#039;@/utils/request-cache&#039;;
+<span class="line-num">5</span> * 
+<span class="line-num">6</span> * // 带缓存的 GET 请求
+<span class="line-num">7</span> * const users = await requestCache.get(&#039;/api/users&#039;, {
+<span class="line-num">8</span> *   cache: true,
+<span class="line-num">9</span> *   cacheTTL: CACHE_CONFIG.MEDIUM_TERM
+<span class="line-num">10</span> * });
+<span class="line-num">11</span> * 
+<span class="line-num">12</span> * // 2. 批量请求
+<span class="line-num">13</span> * import requestBatcher from &#039;@/utils/request-batcher&#039;;
+<span class="line-num">14</span> * 
+<span class="line-num">15</span> * const result = await requestBatcher.batchRequest(&#039;POST&#039;, &#039;/api/assets/batch-update&#039;, {
+<span class="line-num">16</span> *   id: assetId,
+<span class="line-num">17</span> *   data: updateData
+<span class="line-num">18</span> * });
+<span class="line-num">19</span> * 
+<span class="line-num">20</span> * // 3. 批量操作
+<span class="line-num">21</span> * import { BatchOperation } from &#039;@/utils/request-batcher&#039;;
+<span class="line-num">22</span> * 
+<span class="line-num">23</span> * const batch = new BatchOperation({
+<span class="line-num">24</span> *   batchSize: 50,
+<span class="line-num">25</span> *   onProgress: ({ percentage }) =&gt; console.log(`${percentage}% 完成`),
+<span class="line-num">26</span> * });
+<span class="line-num">27</span> * 
+<span class="line-num">28</span> * assets.forEach(asset =&gt; batch.add(asset));
+<span class="line-num">29</span> * const { results, errors } = await batch.execute(async (asset) =&gt; {
+<span class="line-num">30</span> *   return api.put(`/api/assets/${asset.id}`, asset);
+<span class="line-num">31</span> * });
+<span class="line-num">32</span> */
+<span class="line-num">33</span>
+<span class="line-num">34</span>
+<span class="line-num">35</span>// ===== FILE: frontend/src/utils/request-cache.js =====
+<span class="line-num">36</span>/**
+<span class="line-num">37</span> * API 请求缓存工具
+<span class="line-num">38</span> * 提供请求去重、响应缓存、失效策略等功能
+<span class="line-num">39</span> */
+<span class="line-num">40</span>
+<span class="line-num">41</span>import { api } from &#039;../api/client&#039;;
+<span class="line-num">42</span>
+<span class="line-num">43</span>class RequestCache {
+<span class="line-num">44</span>  constructor() {
+<span class="line-num">45</span>    this.cache = new Map();
+<span class="line-num">46</span>    this.pendingRequests = new Map();
+<span class="line-num">47</span>    this.defaultTTL = 5 * 60 * 1000; // 默认缓存5分钟
+<span class="line-num">48</span>  }
+<span class="line-num">49</span>
+<span class="line-num">50</span>  /**
+</div>
+<div class="footer">第 39 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>   * 生成缓存键
+<span class="line-num">2</span>   */
+<span class="line-num">3</span>  generateKey(method, url, params = {}) {
+<span class="line-num">4</span>    const sortedParams = Object.keys(params)
+<span class="line-num">5</span>      .sort()
+<span class="line-num">6</span>      .map(key =&gt; `${key}=${JSON.stringify(params[key])}`)
+<span class="line-num">7</span>      .join(&#039;&amp;&#039;);
+<span class="line-num">8</span>    return `${method}:${url}?${sortedParams}`;
+<span class="line-num">9</span>  }
+<span class="line-num">10</span>
+<span class="line-num">11</span>  /**
+<span class="line-num">12</span>   * 获取缓存数据
+<span class="line-num">13</span>   */
+<span class="line-num">14</span>  getCached(key) {
+<span class="line-num">15</span>    const item = this.cache.get(key);
+<span class="line-num">16</span>    if (!item) return null;
+<span class="line-num">17</span>
+<span class="line-num">18</span>    // 检查是否过期
+<span class="line-num">19</span>    if (Date.now() &gt; item.expiry) {
+<span class="line-num">20</span>      this.cache.delete(key);
+<span class="line-num">21</span>      return null;
+<span class="line-num">22</span>    }
+<span class="line-num">23</span>
+<span class="line-num">24</span>    return item.data;
+<span class="line-num">25</span>  }
+<span class="line-num">26</span>
+<span class="line-num">27</span>  /**
+<span class="line-num">28</span>   * 设置缓存数据
+<span class="line-num">29</span>   */
+<span class="line-num">30</span>  set(key, data, ttl = this.defaultTTL) {
+<span class="line-num">31</span>    this.cache.set(key, {
+<span class="line-num">32</span>      data,
+<span class="line-num">33</span>      expiry: Date.now() + ttl,
+<span class="line-num">34</span>    });
+<span class="line-num">35</span>  }
+<span class="line-num">36</span>
+<span class="line-num">37</span>  /**
+<span class="line-num">38</span>   * 删除缓存
+<span class="line-num">39</span>   */
+<span class="line-num">40</span>  deleteCached(key) {
+<span class="line-num">41</span>    this.cache.delete(key);
+<span class="line-num">42</span>  }
+<span class="line-num">43</span>
+<span class="line-num">44</span>  /**
+<span class="line-num">45</span>   * 清除所有缓存
+<span class="line-num">46</span>   */
+<span class="line-num">47</span>  clear() {
+<span class="line-num">48</span>    this.cache.clear();
+<span class="line-num">49</span>  }
+<span class="line-num">50</span>
+</div>
+<div class="footer">第 40 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>  /**
+<span class="line-num">2</span>   * 清除匹配的缓存
+<span class="line-num">3</span>   */
+<span class="line-num">4</span>  clearMatching(pattern) {
+<span class="line-num">5</span>    for (const key of this.cache.keys()) {
+<span class="line-num">6</span>      if (key.includes(pattern)) {
+<span class="line-num">7</span>        this.cache.delete(key);
+<span class="line-num">8</span>      }
+<span class="line-num">9</span>    }
+<span class="line-num">10</span>  }
+<span class="line-num">11</span>
+<span class="line-num">12</span>  /**
+<span class="line-num">13</span>   * 带缓存的请求
+<span class="line-num">14</span>   */
+<span class="line-num">15</span>  async request(method, url, options = {}) {
+<span class="line-num">16</span>    const { 
+<span class="line-num">17</span>      cache = false, 
+<span class="line-num">18</span>      cacheTTL = this.defaultTTL,
+<span class="line-num">19</span>      cacheKey: customCacheKey,
+<span class="line-num">20</span>      ...requestOptions 
+<span class="line-num">21</span>    } = options;
+<span class="line-num">22</span>
+<span class="line-num">23</span>    const cacheKey = customCacheKey || this.generateKey(method, url, requestOptions.params);
+<span class="line-num">24</span>
+<span class="line-num">25</span>    // 如果启用缓存，先检查缓存
+<span class="line-num">26</span>    if (cache) {
+<span class="line-num">27</span>      const cached = this.getCached(cacheKey);
+<span class="line-num">28</span>      if (cached) {
+<span class="line-num">29</span>        return cached;
+<span class="line-num">30</span>      }
+<span class="line-num">31</span>    }
+<span class="line-num">32</span>
+<span class="line-num">33</span>    // 检查是否有正在进行的相同请求（请求去重）
+<span class="line-num">34</span>    if (this.pendingRequests.has(cacheKey)) {
+<span class="line-num">35</span>      return this.pendingRequests.get(cacheKey);
+<span class="line-num">36</span>    }
+<span class="line-num">37</span>
+<span class="line-num">38</span>    // 发起请求
+<span class="line-num">39</span>    const requestPromise = api.request({
+<span class="line-num">40</span>      method,
+<span class="line-num">41</span>      url,
+<span class="line-num">42</span>      ...requestOptions,
+<span class="line-num">43</span>    }).then(response =&gt; {
+<span class="line-num">44</span>      // 缓存响应
+<span class="line-num">45</span>      if (cache &amp;&amp; response) {
+<span class="line-num">46</span>        this.set(cacheKey, response, cacheTTL);
+<span class="line-num">47</span>      }
+<span class="line-num">48</span>      // 移除待处理请求
+<span class="line-num">49</span>      this.pendingRequests.delete(cacheKey);
+<span class="line-num">50</span>      return response;
+</div>
+<div class="footer">第 41 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    }).catch(error =&gt; {
+<span class="line-num">2</span>      // 移除待处理请求
+<span class="line-num">3</span>      this.pendingRequests.delete(cacheKey);
+<span class="line-num">4</span>      throw error;
+<span class="line-num">5</span>    });
+<span class="line-num">6</span>
+<span class="line-num">7</span>    // 记录待处理请求
+<span class="line-num">8</span>    this.pendingRequests.set(cacheKey, requestPromise);
+<span class="line-num">9</span>
+<span class="line-num">10</span>    return requestPromise;
+<span class="line-num">11</span>  }
+<span class="line-num">12</span>
+<span class="line-num">13</span>  /**
+<span class="line-num">14</span>   * GET 请求（带缓存）
+<span class="line-num">15</span>   */
+<span class="line-num">16</span>  async get(url, options = {}) {
+<span class="line-num">17</span>    return this.request(&#039;get&#039;, url, options);
+<span class="line-num">18</span>  }
+<span class="line-num">19</span>
+<span class="line-num">20</span>  /**
+<span class="line-num">21</span>   * POST 请求（默认不缓存）
+<span class="line-num">22</span>   */
+<span class="line-num">23</span>  async post(url, options = {}) {
+<span class="line-num">24</span>    return this.request(&#039;post&#039;, url, { ...options, cache: false });
+<span class="line-num">25</span>  }
+<span class="line-num">26</span>
+<span class="line-num">27</span>  /**
+<span class="line-num">28</span>   * PUT 请求（清除相关缓存）
+<span class="line-num">29</span>   */
+<span class="line-num">30</span>  async put(url, options = {}) {
+<span class="line-num">31</span>    // 清除相关缓存
+<span class="line-num">32</span>    this.clearMatching(url);
+<span class="line-num">33</span>    return this.request(&#039;put&#039;, url, { ...options, cache: false });
+<span class="line-num">34</span>  }
+<span class="line-num">35</span>
+<span class="line-num">36</span>  /**
+<span class="line-num">37</span>   * DELETE 请求（清除相关缓存）
+<span class="line-num">38</span>   */
+<span class="line-num">39</span>  async delete(url, options = {}) {
+<span class="line-num">40</span>    // 清除相关缓存
+<span class="line-num">41</span>    this.clearMatching(url);
+<span class="line-num">42</span>    return this.request(&#039;delete&#039;, url, { ...options, cache: false });
+<span class="line-num">43</span>  }
+<span class="line-num">44</span>
+<span class="line-num">45</span>  /**
+<span class="line-num">46</span>   * 获取缓存统计
+<span class="line-num">47</span>   */
+<span class="line-num">48</span>  getStats() {
+<span class="line-num">49</span>    let valid = 0;
+<span class="line-num">50</span>    let expired = 0;
+</div>
+<div class="footer">第 42 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>    for (const [, item] of this.cache.entries()) {
+<span class="line-num">3</span>      if (Date.now() &gt; item.expiry) {
+<span class="line-num">4</span>        expired++;
+<span class="line-num">5</span>      } else {
+<span class="line-num">6</span>        valid++;
+<span class="line-num">7</span>      }
+<span class="line-num">8</span>    }
+<span class="line-num">9</span>
+<span class="line-num">10</span>    return {
+<span class="line-num">11</span>      total: this.cache.size,
+<span class="line-num">12</span>      valid,
+<span class="line-num">13</span>      expired,
+<span class="line-num">14</span>      pendingRequests: this.pendingRequests.size,
+<span class="line-num">15</span>    };
+<span class="line-num">16</span>  }
+<span class="line-num">17</span>
+<span class="line-num">18</span>  /**
+<span class="line-num">19</span>   * 清理过期缓存
+<span class="line-num">20</span>   */
+<span class="line-num">21</span>  cleanup() {
+<span class="line-num">22</span>    const now = Date.now();
+<span class="line-num">23</span>    for (const [key, item] of this.cache.entries()) {
+<span class="line-num">24</span>      if (now &gt; item.expiry) {
+<span class="line-num">25</span>        this.cache.delete(key);
+<span class="line-num">26</span>      }
+<span class="line-num">27</span>    }
+<span class="line-num">28</span>  }
+<span class="line-num">29</span>}
+<span class="line-num">30</span>
+<span class="line-num">31</span>// 创建全局实例
+<span class="line-num">32</span>const requestCache = new RequestCache();
+<span class="line-num">33</span>
+<span class="line-num">34</span>// 定期清理过期缓存（每5分钟）
+<span class="line-num">35</span>const cacheCleanupInterval = setInterval(() =&gt; {
+<span class="line-num">36</span>  requestCache.cleanup();
+<span class="line-num">37</span>}, 5 * 60 * 1000);
+<span class="line-num">38</span>
+<span class="line-num">39</span>// 提供清理函数，用于应用卸载时调用
+<span class="line-num">40</span>export const cleanupRequestCache = () =&gt; {
+<span class="line-num">41</span>  clearInterval(cacheCleanupInterval);
+<span class="line-num">42</span>  requestCache.clear();
+<span class="line-num">43</span>};
+<span class="line-num">44</span>
+<span class="line-num">45</span>export default requestCache;
+<span class="line-num">46</span>
+<span class="line-num">47</span>// 缓存配置常量
+<span class="line-num">48</span>export const CACHE_CONFIG = {
+<span class="line-num">49</span>  // 长时间缓存（1小时）
+<span class="line-num">50</span>  LONG_TERM: 60 * 60 * 1000,
+</div>
+<div class="footer">第 43 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>  
+<span class="line-num">2</span>  // 中等时间缓存（15分钟）
+<span class="line-num">3</span>  MEDIUM_TERM: 15 * 60 * 1000,
+<span class="line-num">4</span>  
+<span class="line-num">5</span>  // 短时间缓存（5分钟）
+<span class="line-num">6</span>  SHORT_TERM: 5 * 60 * 1000,
+<span class="line-num">7</span>  
+<span class="line-num">8</span>  // 实时数据（不缓存）
+<span class="line-num">9</span>  REAL_TIME: 0,
+<span class="line-num">10</span>};
+<span class="line-num">11</span>
+<span class="line-num">12</span>// 常用 API 缓存配置
+<span class="line-num">13</span>export const API_CACHE_STRATEGIES = {
+<span class="line-num">14</span>  // 用户列表 - 短时间缓存
+<span class="line-num">15</span>  &#039;GET:/api/users&#039;: { cache: true, ttl: CACHE_CONFIG.SHORT_TERM },
+<span class="line-num">16</span>  
+<span class="line-num">17</span>  // 资产分类 - 长时间缓存
+<span class="line-num">18</span>  &#039;GET:/api/assets/categories&#039;: { cache: true, ttl: CACHE_CONFIG.LONG_TERM },
+<span class="line-num">19</span>  
+<span class="line-num">20</span>  // 部门列表 - 中等时间缓存
+<span class="line-num">21</span>  &#039;GET:/api/departments&#039;: { cache: true, ttl: CACHE_CONFIG.MEDIUM_TERM },
+<span class="line-num">22</span>  
+<span class="line-num">23</span>  // 系统配置 - 长时间缓存
+<span class="line-num">24</span>  &#039;GET:/api/system-config&#039;: { cache: true, ttl: CACHE_CONFIG.LONG_TERM },
+<span class="line-num">25</span>  
+<span class="line-num">26</span>  // 模块配置 - 长时间缓存
+<span class="line-num">27</span>  &#039;GET:/api/module-configs&#039;: { cache: true, ttl: CACHE_CONFIG.LONG_TERM },
+<span class="line-num">28</span>  
+<span class="line-num">29</span>  // 仪表盘统计 - 短时间缓存
+<span class="line-num">30</span>  &#039;GET:/api/dashboard&#039;: { cache: true, ttl: CACHE_CONFIG.SHORT_TERM },
+<span class="line-num">31</span>  
+<span class="line-num">32</span>  // 资产详情 - 中等时间缓存
+<span class="line-num">33</span>  &#039;GET:/api/assets/*&#039;: { cache: true, ttl: CACHE_CONFIG.MEDIUM_TERM },
+<span class="line-num">34</span>};
+<span class="line-num">35</span>
+<span class="line-num">36</span>
+<span class="line-num">37</span>// ===== FILE: frontend/src/utils/roleUtils.js =====
+<span class="line-num">38</span>/**
+<span class="line-num">39</span> * 角色相关工具函数
+<span class="line-num">40</span> */
+<span class="line-num">41</span>import crypto from &#039;./crypto&#039;;
+<span class="line-num">42</span>
+<span class="line-num">43</span>// ==================== 角色定义 ====================
+<span class="line-num">44</span>
+<span class="line-num">45</span>// 管理员角色列表
+<span class="line-num">46</span>export const ADMIN_ROLES = [&#039;super_admin&#039;, &#039;system_admin&#039;];
+<span class="line-num">47</span>
+<span class="line-num">48</span>// 业务管理员角色列表（拥有比普通用户更多的权限）
+<span class="line-num">49</span>export const BUSINESS_ADMIN_ROLES = [
+<span class="line-num">50</span>  &#039;asset_admin&#039;,
+</div>
+<div class="footer">第 44 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>  &#039;department_admin&#039;,
+<span class="line-num">2</span>  &#039;metrology_admin&#039;,
+<span class="line-num">3</span>  &#039;quality_admin&#039;,
+<span class="line-num">4</span>  &#039;maintenance_admin&#039;,
+<span class="line-num">5</span>  &#039;acceptance_admin&#039;,
+<span class="line-num">6</span>  &#039;transfer_admin&#039;,
+<span class="line-num">7</span>  &#039;inventory_admin&#039;,
+<span class="line-num">8</span>];
+<span class="line-num">9</span>
+<span class="line-num">10</span>// 所有系统角色列表
+<span class="line-num">11</span>export const ALL_SYSTEM_ROLES = [...ADMIN_ROLES, ...BUSINESS_ADMIN_ROLES, &#039;user&#039;];
+<span class="line-num">12</span>
+<span class="line-num">13</span>// 角色显示名称映射
+<span class="line-num">14</span>export const ROLE_DISPLAY_NAMES = {
+<span class="line-num">15</span>  super_admin: &#039;超级管理员&#039;,
+<span class="line-num">16</span>  system_admin: &#039;系统管理员&#039;,
+<span class="line-num">17</span>  asset_admin: &#039;资产管理员&#039;,
+<span class="line-num">18</span>  department_admin: &#039;科室管理员&#039;,
+<span class="line-num">19</span>  metrology_admin: &#039;计量管理员&#039;,
+<span class="line-num">20</span>  quality_admin: &#039;质量管理员&#039;,
+<span class="line-num">21</span>  maintenance_admin: &#039;维护管理员&#039;,
+<span class="line-num">22</span>  acceptance_admin: &#039;验收管理员&#039;,
+<span class="line-num">23</span>  transfer_admin: &#039;调配管理员&#039;,
+<span class="line-num">24</span>  inventory_admin: &#039;盘点管理员&#039;,
+<span class="line-num">25</span>  user: &#039;普通用户&#039;,
+<span class="line-num">26</span>};
+<span class="line-num">27</span>
+<span class="line-num">28</span>// 角色权限级别（数字越大权限越高）
+<span class="line-num">29</span>export const ROLE_LEVELS = {
+<span class="line-num">30</span>  super_admin: 100,
+<span class="line-num">31</span>  system_admin: 90,
+<span class="line-num">32</span>  asset_admin: 70,
+<span class="line-num">33</span>  department_admin: 60,
+<span class="line-num">34</span>  metrology_admin: 65,
+<span class="line-num">35</span>  quality_admin: 65,
+<span class="line-num">36</span>  maintenance_admin: 65,
+<span class="line-num">37</span>  acceptance_admin: 65,
+<span class="line-num">38</span>  transfer_admin: 65,
+<span class="line-num">39</span>  inventory_admin: 65,
+<span class="line-num">40</span>  user: 10,
+<span class="line-num">41</span>};
+<span class="line-num">42</span>
+<span class="line-num">43</span>// ==================== 角色检查函数 ====================
+<span class="line-num">44</span>
+<span class="line-num">45</span>/**
+<span class="line-num">46</span> * 检查是否为管理员角色
+<span class="line-num">47</span> * @param {string} role - 用户角色
+<span class="line-num">48</span> * @returns {boolean} 是否为管理员
+<span class="line-num">49</span> */
+<span class="line-num">50</span>export const isAdminRole = role =&gt; ADMIN_ROLES.includes(role);
+</div>
+<div class="footer">第 45 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>export const isSuperAdmin = user =&gt; {
+<span class="line-num">3</span>  if (!user) return false;
+<span class="line-num">4</span>  return user.is_super_admin === true || user.role === &#039;super_admin&#039;;
+<span class="line-num">5</span>};
+<span class="line-num">6</span>
+<span class="line-num">7</span>export const isBusinessAdminRole = role =&gt; BUSINESS_ADMIN_ROLES.includes(role);
+<span class="line-num">8</span>
+<span class="line-num">9</span>/**
+<span class="line-num">10</span> * 检查是否为系统角色
+<span class="line-num">11</span> * @param {string} role - 用户角色
+<span class="line-num">12</span> * @returns {boolean} 是否为系统角色
+<span class="line-num">13</span> */
+<span class="line-num">14</span>export const isSystemRole = role =&gt; ALL_SYSTEM_ROLES.includes(role);
+<span class="line-num">15</span>
+<span class="line-num">16</span>/**
+<span class="line-num">17</span> * 获取角色显示名称
+<span class="line-num">18</span> * @param {string} role - 角色代码
+<span class="line-num">19</span> * @returns {string} 显示名称
+<span class="line-num">20</span> */
+<span class="line-num">21</span>export const getRoleDisplayName = role =&gt; ROLE_DISPLAY_NAMES[role] || role || &#039;未知角色&#039;;
+<span class="line-num">22</span>
+<span class="line-num">23</span>/**
+<span class="line-num">24</span> * 获取角色权限级别
+<span class="line-num">25</span> * @param {string} role - 角色代码
+<span class="line-num">26</span> * @returns {number} 权限级别
+<span class="line-num">27</span> */
+<span class="line-num">28</span>export const getRoleLevel = role =&gt; ROLE_LEVELS[role] || 0;
+<span class="line-num">29</span>
+<span class="line-num">30</span>/**
+<span class="line-num">31</span> * 比较两个角色的权限级别
+<span class="line-num">32</span> * @param {string} roleA - 角色A
+<span class="line-num">33</span> * @param {string} roleB - 角色B
+<span class="line-num">34</span> * @returns {number} 正数表示A权限更高，负数表示B权限更高，0表示相等
+<span class="line-num">35</span> */
+<span class="line-num">36</span>export const compareRoleLevel = (roleA, roleB) =&gt; getRoleLevel(roleA) - getRoleLevel(roleB);
+<span class="line-num">37</span>
+<span class="line-num">38</span>/**
+<span class="line-num">39</span> * 检查角色A是否拥有比角色B更高的或相等的权限
+<span class="line-num">40</span> * @param {string} roleA - 角色A
+<span class="line-num">41</span> * @param {string} roleB - 角色B
+<span class="line-num">42</span> * @returns {boolean}
+<span class="line-num">43</span> */
+<span class="line-num">44</span>export const hasHigherOrEqualRole = (roleA, roleB) =&gt; compareRoleLevel(roleA, roleB) &gt;= 0;
+<span class="line-num">45</span>
+<span class="line-num">46</span>// ==================== 菜单权限检查 ====================
+<span class="line-num">47</span>
+<span class="line-num">48</span>/**
+<span class="line-num">49</span> * 超级管理员专属菜单key列表
+<span class="line-num">50</span> */
+</div>
+<div class="footer">第 46 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>export const SUPER_ADMIN_ONLY_MENUS = [&#039;/database-connection&#039;, &#039;/api-docs&#039;, &#039;/api-documentation&#039;];
+<span class="line-num">2</span>
+<span class="line-num">3</span>/**
+<span class="line-num">4</span> * 检查是否为超级管理员专属菜单
+<span class="line-num">5</span> * @param {string} menuKey - 菜单路径
+<span class="line-num">6</span> * @returns {boolean} 是否为超级管理员专属
+<span class="line-num">7</span> */
+<span class="line-num">8</span>export const isSuperAdminOnlyMenu = menuKey =&gt; SUPER_ADMIN_ONLY_MENUS.includes(menuKey);
+<span class="line-num">9</span>
+<span class="line-num">10</span>/**
+<span class="line-num">11</span> * 检查用户是否有访问指定菜单的权限
+<span class="line-num">12</span> * @param {Object} user - 用户对象
+<span class="line-num">13</span> * @param {string} menuKey - 菜单路径
+<span class="line-num">14</span> * @param {string[]} visibleMenuKeys - 用户可见的菜单键列表
+<span class="line-num">15</span> * @param {boolean} menuPermissionLoaded - 权限是否已加载
+<span class="line-num">16</span> * @returns {boolean} 是否有权限
+<span class="line-num">17</span> */
+<span class="line-num">18</span>export const canAccessMenu = (user, menuKey, visibleMenuKeys = [], menuPermissionLoaded = false) =&gt; {
+<span class="line-num">19</span>  // 超级管理员总是可以访问所有菜单
+<span class="line-num">20</span>  if (user?.role === &#039;super_admin&#039;) return true;
+<span class="line-num">21</span>
+<span class="line-num">22</span>  // 超级管理员专属菜单检查
+<span class="line-num">23</span>  if (isSuperAdminOnlyMenu(menuKey) &amp;&amp; user?.role !== &#039;super_admin&#039;) {
+<span class="line-num">24</span>    return false;
+<span class="line-num">25</span>  }
+<span class="line-num">26</span>
+<span class="line-num">27</span>  // 管理员总是可以访问非超级管理员专属菜单
+<span class="line-num">28</span>  if (isAdminRole(user?.role)) return true;
+<span class="line-num">29</span>
+<span class="line-num">30</span>  // 权限未加载时默认允许（避免页面闪烁）
+<span class="line-num">31</span>  if (!menuPermissionLoaded) return true;
+<span class="line-num">32</span>
+<span class="line-num">33</span>  // 可见菜单为空时允许（兼容旧版本）
+<span class="line-num">34</span>  if (!visibleMenuKeys || visibleMenuKeys.length === 0) return true;
+<span class="line-num">35</span>
+<span class="line-num">36</span>  // 检查是否在可见菜单中
+<span class="line-num">37</span>  return visibleMenuKeys.includes(menuKey);
+<span class="line-num">38</span>};
+<span class="line-num">39</span>
+<span class="line-num">40</span>/**
+<span class="line-num">41</span> * 检查用户是否可以访问某个功能模块
+<span class="line-num">42</span> * @param {Object} user - 用户对象
+<span class="line-num">43</span> * @param {string} moduleId - 模块ID
+<span class="line-num">44</span> * @returns {boolean}
+<span class="line-num">45</span> */
+<span class="line-num">46</span>export const canAccessModule = (user, moduleId) =&gt; {
+<span class="line-num">47</span>  if (!user || !moduleId) return false;
+<span class="line-num">48</span>
+<span class="line-num">49</span>  // 超级管理员可以访问所有模块
+<span class="line-num">50</span>  if (user.role === &#039;super_admin&#039;) return true;
+</div>
+<div class="footer">第 47 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>  // 检查用户启用的模块列表
+<span class="line-num">3</span>  const enabledModules = user.enabled_modules || [];
+<span class="line-num">4</span>  if (enabledModules.includes(moduleId)) return true;
+<span class="line-num">5</span>
+<span class="line-num">6</span>  // 某些模块有依赖关系
+<span class="line-num">7</span>  const moduleFallbacks = {
+<span class="line-num">8</span>    &#039;special-equipment-management&#039;: [&#039;compliance-management&#039;],
+<span class="line-num">9</span>    &#039;safety-inspection-management&#039;: [&#039;compliance-management&#039;],
+<span class="line-num">10</span>    &#039;asset-risk-management&#039;: [&#039;compliance-management&#039;],
+<span class="line-num">11</span>    &#039;staff-qualification&#039;: [&#039;compliance-management&#039;],
+<span class="line-num">12</span>    &#039;uptime-management&#039;: [&#039;compliance-management&#039;],
+<span class="line-num">13</span>    &#039;iot-geo-location-management&#039;: [&#039;iot-management&#039;],
+<span class="line-num">14</span>    &#039;iot-zone-location-management&#039;: [&#039;iot-management&#039;],
+<span class="line-num">15</span>    &#039;iot-asset-monitoring-management&#039;: [&#039;iot-management&#039;],
+<span class="line-num">16</span>    &#039;iot-environment-monitoring-management&#039;: [&#039;iot-management&#039;],
+<span class="line-num">17</span>    &#039;iot-patient-volume-management&#039;: [&#039;iot-management&#039;],
+<span class="line-num">18</span>  };
+<span class="line-num">19</span>
+<span class="line-num">20</span>  const fallbacks = moduleFallbacks[moduleId] || [];
+<span class="line-num">21</span>  return fallbacks.some(fallbackId =&gt; enabledModules.includes(fallbackId));
+<span class="line-num">22</span>};
+<span class="line-num">23</span>
+<span class="line-num">24</span>// ==================== 用户相关函数 ====================
+<span class="line-num">25</span>
+<span class="line-num">26</span>/**
+<span class="line-num">27</span> * 从localStorage获取当前用户
+<span class="line-num">28</span> * @returns {Object|null} 用户对象
+<span class="line-num">29</span> */
+<span class="line-num">30</span>export const getCurrentUser = () =&gt; {
+<span class="line-num">31</span>  return crypto.getItem(&#039;user&#039;);
+<span class="line-num">32</span>};
+<span class="line-num">33</span>
+<span class="line-num">34</span>/**
+<span class="line-num">35</span> * 检查当前用户是否为管理员
+<span class="line-num">36</span> * @returns {boolean} 是否为管理员
+<span class="line-num">37</span> */
+<span class="line-num">38</span>export const isCurrentUserAdmin = () =&gt; {
+<span class="line-num">39</span>  const user = getCurrentUser();
+<span class="line-num">40</span>  return isAdminRole(user?.role);
+<span class="line-num">41</span>};
+<span class="line-num">42</span>
+<span class="line-num">43</span>/**
+<span class="line-num">44</span> * 检查当前用户是否为超级管理员
+<span class="line-num">45</span> * @returns {boolean} 是否为超级管理员
+<span class="line-num">46</span> */
+<span class="line-num">47</span>export const isCurrentUserSuperAdmin = () =&gt; {
+<span class="line-num">48</span>  const user = getCurrentUser();
+<span class="line-num">49</span>  return user?.role === &#039;super_admin&#039;;
+<span class="line-num">50</span>};
+</div>
+<div class="footer">第 48 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>/**
+<span class="line-num">3</span> * 获取当前用户的角色显示名称
+<span class="line-num">4</span> * @returns {string}
+<span class="line-num">5</span> */
+<span class="line-num">6</span>export const getCurrentUserRoleDisplayName = () =&gt; {
+<span class="line-num">7</span>  const user = getCurrentUser();
+<span class="line-num">8</span>  return getRoleDisplayName(user?.role);
+<span class="line-num">9</span>};
+<span class="line-num">10</span>
+<span class="line-num">11</span>/**
+<span class="line-num">12</span> * 检查当前用户是否拥有指定角色或更高级别
+<span class="line-num">13</span> * @param {string} requiredRole - 要求的最低角色
+<span class="line-num">14</span> * @returns {boolean}
+<span class="line-num">15</span> */
+<span class="line-num">16</span>export const currentUserHasRole = requiredRole =&gt; {
+<span class="line-num">17</span>  const user = getCurrentUser();
+<span class="line-num">18</span>  if (!user?.role) return false;
+<span class="line-num">19</span>  return hasHigherOrEqualRole(user.role, requiredRole);
+<span class="line-num">20</span>};
+<span class="line-num">21</span>
+<span class="line-num">22</span>
+<span class="line-num">23</span>// ===== FILE: frontend/src/utils/safeConsole.js =====
+<span class="line-num">24</span>/**
+<span class="line-num">25</span> * API 响应处理工具
+<span class="line-num">26</span> * 提供统一的错误处理和用户提示
+<span class="line-num">27</span> */
+<span class="line-num">28</span>
+<span class="line-num">29</span>import { message } from &#039;antd&#039;;
+<span class="line-num">30</span>import { logger } from &#039;./productionLogger&#039;;
+<span class="line-num">31</span>
+<span class="line-num">32</span>class APIResponseHandler {
+<span class="line-num">33</span>  constructor() {
+<span class="line-num">34</span>    this.errorCount = new Map();
+<span class="line-num">35</span>    this.maxErrorsPerEndpoint = 5;
+<span class="line-num">36</span>    this.errorTimeWindow = 60000; // 1分钟内
+<span class="line-num">37</span>  }
+<span class="line-num">38</span>
+<span class="line-num">39</span>  /**
+<span class="line-num">40</span>   * 检查是否应该显示错误提示
+<span class="line-num">41</span>   */
+<span class="line-num">42</span>  shouldShowError(endpoint) {
+<span class="line-num">43</span>    const now = Date.now();
+<span class="line-num">44</span>    const endpointErrors = this.errorCount.get(endpoint) || [];
+<span class="line-num">45</span>    
+<span class="line-num">46</span>    // 清理过期记录
+<span class="line-num">47</span>    const recentErrors = endpointErrors.filter(
+<span class="line-num">48</span>      time =&gt; now - time &lt; this.errorTimeWindow
+<span class="line-num">49</span>    );
+<span class="line-num">50</span>    
+</div>
+<div class="footer">第 49 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    this.errorCount.set(endpoint, recentErrors);
+<span class="line-num">2</span>    
+<span class="line-num">3</span>    // 如果1分钟内错误次数超过阈值，不再显示提示
+<span class="line-num">4</span>    if (recentErrors.length &gt;= this.maxErrorsPerEndpoint) {
+<span class="line-num">5</span>      return false;
+<span class="line-num">6</span>    }
+<span class="line-num">7</span>    
+<span class="line-num">8</span>    // 记录错误
+<span class="line-num">9</span>    recentErrors.push(now);
+<span class="line-num">10</span>    return true;
+<span class="line-num">11</span>  }
+<span class="line-num">12</span>
+<span class="line-num">13</span>  /**
+<span class="line-num">14</span>   * 处理成功响应
+<span class="line-num">15</span>   */
+<span class="line-num">16</span>  handleSuccess(result, options = {}) {
+<span class="line-num">17</span>    const {
+<span class="line-num">18</span>      showMessage = true,
+<span class="line-num">19</span>      successMessage = &#039;操作成功&#039;,
+<span class="line-num">20</span>      silentEndpoints = [],
+<span class="line-num">21</span>    } = options;
+<span class="line-num">22</span>
+<span class="line-num">23</span>    if (result.success &amp;&amp; showMessage &amp;&amp; result.message) {
+<span class="line-num">24</span>      message.success(result.message);
+<span class="line-num">25</span>    }
+<span class="line-num">26</span>
+<span class="line-num">27</span>    logger.info(&#039;API请求成功&#039;, {
+<span class="line-num">28</span>      url: result.url,
+<span class="line-num">29</span>      success: result.success,
+<span class="line-num">30</span>    });
+<span class="line-num">31</span>
+<span class="line-num">32</span>    return result;
+<span class="line-num">33</span>  }
+<span class="line-num">34</span>
+<span class="line-num">35</span>  /**
+<span class="line-num">36</span>   * 处理错误响应
+<span class="line-num">37</span>   */
+<span class="line-num">38</span>  handleError(error, options = {}) {
+<span class="line-num">39</span>    const {
+<span class="line-num">40</span>      endpoint = &#039;unknown&#039;,
+<span class="line-num">41</span>      showMessage = true,
+<span class="line-num">42</span>      customMessage = null,
+<span class="line-num">43</span>      silentEndpoints = [],
+<span class="line-num">44</span>      fallbackMessage = &#039;操作失败，请稍后重试&#039;,
+<span class="line-num">45</span>    } = options;
+<span class="line-num">46</span>
+<span class="line-num">47</span>    // 检查是否应该显示错误
+<span class="line-num">48</span>    const shouldShow = this.shouldShowError(endpoint);
+<span class="line-num">49</span>
+<span class="line-num">50</span>    // 记录错误
+</div>
+<div class="footer">第 50 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    logger.error(&#039;API请求错误&#039;, {
+<span class="line-num">2</span>      endpoint,
+<span class="line-num">3</span>      error: error.message || error,
+<span class="line-num">4</span>      status: error.response?.status,
+<span class="line-num">5</span>      data: error.response?.data,
+<span class="line-num">6</span>    });
+<span class="line-num">7</span>
+<span class="line-num">8</span>    // 显示用户提示
+<span class="line-num">9</span>    if (showMessage &amp;&amp; shouldShow) {
+<span class="line-num">10</span>      let displayMessage = customMessage || 
+<span class="line-num">11</span>        error.response?.data?.message || 
+<span class="line-num">12</span>        error.message || 
+<span class="line-num">13</span>        fallbackMessage;
+<span class="line-num">14</span>
+<span class="line-num">15</span>      // 根据错误类型选择提示方式
+<span class="line-num">16</span>      if (error.response?.status === 401) {
+<span class="line-num">17</span>        message.error(&#039;登录已过期，请重新登录&#039;);
+<span class="line-num">18</span>      } else if (error.response?.status === 403) {
+<span class="line-num">19</span>        message.error(&#039;没有权限执行此操作&#039;);
+<span class="line-num">20</span>      } else if (error.response?.status === 404) {
+<span class="line-num">21</span>        message.error(&#039;请求的资源不存在&#039;);
+<span class="line-num">22</span>      } else if (error.response?.status &gt;= 500) {
+<span class="line-num">23</span>        message.error(&#039;服务器错误，请联系管理员&#039;);
+<span class="line-num">24</span>      } else {
+<span class="line-num">25</span>        message.error(displayMessage);
+<span class="line-num">26</span>      }
+<span class="line-num">27</span>    }
+<span class="line-num">28</span>
+<span class="line-num">29</span>    // 返回标准化的错误对象
+<span class="line-num">30</span>    return {
+<span class="line-num">31</span>      success: false,
+<span class="line-num">32</span>      error: error.message || &#039;Unknown error&#039;,
+<span class="line-num">33</span>      code: error.response?.data?.code || error.code || &#039;UNKNOWN_ERROR&#039;,
+<span class="line-num">34</span>      status: error.response?.status,
+<span class="line-num">35</span>      data: error.response?.data,
+<span class="line-num">36</span>      timestamp: new Date().toISOString(),
+<span class="line-num">37</span>    };
+<span class="line-num">38</span>  }
+<span class="line-num">39</span>
+<span class="line-num">40</span>  /**
+<span class="line-num">41</span>   * 处理网络错误
+<span class="line-num">42</span>   */
+<span class="line-num">43</span>  handleNetworkError(error, options = {}) {
+<span class="line-num">44</span>    const { showMessage = true } = options;
+<span class="line-num">45</span>
+<span class="line-num">46</span>    logger.error(&#039;网络错误&#039;, {
+<span class="line-num">47</span>      error: error.message || error,
+<span class="line-num">48</span>      type: &#039;NETWORK_ERROR&#039;,
+<span class="line-num">49</span>    });
+<span class="line-num">50</span>
+</div>
+<div class="footer">第 51 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    if (showMessage) {
+<span class="line-num">2</span>      if (!navigator.onLine) {
+<span class="line-num">3</span>        message.error(&#039;网络连接已断开，请检查网络&#039;);
+<span class="line-num">4</span>      } else {
+<span class="line-num">5</span>        message.error(&#039;网络请求失败，请稍后重试&#039;);
+<span class="line-num">6</span>      }
+<span class="line-num">7</span>    }
+<span class="line-num">8</span>
+<span class="line-num">9</span>    return {
+<span class="line-num">10</span>      success: false,
+<span class="line-num">11</span>      error: error.message || &#039;Network error&#039;,
+<span class="line-num">12</span>      code: &#039;NETWORK_ERROR&#039;,
+<span class="line-num">13</span>      timestamp: new Date().toISOString(),
+<span class="line-num">14</span>    };
+<span class="line-num">15</span>  }
+<span class="line-num">16</span>
+<span class="line-num">17</span>  /**
+<span class="line-num">18</span>   * 处理超时错误
+<span class="line-num">19</span>   */
+<span class="line-num">20</span>  handleTimeoutError(options = {}) {
+<span class="line-num">21</span>    const { showMessage = true } = options;
+<span class="line-num">22</span>
+<span class="line-num">23</span>    logger.warn(&#039;请求超时&#039;);
+<span class="line-num">24</span>
+<span class="line-num">25</span>    if (showMessage) {
+<span class="line-num">26</span>      message.warning(&#039;请求超时，请稍后重试&#039;);
+<span class="line-num">27</span>    }
+<span class="line-num">28</span>
+<span class="line-num">29</span>    return {
+<span class="line-num">30</span>      success: false,
+<span class="line-num">31</span>      error: &#039;Request timeout&#039;,
+<span class="line-num">32</span>      code: &#039;TIMEOUT_ERROR&#039;,
+<span class="line-num">33</span>      timestamp: new Date().toISOString(),
+<span class="line-num">34</span>    };
+<span class="line-num">35</span>  }
+<span class="line-num">36</span>
+<span class="line-num">37</span>  /**
+<span class="line-num">38</span>   * 重试处理
+<span class="line-num">39</span>   */
+<span class="line-num">40</span>  async withRetry(fn, options = {}) {
+<span class="line-num">41</span>    const {
+<span class="line-num">42</span>      maxRetries = 3,
+<span class="line-num">43</span>      retryDelay = 1000,
+<span class="line-num">44</span>      onRetry = null,
+<span class="line-num">45</span>      shouldRetry = (error) =&gt; {
+<span class="line-num">46</span>        // 默认只重试网络错误和服务器错误
+<span class="line-num">47</span>        return !error.response || error.response.status &gt;= 500;
+<span class="line-num">48</span>      },
+<span class="line-num">49</span>    } = options;
+<span class="line-num">50</span>
+</div>
+<div class="footer">第 52 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    let lastError;
+<span class="line-num">2</span>    
+<span class="line-num">3</span>    for (let i = 0; i &lt; maxRetries; i++) {
+<span class="line-num">4</span>      try {
+<span class="line-num">5</span>        return await fn();
+<span class="line-num">6</span>      } catch (error) {
+<span class="line-num">7</span>        lastError = error;
+<span class="line-num">8</span>        
+<span class="line-num">9</span>        if (i &lt; maxRetries - 1 &amp;&amp; shouldRetry(error)) {
+<span class="line-num">10</span>          logger.info(`重试请求 (${i + 1}/${maxRetries})`);
+<span class="line-num">11</span>          
+<span class="line-num">12</span>          if (onRetry) {
+<span class="line-num">13</span>            onRetry(error, i + 1);
+<span class="line-num">14</span>          }
+<span class="line-num">15</span>          
+<span class="line-num">16</span>          // 等待后重试
+<span class="line-num">17</span>          await new Promise(resolve =&gt; setTimeout(resolve, retryDelay * (i + 1)));
+<span class="line-num">18</span>        }
+<span class="line-num">19</span>      }
+<span class="line-num">20</span>    }
+<span class="line-num">21</span>    
+<span class="line-num">22</span>    throw lastError;
+<span class="line-num">23</span>  }
+<span class="line-num">24</span>
+<span class="line-num">25</span>  /**
+<span class="line-num">26</span>   * 带缓存的请求
+<span class="line-num">27</span>   */
+<span class="line-num">28</span>  async withCache(key, fn, options = {}) {
+<span class="line-num">29</span>    const { cacheTime = 60000, cache = new Map() } = options;
+<span class="line-num">30</span>    
+<span class="line-num">31</span>    const cached = cache.get(key);
+<span class="line-num">32</span>    if (cached &amp;&amp; Date.now() - cached.timestamp &lt; cacheTime) {
+<span class="line-num">33</span>      logger.debug(&#039;使用缓存数据&#039;, { key });
+<span class="line-num">34</span>      return cached.data;
+<span class="line-num">35</span>    }
+<span class="line-num">36</span>    
+<span class="line-num">37</span>    const data = await fn();
+<span class="line-num">38</span>    cache.set(key, {
+<span class="line-num">39</span>      data,
+<span class="line-num">40</span>      timestamp: Date.now(),
+<span class="line-num">41</span>    });
+<span class="line-num">42</span>    
+<span class="line-num">43</span>    return data;
+<span class="line-num">44</span>  }
+<span class="line-num">45</span>
+<span class="line-num">46</span>  /**
+<span class="line-num">47</span>   * 批量请求处理
+<span class="line-num">48</span>   */
+<span class="line-num">49</span>  async handleBatch(requests, options = {}) {
+<span class="line-num">50</span>    const { stopOnError = false, showProgress = false } = options;
+</div>
+<div class="footer">第 53 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    const results = [];
+<span class="line-num">2</span>    
+<span class="line-num">3</span>    for (let i = 0; i &lt; requests.length; i++) {
+<span class="line-num">4</span>      try {
+<span class="line-num">5</span>        const result = await requests[i].fn();
+<span class="line-num">6</span>        results.push({ success: true, data: result, index: i });
+<span class="line-num">7</span>        
+<span class="line-num">8</span>        if (showProgress) {
+<span class="line-num">9</span>          message.loading(`处理中... ${i + 1}/${requests.length}`);
+<span class="line-num">10</span>        }
+<span class="line-num">11</span>      } catch (error) {
+<span class="line-num">12</span>        const errorResult = this.handleError(error, {
+<span class="line-num">13</span>          showMessage: false,
+<span class="line-num">14</span>          ...requests[i].options,
+<span class="line-num">15</span>        });
+<span class="line-num">16</span>        results.push({ success: false, error: errorResult, index: i });
+<span class="line-num">17</span>        
+<span class="line-num">18</span>        if (stopOnError) {
+<span class="line-num">19</span>          break;
+<span class="line-num">20</span>        }
+<span class="line-num">21</span>      }
+<span class="line-num">22</span>    }
+<span class="line-num">23</span>    
+<span class="line-num">24</span>    return {
+<span class="line-num">25</span>      results,
+<span class="line-num">26</span>      successCount: results.filter(r =&gt; r.success).length,
+<span class="line-num">27</span>      errorCount: results.filter(r =&gt; !r.success).length,
+<span class="line-num">28</span>      allSuccess: results.every(r =&gt; r.success),
+<span class="line-num">29</span>    };
+<span class="line-num">30</span>  }
+<span class="line-num">31</span>
+<span class="line-num">32</span>  /**
+<span class="line-num">33</span>   * 获取错误统计
+<span class="line-num">34</span>   */
+<span class="line-num">35</span>  getErrorStats() {
+<span class="line-num">36</span>    const stats = {};
+<span class="line-num">37</span>    
+<span class="line-num">38</span>    for (const [endpoint, errors] of this.errorCount.entries()) {
+<span class="line-num">39</span>      const recentErrors = errors.filter(
+<span class="line-num">40</span>        time =&gt; Date.now() - time &lt; this.errorTimeWindow
+<span class="line-num">41</span>      );
+<span class="line-num">42</span>      
+<span class="line-num">43</span>      if (recentErrors.length &gt; 0) {
+<span class="line-num">44</span>        stats[endpoint] = {
+<span class="line-num">45</span>          count: recentErrors.length,
+<span class="line-num">46</span>          lastError: recentErrors[recentErrors.length - 1],
+<span class="line-num">47</span>        };
+<span class="line-num">48</span>      }
+<span class="line-num">49</span>    }
+<span class="line-num">50</span>    
+</div>
+<div class="footer">第 54 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    return stats;
+<span class="line-num">2</span>  }
+<span class="line-num">3</span>
+<span class="line-num">4</span>  /**
+<span class="line-num">5</span>   * 重置错误计数
+<span class="line-num">6</span>   */
+<span class="line-num">7</span>  resetErrors(endpoint = null) {
+<span class="line-num">8</span>    if (endpoint) {
+<span class="line-num">9</span>      this.errorCount.delete(endpoint);
+<span class="line-num">10</span>    } else {
+<span class="line-num">11</span>      this.errorCount.clear();
+<span class="line-num">12</span>    }
+<span class="line-num">13</span>  }
+<span class="line-num">14</span>}
+<span class="line-num">15</span>
+<span class="line-num">16</span>// 创建全局单例
+<span class="line-num">17</span>const responseHandler = new APIResponseHandler();
+<span class="line-num">18</span>
+<span class="line-num">19</span>export const apiHandler = responseHandler;
+<span class="line-num">20</span>
+<span class="line-num">21</span>export default responseHandler;
+<span class="line-num">22</span>
+<span class="line-num">23</span>// 使用示例
+<span class="line-num">24</span>/**
+<span class="line-num">25</span> * // 简单使用
+<span class="line-num">26</span> * try {
+<span class="line-num">27</span> *   const result = await api.get(&#039;/assets&#039;);
+<span class="line-num">28</span> *   apiHandler.handleSuccess(result);
+<span class="line-num">29</span> * } catch (error) {
+<span class="line-num">30</span> *   apiHandler.handleError(error, { endpoint: &#039;/assets&#039; });
+<span class="line-num">31</span> * }
+<span class="line-num">32</span> *
+<span class="line-num">33</span> * // 带重试
+<span class="line-num">34</span> * try {
+<span class="line-num">35</span> *   const result = await apiHandler.withRetry(
+<span class="line-num">36</span> *     () =&gt; api.post(&#039;/assets&#039;, data),
+<span class="line-num">37</span> *     { maxRetries: 3, retryDelay: 1000 }
+<span class="line-num">38</span> *   );
+<span class="line-num">39</span> * } catch (error) {
+<span class="line-num">40</span> *   apiHandler.handleError(error);
+<span class="line-num">41</span> * }
+<span class="line-num">42</span> *
+<span class="line-num">43</span> * // 批量处理
+<span class="line-num">44</span> * const batchResult = await apiHandler.handleBatch([
+<span class="line-num">45</span> *   { fn: () =&gt; api.post(&#039;/asset1&#039;, data1) },
+<span class="line-num">46</span> *   { fn: () =&gt; api.post(&#039;/asset2&#039;, data2) },
+<span class="line-num">47</span> * ]);
+<span class="line-num">48</span> *
+<span class="line-num">49</span> * console.log(`成功: ${batchResult.successCount}, 失败: ${batchResult.errorCount}`);
+<span class="line-num">50</span> */
+</div>
+<div class="footer">第 55 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>
+<span class="line-num">3</span>// ===== FILE: frontend/src/utils/validation.js =====
+<span class="line-num">4</span>/**
+<span class="line-num">5</span> * 表单验证工具
+<span class="line-num">6</span> * 集中管理验证规则，与 constants/VALIDATION_RULES 配合使用
+<span class="line-num">7</span> */
+<span class="line-num">8</span>
+<span class="line-num">9</span>import { VALIDATION_RULES } from &#039;../constants&#039;;
+<span class="line-num">10</span>
+<span class="line-num">11</span>/**
+<span class="line-num">12</span> * 创建必填验证规则
+<span class="line-num">13</span> * @param {string} message - 自定义错误消息
+<span class="line-num">14</span> */
+<span class="line-num">15</span>export const required = (message = &#039;此字段为必填项&#039;) =&gt; ({
+<span class="line-num">16</span>  required: true,
+<span class="line-num">17</span>  message,
+<span class="line-num">18</span>});
+<span class="line-num">19</span>
+<span class="line-num">20</span>/**
+<span class="line-num">21</span> * 创建最小长度验证规则
+<span class="line-num">22</span> * @param {number} min - 最小长度
+<span class="line-num">23</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">24</span> */
+<span class="line-num">25</span>export const minLength = (min, message) =&gt; ({
+<span class="line-num">26</span>  min,
+<span class="line-num">27</span>  message: message || `至少 ${min} 个字符`,
+<span class="line-num">28</span>});
+<span class="line-num">29</span>
+<span class="line-num">30</span>/**
+<span class="line-num">31</span> * 创建最大长度验证规则
+<span class="line-num">32</span> * @param {number} max - 最大长度
+<span class="line-num">33</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">34</span> */
+<span class="line-num">35</span>export const maxLength = (max, message) =&gt; ({
+<span class="line-num">36</span>  max,
+<span class="line-num">37</span>  message: message || `最多 ${max} 个字符`,
+<span class="line-num">38</span>});
+<span class="line-num">39</span>
+<span class="line-num">40</span>/**
+<span class="line-num">41</span> * 创建长度范围验证规则
+<span class="line-num">42</span> * @param {number} min - 最小长度
+<span class="line-num">43</span> * @param {number} max - 最大长度
+<span class="line-num">44</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">45</span> */
+<span class="line-num">46</span>export const lengthRange = (min, max, message) =&gt; ({
+<span class="line-num">47</span>  min,
+<span class="line-num">48</span>  max,
+<span class="line-num">49</span>  message: message || `长度应在 ${min} 到 ${max} 个字符之间`,
+<span class="line-num">50</span>});
+</div>
+<div class="footer">第 56 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>/**
+<span class="line-num">3</span> * 创建邮箱验证规则
+<span class="line-num">4</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">5</span> */
+<span class="line-num">6</span>export const email = (message) =&gt; ({
+<span class="line-num">7</span>  type: &#039;email&#039;,
+<span class="line-num">8</span>  message: message || VALIDATION_RULES.EMAIL?.PATTERN ? &#039;请输入有效的邮箱地址&#039; : &#039;请输入有效的邮箱地址&#039;,
+<span class="line-num">9</span>});
+<span class="line-num">10</span>
+<span class="line-num">11</span>/**
+<span class="line-num">12</span> * 创建手机号验证规则（中国大陆）
+<span class="line-num">13</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">14</span> */
+<span class="line-num">15</span>export const phone = (message) =&gt; ({
+<span class="line-num">16</span>  pattern: VALIDATION_RULES.PHONE?.PATTERN || /^1[3-9]\d{9}$/,
+<span class="line-num">17</span>  message: message || &#039;请输入有效的手机号码&#039;,
+<span class="line-num">18</span>});
+<span class="line-num">19</span>
+<span class="line-num">20</span>/**
+<span class="line-num">21</span> * 创建电话号码验证规则（支持手机号和座机）
+<span class="line-num">22</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">23</span> */
+<span class="line-num">24</span>export const telephone = (message) =&gt; ({
+<span class="line-num">25</span>  pattern: /^1[3-9]\d{9}$|^0\d{2,3}-?\d{7,8}$/,
+<span class="line-num">26</span>  message: message || &#039;请输入有效的电话号码&#039;,
+<span class="line-num">27</span>});
+<span class="line-num">28</span>
+<span class="line-num">29</span>/**
+<span class="line-num">30</span> * 创建数字验证规则
+<span class="line-num">31</span> * @param {number} [min] - 最小值
+<span class="line-num">32</span> * @param {number} [max] - 最大值
+<span class="line-num">33</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">34</span> */
+<span class="line-num">35</span>export const number = (min, max, message) =&gt; {
+<span class="line-num">36</span>  const rule = { type: &#039;number&#039;, message: message || &#039;请输入有效的数字&#039; };
+<span class="line-num">37</span>  if (min !== undefined) rule.min = min;
+<span class="line-num">38</span>  if (max !== undefined) rule.max = max;
+<span class="line-num">39</span>  return rule;
+<span class="line-num">40</span>};
+<span class="line-num">41</span>
+<span class="line-num">42</span>/**
+<span class="line-num">43</span> * 创建正则表达式验证规则
+<span class="line-num">44</span> * @param {RegExp} pattern - 正则表达式
+<span class="line-num">45</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">46</span> */
+<span class="line-num">47</span>export const pattern = (pattern, message = &#039;格式不正确&#039;) =&gt; ({
+<span class="line-num">48</span>  pattern,
+<span class="line-num">49</span>  message,
+<span class="line-num">50</span>});
+</div>
+<div class="footer">第 57 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>
+<span class="line-num">2</span>/**
+<span class="line-num">3</span> * 创建资产编码验证规则
+<span class="line-num">4</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">5</span> */
+<span class="line-num">6</span>export const assetCode = (message) =&gt; ({
+<span class="line-num">7</span>  pattern: VALIDATION_RULES.ASSET_CODE?.PATTERN || /^[A-Za-z0-9-_]+$/,
+<span class="line-num">8</span>  message: message || VALIDATION_RULES.ASSET_CODE?.PATTERN ? &#039;只能包含字母、数字、- 和 _&#039; : &#039;只能包含字母、数字、- 和 _&#039;,
+<span class="line-num">9</span>});
+<span class="line-num">10</span>
+<span class="line-num">11</span>/**
+<span class="line-num">12</span> * 创建 MAC 地址验证规则
+<span class="line-num">13</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">14</span> */
+<span class="line-num">15</span>export const macAddress = (message) =&gt; ({
+<span class="line-num">16</span>  pattern: /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
+<span class="line-num">17</span>  message: message || &#039;请输入有效的MAC地址格式&#039;,
+<span class="line-num">18</span>});
+<span class="line-num">19</span>
+<span class="line-num">20</span>/**
+<span class="line-num">21</span> * 创建 IP 地址验证规则
+<span class="line-num">22</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">23</span> */
+<span class="line-num">24</span>export const ipAddress = (message) =&gt; ({
+<span class="line-num">25</span>  pattern: /^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$/,
+<span class="line-num">26</span>  message: message || &#039;请输入有效的IP地址&#039;,
+<span class="line-num">27</span>});
+<span class="line-num">28</span>
+<span class="line-num">29</span>/**
+<span class="line-num">30</span> * 创建 URL 验证规则
+<span class="line-num">31</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">32</span> */
+<span class="line-num">33</span>export const url = (message) =&gt; ({
+<span class="line-num">34</span>  type: &#039;url&#039;,
+<span class="line-num">35</span>  message: message || &#039;请输入有效的URL地址&#039;,
+<span class="line-num">36</span>});
+<span class="line-num">37</span>
+<span class="line-num">38</span>/**
+<span class="line-num">39</span> * 创建自定义验证器
+<span class="line-num">40</span> * @param {Function} validator - 验证函数 (rule, value) =&gt; Promise | boolean
+<span class="line-num">41</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">42</span> */
+<span class="line-num">43</span>export const custom = (validator, message) =&gt; ({
+<span class="line-num">44</span>  validator,
+<span class="line-num">45</span>  message: message || &#039;验证失败&#039;,
+<span class="line-num">46</span>});
+<span class="line-num">47</span>
+<span class="line-num">48</span>/**
+<span class="line-num">49</span> * 验证器组合函数（用于需要多个验证规则的字段）
+<span class="line-num">50</span> * @param  {...(Object|Array)} rules - 验证规则
+</div>
+<div class="footer">第 58 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span> * @returns {Array} 合并后的验证规则数组
+<span class="line-num">2</span> */
+<span class="line-num">3</span>export const combine = (...rules) =&gt; {
+<span class="line-num">4</span>  return rules.flat().filter(Boolean);
+<span class="line-num">5</span>};
+<span class="line-num">6</span>
+<span class="line-num">7</span>/**
+<span class="line-num">8</span> * 创建确认密码验证规则
+<span class="line-num">9</span> * @param {Function} getValue - 获取原密码值的函数 () =&gt; string
+<span class="line-num">10</span> * @param {string} [message] - 自定义错误消息
+<span class="line-num">11</span> */
+<span class="line-num">12</span>export const confirmPassword = (getValue, message) =&gt; ({
+<span class="line-num">13</span>  validator: (_, value) =&gt; {
+<span class="line-num">14</span>    if (!value) {
+<span class="line-num">15</span>      return Promise.reject(message || &#039;请确认密码&#039;);
+<span class="line-num">16</span>    }
+<span class="line-num">17</span>    if (value !== getValue()) {
+<span class="line-num">18</span>      return Promise.reject(message || &#039;两次输入的密码不一致&#039;);
+<span class="line-num">19</span>    }
+<span class="line-num">20</span>    return Promise.resolve();
+<span class="line-num">21</span>  },
+<span class="line-num">22</span>});
+<span class="line-num">23</span>
+<span class="line-num">24</span>/**
+<span class="line-num">25</span> * 常用字段验证规则预设
+<span class="line-num">26</span> */
+<span class="line-num">27</span>export const fieldRules = {
+<span class="line-num">28</span>  /** 用户名 */
+<span class="line-num">29</span>  username: combine(
+<span class="line-num">30</span>    required(&#039;请输入用户名&#039;),
+<span class="line-num">31</span>    lengthRange(3, 20, &#039;用户名长度在 3 到 20 个字符之间&#039;),
+<span class="line-num">32</span>    pattern(/^[a-zA-Z0-9_-]+$/, &#039;只能包含字母、数字、- 和 _&#039;)
+<span class="line-num">33</span>  ),
+<span class="line-num">34</span>
+<span class="line-num">35</span>  /** 密码 */
+<span class="line-num">36</span>  password: combine(
+<span class="line-num">37</span>    required(&#039;请输入密码&#039;),
+<span class="line-num">38</span>    minLength(6, &#039;密码至少 6 个字符&#039;),
+<span class="line-num">39</span>    maxLength(32, &#039;密码最多 32 个字符&#039;)
+<span class="line-num">40</span>  ),
+<span class="line-num">41</span>
+<span class="line-num">42</span>  /** 邮箱 */
+<span class="line-num">43</span>  email: combine(
+<span class="line-num">44</span>    required(&#039;请输入邮箱&#039;),
+<span class="line-num">45</span>    email()
+<span class="line-num">46</span>  ),
+<span class="line-num">47</span>
+<span class="line-num">48</span>  /** 手机号 */
+<span class="line-num">49</span>  phone: combine(
+<span class="line-num">50</span>    required(&#039;请输入手机号&#039;),
+</div>
+<div class="footer">第 59 页</div>
+</div>
+<div class="page">
+<div class="header"><span class="title">AssetHost智能资产管理平台 源代码</span>　版本：V1.0</div>
+<div class="code">
+<span class="line-num">1</span>    phone()
+<span class="line-num">2</span>  ),
+<span class="line-num">3</span>
+<span class="line-num">4</span>  /** 部门编码 */
+<span class="line-num">5</span>  departmentCode: combine(
+<span class="line-num">6</span>    required(&#039;请输入部门编码&#039;),
+<span class="line-num">7</span>    lengthRange(2, 20, &#039;部门编码长度在 2 到 20 个字符之间&#039;),
+<span class="line-num">8</span>    pattern(/^[a-zA-Z0-9-_]+$/, &#039;只能包含字母、数字、- 和 _&#039;)
+<span class="line-num">9</span>  ),
+<span class="line-num">10</span>
+<span class="line-num">11</span>  /** 部门名称 */
+<span class="line-num">12</span>  departmentName: combine(
+<span class="line-num">13</span>    required(&#039;请输入部门名称&#039;),
+<span class="line-num">14</span>    lengthRange(2, 50, &#039;部门名称长度在 2 到 50 个字符之间&#039;)
+<span class="line-num">15</span>  ),
+<span class="line-num">16</span>
+<span class="line-num">17</span>  /** 资产名称 */
+<span class="line-num">18</span>  assetName: combine(
+<span class="line-num">19</span>    required(&#039;请输入资产名称&#039;),
+<span class="line-num">20</span>    lengthRange(1, 100, &#039;资产名称长度在 1 到 100 个字符之间&#039;)
+<span class="line-num">21</span>  ),
+<span class="line-num">22</span>
+<span class="line-num">23</span>  /** 资产编码 */
+<span class="line-num">24</span>  assetCode: combine(
+<span class="line-num">25</span>    required(&#039;请输入资产编码&#039;),
+<span class="line-num">26</span>    assetCode()
+<span class="line-num">27</span>  ),
+<span class="line-num">28</span>};
+<span class="line-num">29</span>
+<span class="line-num">30</span>export default {
+<span class="line-num">31</span>  required,
+<span class="line-num">32</span>  minLength,
+<span class="line-num">33</span>  maxLength,
+<span class="line-num">34</span>  lengthRange,
+<span class="line-num">35</span>  email,
+<span class="line-num">36</span>  phone,
+<span class="line-num">37</span>  telephone,
+<span class="line-num">38</span>  number,
+<span class="line-num">39</span>  pattern,
+<span class="line-num">40</span>  assetCode,
+<span class="line-num">41</span>  macAddress,
+<span class="line-num">42</span>  ipAddress,
+<span class="line-num">43</span>  url,
+<span class="line-num">44</span>  custom,
+<span class="line-num">45</span>  combine,
+<span class="line-num">46</span>  confirmPassword,
+<span class="line-num">47</span>  fieldRules,
+<span class="line-num">48</span>};
+<span class="line-num">49</span>
+<span class="line-num">50</span>
+</div>
+<div class="footer">第 60 页</div>
+</div>
+</body></html>

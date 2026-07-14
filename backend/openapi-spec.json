@@ -1,0 +1,2761 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AssetHub 维修维护模块 API",
+    "description": "AssetHub企业资产管理系统的维修维护模块完整API文档，涵盖维修日志、预防性维护、故障维修、工单管理、模板管理、提醒、使用量追踪、成本统计和效率分析等功能。",
+    "version": "1.0.0",
+    "contact": {
+      "name": "AssetHub技术支持",
+      "email": "support@assethub.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5183/api",
+      "description": "本地开发服务器"
+    },
+    {
+      "url": "https://api.assethub.com/api",
+      "description": "生产环境服务器"
+    }
+  ],
+  "tags": [
+    {
+      "name": "维修日志",
+      "description": "维修日志管理，包括创建、查询、更新、删除和附件管理"
+    },
+    {
+      "name": "预防性维护",
+      "description": "预防性维护计划管理，包括计划创建、执行、完成和历史记录"
+    },
+    {
+      "name": "故障维修申请",
+      "description": "故障维修申请流程，包括申请提交、审批、开始和完成"
+    },
+    {
+      "name": "维修工单",
+      "description": "维修工单管理，包括创建、分配、执行、完成和关闭"
+    },
+    {
+      "name": "维修模板",
+      "description": "维修模板管理，包括模板的CRUD和智能推荐"
+    },
+    {
+      "name": "维护提醒",
+      "description": "维护提醒配置和发送"
+    },
+    {
+      "name": "资产使用量",
+      "description": "资产使用量记录和阈值触发管理"
+    },
+    {
+      "name": "维修成本",
+      "description": "维修成本统计和分析"
+    },
+    {
+      "name": "维修效率",
+      "description": "维修效率统计和分析"
+    },
+    {
+      "name": "维修评估",
+      "description": "维修质量评估"
+    },
+    {
+      "name": "AI维修助手",
+      "description": "AI智能维修助手功能"
+    }
+  ],
+  "paths": {
+    "/maintenance/logs": {
+      "get": {
+        "tags": ["维修日志"],
+        "summary": "获取维修日志列表",
+        "description": "分页获取维修日志列表，支持按资产编号、维修类型、状态、日期范围筛选",
+        "operationId": "getMaintenanceLogs",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码，从1开始",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页数量",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "asset_code",
+            "in": "query",
+            "description": "资产编号（支持模糊搜索）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "maintenance_type",
+            "in": "query",
+            "description": "维修类型",
+            "schema": {
+              "type": "string",
+              "enum": ["故障维修", "预防性维护", "定期保养", "日常维护", "其他"]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "维修状态",
+            "schema": {
+              "type": "string",
+              "enum": ["待分配", "已分配", "进行中", "已完成", "已取消"]
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "开始日期（YYYY-MM-DD）",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "结束日期（YYYY-MM-DD）",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "description": "关键词（搜索资产编号、维修人员）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取维修日志列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceLogListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "post": {
+        "tags": ["维修日志"],
+        "summary": "创建维修日志",
+        "description": "创建新的维修日志记录。需要提供资产编号、维修类型、维修日期、维修人员等必填字段。",
+        "operationId": "createMaintenanceLog",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceLogCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "维修日志创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceLogResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "428": {
+            "$ref": "#/components/responses/IdempotencyRequired"
+          }
+        }
+      }
+    },
+    "/maintenance/logs/{id}": {
+      "get": {
+        "tags": ["维修日志"],
+        "summary": "获取维修日志详情",
+        "description": "根据ID获取单条维修日志的详细信息",
+        "operationId": "getMaintenanceLogById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "维修日志ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取维修日志详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceLogResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": ["维修日志"],
+        "summary": "更新维修日志",
+        "description": "更新已有的维修日志信息",
+        "operationId": "updateMaintenanceLog",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "维修日志ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceLogUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "维修日志更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceLogResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["维修日志"],
+        "summary": "删除维修日志",
+        "description": "删除指定的维修日志（仅允许删除未完成的日志）",
+        "operationId": "deleteMaintenanceLog",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "维修日志ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "维修日志删除成功"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/maintenance/logs/{id}/attachments": {
+      "get": {
+        "tags": ["维修日志"],
+        "summary": "获取维修日志附件列表",
+        "description": "获取指定维修日志的所有附件",
+        "operationId": "getMaintenanceLogAttachments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "维修日志ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取附件列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Attachment"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["维修日志"],
+        "summary": "上传维修日志附件",
+        "description": "为维修日志上传附件，支持图片、PDF、Word、Excel等格式",
+        "operationId": "uploadMaintenanceLogAttachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "维修日志ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "附件文件（支持图片、PDF、Word、Excel）"
+                  },
+                  "originalFileName": {
+                    "type": "string",
+                    "description": "原始文件名（URL编码）"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "附件上传成功"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/logs/{logId}/attachments/{attachmentId}/download": {
+      "get": {
+        "tags": ["维修日志"],
+        "summary": "下载维修日志附件",
+        "description": "下载指定的维修日志附件",
+        "operationId": "downloadMaintenanceLogAttachment",
+        "parameters": [
+          {
+            "name": "logId",
+            "in": "path",
+            "required": true,
+            "description": "维修日志ID",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "description": "附件ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "附件下载成功",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/maintenance/statistics": {
+      "get": {
+        "tags": ["维修日志"],
+        "summary": "获取维修统计",
+        "description": "获取维修日志的统计信息，包括总次数、总成本、各类型次数等",
+        "operationId": "getMaintenanceStatistics",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "开始日期（YYYY-MM-DD）",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "结束日期（YYYY-MM-DD）",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "department",
+            "in": "query",
+            "description": "部门筛选",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取维修统计",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceStatistics"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/plans": {
+      "get": {
+        "tags": ["预防性维护"],
+        "summary": "获取预防性维护计划列表",
+        "description": "分页获取预防性维护计划列表，支持按资产编号、状态、关键词筛选",
+        "operationId": "getMaintenancePlans",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页数量",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "name": "asset_code",
+            "in": "query",
+            "description": "资产编号",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "计划状态",
+            "schema": {
+              "type": "string",
+              "enum": ["active", "paused", "completed", "cancelled"]
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "description": "关键词（匹配资产编号、资产名称、计划名称）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取预防性维护计划列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenancePlanListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["预防性维护"],
+        "summary": "创建预防性维护计划",
+        "description": "创建新的预防性维护计划，支持按时间周期或使用量触发",
+        "operationId": "createMaintenancePlan",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenancePlanCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "预防性维护计划创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenancePlanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/plans/{id}": {
+      "get": {
+        "tags": ["预防性维护"],
+        "summary": "获取预防性维护计划详情",
+        "description": "根据ID获取预防性维护计划的详细信息",
+        "operationId": "getMaintenancePlanById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "计划ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取计划详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenancePlanResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": ["预防性维护"],
+        "summary": "更新预防性维护计划",
+        "description": "更新预防性维护计划的基本信息和执行参数",
+        "operationId": "updateMaintenancePlan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "计划ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenancePlanUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "计划更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenancePlanResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["预防性维护"],
+        "summary": "删除预防性维护计划",
+        "description": "删除指定的预防性维护计划（仅允许删除未激活的计划）",
+        "operationId": "deleteMaintenancePlan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "计划ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "计划删除成功"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/plans/{id}/complete": {
+      "post": {
+        "tags": ["预防性维护"],
+        "summary": "完成预防性维护计划",
+        "description": "执行完成预防性维护计划，系统会自动创建维修日志并更新下次维护日期",
+        "operationId": "completeMaintenancePlan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "计划ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "maintenance_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "维护日期（YYYY-MM-DD）"
+                  },
+                  "maintenance_person": {
+                    "type": "string",
+                    "description": "维护人员"
+                  },
+                  "maintenance_content": {
+                    "type": "string",
+                    "description": "维护内容"
+                  },
+                  "maintenance_cost": {
+                    "type": "number",
+                    "description": "维护成本"
+                  },
+                  "parts_replaced": {
+                    "type": "string",
+                    "description": "更换部件"
+                  },
+                  "remark": {
+                    "type": "string",
+                    "description": "备注"
+                  },
+                  "actual_hours": {
+                    "type": "number",
+                    "description": "实际工时"
+                  },
+                  "maintenance_result": {
+                    "type": "string",
+                    "description": "维护结果"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "计划完成成功，自动创建维修日志",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "plan": {
+                          "$ref": "#/components/schemas/MaintenancePlan"
+                        },
+                        "log": {
+                          "$ref": "#/components/schemas/MaintenanceLog"
+                        },
+                        "next_maintenance_date": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "下次维护日期（系统自动计算）"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/plans/{id}/history": {
+      "get": {
+        "tags": ["预防性维护"],
+        "summary": "获取预防性维护计划历史",
+        "description": "获取指定预防性维护计划的执行历史记录",
+        "operationId": "getMaintenancePlanHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "计划ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取计划历史",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "plan_id": {
+                            "type": "integer"
+                          },
+                          "completed_date": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "maintenance_person": {
+                            "type": "string"
+                          },
+                          "maintenance_content": {
+                            "type": "string"
+                          },
+                          "maintenance_cost": {
+                            "type": "number"
+                          },
+                          "parts_replaced": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/requests": {
+      "get": {
+        "tags": ["故障维修申请"],
+        "summary": "获取故障维修申请列表",
+        "description": "分页获取故障维修申请列表，支持按状态、故障等级、日期范围筛选",
+        "operationId": "getMaintenanceRequests",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页数量",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "name": "asset_code",
+            "in": "query",
+            "description": "资产编号",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "申请状态",
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "approved", "rejected", "in_progress", "completed", "cancelled"]
+            }
+          },
+          {
+            "name": "fault_level",
+            "in": "query",
+            "description": "故障等级",
+            "schema": {
+              "type": "string",
+              "enum": ["紧急", "一般", "轻微"]
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "申请开始日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "申请结束日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "description": "关键词",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取故障维修申请列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceRequestListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["故障维修申请"],
+        "summary": "创建故障维修申请",
+        "description": "提交新的故障维修申请，系统会生成唯一的申请单号",
+        "operationId": "createMaintenanceRequest",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceRequestCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "故障维修申请创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/requests/{id}": {
+      "get": {
+        "tags": ["故障维修申请"],
+        "summary": "获取故障维修申请详情",
+        "description": "根据ID获取故障维修申请的详细信息",
+        "operationId": "getMaintenanceRequestById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "申请ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取申请详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceRequestResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": ["故障维修申请"],
+        "summary": "更新故障维修申请",
+        "description": "更新故障维修申请信息（仅允许更新待审批状态的申请）",
+        "operationId": "updateMaintenanceRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "申请ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceRequestUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "申请更新成功"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["故障维修申请"],
+        "summary": "删除故障维修申请",
+        "description": "删除指定的故障维修申请（仅允许删除待审批状态的申请）",
+        "operationId": "deleteMaintenanceRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "申请ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "申请删除成功"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/requests/{id}/approve": {
+      "post": {
+        "tags": ["故障维修申请"],
+        "summary": "审批故障维修申请",
+        "description": "审批通过或拒绝故障维修申请",
+        "operationId": "approveMaintenanceRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "申请ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["approved"],
+                "properties": {
+                  "approved": {
+                    "type": "boolean",
+                    "description": "是否批准（true批准，false拒绝）"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": ["approve", "reject"],
+                    "description": "审批动作（兼容参数）"
+                  },
+                  "comment": {
+                    "type": "string",
+                    "description": "审批意见"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "审批操作成功"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/requests/{id}/start": {
+      "post": {
+        "tags": ["故障维修申请"],
+        "summary": "开始执行维修",
+        "description": "审批通过后，开始执行维修工作",
+        "operationId": "startMaintenanceRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "申请ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "repair_person": {
+                    "type": "string",
+                    "description": "维修人员"
+                  },
+                  "repair_start_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "开始维修日期"
+                  }
+                },
+                "required": ["repair_person"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "维修开始成功"
+          }
+        }
+      }
+    },
+    "/maintenance/requests/{id}/complete": {
+      "post": {
+        "tags": ["故障维修申请"],
+        "summary": "完成维修",
+        "description": "完成维修工作，系统会自动沉淀维修日志",
+        "operationId": "completeMaintenanceRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "申请ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "repair_end_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "完成维修日期"
+                  },
+                  "repair_cost": {
+                    "type": "number",
+                    "description": "维修费用"
+                  },
+                  "repair_content": {
+                    "type": "string",
+                    "description": "维修内容"
+                  },
+                  "parts_replaced": {
+                    "type": "string",
+                    "description": "更换部件"
+                  },
+                  "remark": {
+                    "type": "string",
+                    "description": "备注"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "维修完成成功，自动创建维修日志",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "request": {
+                          "$ref": "#/components/schemas/MaintenanceRequest"
+                        },
+                        "log": {
+                          "$ref": "#/components/schemas/MaintenanceLog"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/requests/{id}/cancel": {
+      "post": {
+        "tags": ["故障维修申请"],
+        "summary": "取消故障维修申请",
+        "description": "取消指定的故障维修申请",
+        "operationId": "cancelMaintenanceRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "申请ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "申请取消成功"
+          }
+        }
+      }
+    },
+    "/maintenance/workorders": {
+      "get": {
+        "tags": ["维修工单"],
+        "summary": "获取维修工单列表",
+        "description": "分页获取维修工单列表，支持按状态、优先级、负责人筛选",
+        "operationId": "getMaintenanceWorkOrders",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页数量",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "name": "asset_code",
+            "in": "query",
+            "description": "资产编号",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "工单状态",
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "assigned", "in_progress", "completed", "closed", "cancelled"]
+            }
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "description": "优先级（1-5，1最高）",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            }
+          },
+          {
+            "name": "assigned_to",
+            "in": "query",
+            "description": "负责人",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "description": "关键词",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取工单列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceWorkOrderListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["维修工单"],
+        "summary": "创建维修工单",
+        "description": "创建新的维修工单",
+        "operationId": "createMaintenanceWorkOrder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceWorkOrderCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "工单创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceWorkOrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/workorders/{id}": {
+      "get": {
+        "tags": ["维修工单"],
+        "summary": "获取维修工单详情",
+        "description": "根据ID获取维修工单的详细信息",
+        "operationId": "getMaintenanceWorkOrderById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "工单ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取工单详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceWorkOrderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": ["维修工单"],
+        "summary": "更新维修工单",
+        "description": "更新维修工单信息",
+        "operationId": "updateMaintenanceWorkOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "工单ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceWorkOrderUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "工单更新成功"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["维修工单"],
+        "summary": "删除维修工单",
+        "description": "删除指定的维修工单（仅允许删除未开始的工单）",
+        "operationId": "deleteMaintenanceWorkOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "工单ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "工单删除成功"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/workorders/{id}/assign": {
+      "post": {
+        "tags": ["维修工单"],
+        "summary": "分配维修工单",
+        "description": "将工单分配给指定的负责人",
+        "operationId": "assignMaintenanceWorkOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "工单ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "assigned_to": {
+                    "type": "string",
+                    "description": "负责人"
+                  }
+                },
+                "required": ["assigned_to"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "工单分配成功"
+          }
+        }
+      }
+    },
+    "/maintenance/workorders/{id}/start": {
+      "post": {
+        "tags": ["维修工单"],
+        "summary": "开始执行工单",
+        "description": "开始执行维修工单工作",
+        "operationId": "startMaintenanceWorkOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "工单ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "工单开始执行成功"
+          }
+        }
+      }
+    },
+    "/maintenance/workorders/{id}/complete": {
+      "post": {
+        "tags": ["维修工单"],
+        "summary": "完成维修工单",
+        "description": "完成维修工单工作",
+        "operationId": "completeMaintenanceWorkOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "工单ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "work_content": {
+                    "type": "string",
+                    "description": "维修内容"
+                  },
+                  "actual_hours": {
+                    "type": "number",
+                    "description": "实际工时"
+                  },
+                  "labor_cost": {
+                    "type": "number",
+                    "description": "人工成本"
+                  },
+                  "outsourcing_cost": {
+                    "type": "number",
+                    "description": "外包成本"
+                  },
+                  "other_cost": {
+                    "type": "number",
+                    "description": "其他成本"
+                  },
+                  "materials": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "材料名称"
+                        },
+                        "quantity": {
+                          "type": "number",
+                          "description": "数量"
+                        },
+                        "unit_price": {
+                          "type": "number",
+                          "description": "单价"
+                        }
+                      }
+                    },
+                    "description": "材料清单"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "工单完成成功"
+          }
+        }
+      }
+    },
+    "/maintenance/workorders/{id}/close": {
+      "post": {
+        "tags": ["维修工单"],
+        "summary": "关闭维修工单",
+        "description": "关闭已完成的维修工单",
+        "operationId": "closeMaintenanceWorkOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "工单ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "remark": {
+                    "type": "string",
+                    "description": "关闭备注"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "工单关闭成功"
+          }
+        }
+      }
+    },
+    "/maintenance/workorders/{id}/cancel": {
+      "post": {
+        "tags": ["维修工单"],
+        "summary": "取消维修工单",
+        "description": "取消指定的维修工单",
+        "operationId": "cancelMaintenanceWorkOrder",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "工单ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cancel_reason": {
+                    "type": "string",
+                    "description": "取消原因"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "工单取消成功"
+          }
+        }
+      }
+    },
+    "/maintenance/templates": {
+      "get": {
+        "tags": ["维修模板"],
+        "summary": "获取维修模板列表",
+        "description": "分页获取维修模板列表",
+        "operationId": "getMaintenanceTemplates",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页数量",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取模板列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceTemplateListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["维修模板"],
+        "summary": "创建维修模板",
+        "description": "创建新的维修模板",
+        "operationId": "createMaintenanceTemplate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceTemplateCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "模板创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceTemplateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/templates/recommend": {
+      "get": {
+        "tags": ["维修模板"],
+        "summary": "获取推荐维修模板",
+        "description": "根据资产类型获取推荐的维修模板",
+        "operationId": "getRecommendedMaintenanceTemplates",
+        "parameters": [
+          {
+            "name": "asset_type",
+            "in": "query",
+            "required": true,
+            "description": "资产类型",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "brand",
+            "in": "query",
+            "description": "品牌（可选）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "型号（可选）",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取推荐模板",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceTemplateListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/templates/recommend-by-asset": {
+      "get": {
+        "tags": ["维修模板"],
+        "summary": "根据资产获取推荐模板",
+        "description": "根据资产编号智能推荐维修模板",
+        "operationId": "getRecommendedTemplatesByAsset",
+        "parameters": [
+          {
+            "name": "asset_code",
+            "in": "query",
+            "required": true,
+            "description": "资产编号",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取推荐模板",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "asset_info": {
+                      "type": "object",
+                      "description": "资产信息",
+                      "properties": {
+                        "asset_type": {
+                          "type": "string",
+                          "description": "资产类型"
+                        },
+                        "brand": {
+                          "type": "string",
+                          "description": "品牌"
+                        },
+                        "model": {
+                          "type": "string",
+                          "description": "型号"
+                        }
+                      }
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MaintenanceTemplate"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/reminders": {
+      "get": {
+        "tags": ["维护提醒"],
+        "summary": "获取维护提醒列表",
+        "description": "分页获取维护提醒列表",
+        "operationId": "getMaintenanceReminders",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页数量",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "提醒状态",
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "sent", "expired"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取提醒列表"
+          }
+        }
+      }
+    },
+    "/maintenance/reminders/send": {
+      "post": {
+        "tags": ["维护提醒"],
+        "summary": "发送维护提醒",
+        "description": "发送维护提醒通知",
+        "operationId": "sendMaintenanceReminder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "plan_id": {
+                    "type": "integer",
+                    "description": "维护计划ID"
+                  },
+                  "reminder_type": {
+                    "type": "string",
+                    "enum": ["email", "sms", "system"],
+                    "description": "提醒类型"
+                  },
+                  "recipient": {
+                    "type": "string",
+                    "description": "接收人"
+                  }
+                },
+                "required": ["plan_id", "reminder_type"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "提醒发送成功"
+          }
+        }
+      }
+    },
+    "/maintenance/reminders/config": {
+      "post": {
+        "tags": ["维护提醒"],
+        "summary": "配置维护提醒规则",
+        "description": "为维护计划配置提醒规则",
+        "operationId": "configMaintenanceReminder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "plan_id": {
+                    "type": "integer",
+                    "description": "维护计划ID"
+                  },
+                  "reminder_days": {
+                    "type": "integer",
+                    "description": "提前提醒天数"
+                  },
+                  "reminder_types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["email", "sms", "system"]
+                    },
+                    "description": "提醒类型列表"
+                  },
+                  "recipient": {
+                    "type": "string",
+                    "description": "接收人"
+                  }
+                },
+                "required": ["plan_id", "reminder_days", "reminder_types"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "提醒配置成功"
+          }
+        }
+      }
+    },
+    "/maintenance/reminders/check": {
+      "get": {
+        "tags": ["维护提醒"],
+        "summary": "检查维护提醒",
+        "description": "检查近期即将到期的维护计划并生成提醒",
+        "operationId": "checkMaintenanceReminders",
+        "responses": {
+          "200": {
+            "description": "检查完成，返回待提醒列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "pending_reminders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          },
+                          "description": "待发送提醒列表"
+                        },
+                        "overdue_plans": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          },
+                          "description": "逾期计划列表"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/usage/records": {
+      "get": {
+        "tags": ["资产使用量"],
+        "summary": "获取使用量记录列表",
+        "description": "分页获取资产使用量记录",
+        "operationId": "getUsageRecords",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页数量",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "name": "asset_code",
+            "in": "query",
+            "description": "资产编号",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "usage_type",
+            "in": "query",
+            "description": "使用量类型",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取使用量记录"
+          }
+        }
+      },
+      "post": {
+        "tags": ["资产使用量"],
+        "summary": "创建使用量记录",
+        "description": "记录资产使用量数据",
+        "operationId": "createUsageRecord",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "asset_code": {
+                    "type": "string",
+                    "description": "资产编号"
+                  },
+                  "usage_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "使用日期"
+                  },
+                  "usage_value": {
+                    "type": "number",
+                    "description": "本次使用值"
+                  },
+                  "usage_type": {
+                    "type": "string",
+                    "description": "使用量类型（如：运行时长、打印次数等）"
+                  },
+                  "cumulative_value": {
+                    "type": "number",
+                    "description": "累计使用值"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "description": "记录人"
+                  },
+                  "remark": {
+                    "type": "string",
+                    "description": "备注"
+                  }
+                },
+                "required": ["asset_code", "usage_date", "usage_value", "usage_type", "cumulative_value"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "使用量记录创建成功"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/maintenance/usage/triggered": {
+      "get": {
+        "tags": ["资产使用量"],
+        "summary": "获取使用量触发的维护记录",
+        "description": "获取因使用量达到阈值而触发的维护记录",
+        "operationId": "getUsageTriggeredMaintenance",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "页码",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页数量",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "name": "asset_code",
+            "in": "query",
+            "description": "资产编号",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "处理状态",
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "processing", "processed"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取触发记录"
+          }
+        }
+      }
+    },
+    "/maintenance/usage/triggered/{id}/process": {
+      "post": {
+        "tags": ["资产使用量"],
+        "summary": "处理使用量触发记录",
+        "description": "处理因使用量达到阈值而触发的维护记录",
+        "operationId": "processUsageTriggered",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "触发记录ID",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "work_order_id": {
+                    "type": "integer",
+                    "description": "关联工单ID（可选）"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "处理成功"
+          }
+        }
+      }
+    },
+    "/maintenance/costs": {
+      "get": {
+        "tags": ["维修成本"],
+        "summary": "获取维修成本统计",
+        "description": "获取维修成本的多维度统计信息",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "开始日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "结束日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "department",
+            "in": "query",
+            "description": "部门",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取成本统计",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total_cost": {
+                          "type": "number",
+                          "description": "总成本"
+                        },
+                        "labor_cost": {
+                          "type": "number",
+                          "description": "人工成本"
+                        },
+                        "material_cost": {
+                          "type": "number",
+                          "description": "材料成本"
+                        },
+                        "outsourcing_cost": {
+                          "type": "number",
+                          "description": "外包成本"
+                        },
+                        "by_department": {
+                          "type": "array",
+                          "description": "按部门分布"
+                        },
+                        "by_asset_type": {
+                          "type": "array",
+                          "description": "按资产类型分布"
+                        },
+                        "trend": {
+                          "type": "array",
+                          "description": "成本趋势"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/efficiency/overview": {
+      "get": {
+        "tags": ["维修效率"],
+        "summary": "获取维修效率概览",
+        "description": "获取维修效率的整体统计信息",
+        "operationId": "getEfficiencyOverview",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "开始日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "结束日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "department",
+            "in": "query",
+            "description": "部门",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取效率概览",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "total_requests": {
+                          "type": "integer",
+                          "description": "总申请数"
+                        },
+                        "completed_requests": {
+                          "type": "integer",
+                          "description": "已完成数"
+                        },
+                        "pending_requests": {
+                          "type": "integer",
+                          "description": "待处理数"
+                        },
+                        "avg_completion_time": {
+                          "type": "number",
+                          "description": "平均完成时间（小时）"
+                        },
+                        "first_response_rate": {
+                          "type": "number",
+                          "description": "首次响应率（%）"
+                        },
+                        "satisfaction_score": {
+                          "type": "number",
+                          "description": "满意度评分"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/efficiency/response-time": {
+      "get": {
+        "tags": ["维修效率"],
+        "summary": "获取响应时间统计",
+        "description": "获取维修响应时间的多维度统计",
+        "operationId": "getResponseTimeStats",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "开始日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "结束日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取响应时间统计"
+          }
+        }
+      }
+    },
+    "/maintenance/efficiency/technician": {
+      "get": {
+        "tags": ["维修效率"],
+        "summary": "获取技术人员统计",
+        "description": "获取各技术人员的维修效率统计",
+        "operationId": "getTechnicianStats",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "开始日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "结束日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取技术人员统计"
+          }
+        }
+      }
+    },
+    "/maintenance/efficiency/asset-frequency": {
+      "get": {
+        "tags": ["维修效率"],
+        "summary": "获取资产维护频率分析",
+        "description": "获取资产维护频率的多维度分析",
+        "operationId": "getAssetFrequencyStats",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "开始日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "结束日期",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功获取资产维护频率分析"
+          }
+        }
+      }
+    },
+    "/maintenance/ai/init": {
+      "post": {
+        "tags": ["AI维修助手"],
+        "summary": "初始化AI维修对话",
+        "description": "初始化AI维修助手对话，获取对话ID和上下文",
+        "operationId": "initAICConversation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "对话类型",
+                    "enum": ["maintenance", "repair", "general"]
+                  },
+                  "userId": {
+                    "type": "string",
+                    "description": "用户ID"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "对话初始化成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "conversationId": {
+                      "type": "string",
+                      "description": "对话ID"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "初始化消息"
+                    },
+                    "pendingRequests": {
+                      "type": "array",
+                      "description": "待处理请求列表"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/ai/message": {
+      "post": {
+        "tags": ["AI维修助手"],
+        "summary": "发送AI维修对话消息",
+        "description": "向AI维修助手发送消息，获取智能回复和建议",
+        "operationId": "sendAIMessage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "conversationId": {
+                    "type": "string",
+                    "description": "对话ID"
+                  },
+                  "message": {
+                    "type": "string",
+                    "description": "消息内容"
+                  },
+                  "context": {
+                    "type": "object",
+                    "description": "对话上下文"
+                  },
+                  "history": {
+                    "type": "array",
+                    "description": "对话历史"
+                  }
+                },
+                "required": ["conversationId", "message"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "消息发送成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "response": {
+                      "type": "string",
+                      "description": "AI回复内容"
+                    },
+                    "intent": {
+                      "type": "string",
+                      "description": "识别的意图"
+                    },
+                    "maintenanceForm": {
+                      "type": "object",
+                      "description": "提取的维修表单数据"
+                    },
+                    "assetLookup": {
+                      "type": "object",
+                      "description": "资产查询结果"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/ai/pending": {
+      "get": {
+        "tags": ["AI维修助手"],
+        "summary": "获取AI待处理请求",
+        "description": "获取AI助手的待处理请求列表",
+        "operationId": "getAIPendingRequests",
+        "responses": {
+          "200": {
+            "description": "成功获取待处理请求",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "pendingRequests": {
+                      "type": "object",
+                      "properties": {
+                        "repairs": {
+                          "type": "array",
+                          "description": "待处理维修申请"
+                        },
+                        "transfers": {
+                          "type": "array",
+                          "description": "待处理调配申请"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/maintenance/ai/submit-request": {
+      "post": {
+        "tags": ["AI维修助手"],
+        "summary": "提交AI生成的维修申请",
+        "description": "提交由AI助手生成的维修申请表单",
+        "operationId": "submitAIRequest",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceRequestCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "申请提交成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaintenanceRequestResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Bearer Token认证"
+      },
+      "Idempotency-Key": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Idempotency-Key",
+        "description": "幂等性键，防止重复提交（格式：UUID，长度不超过128字符）"
+      },
+      "X-Tenant-ID": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Tenant-ID",
+        "description": "租户ID（多租户环境使用）"
+      }
+    },
+    "schemas": {
+      "MaintenanceLog": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "维修日志ID"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "description": "租户ID"
+          },
+          "asset_code": {
+            "type": "string",
+            "description": "资产编号"
+          },
+          "asset_name": {
+            "type": "string",
+            "description": "资产名称"
+          },
+          "maintenance_type": {
+            "type": "string",
+            "description": "维修类型",
+            "enum": ["故障维修", "预防性维护", "定期保养", "日常维护", "其他"]
+          },
+          "maintenance_method": {
+            "type": "string",
+            "description": "维修方式"
+          },
+          "maintenance_date": {
+            "type": "string",

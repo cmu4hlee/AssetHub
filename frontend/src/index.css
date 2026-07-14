@@ -1,0 +1,211 @@
+@import './styles/theme.css';
+@import './styles/feishu.css';
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* 全局过渡效果 */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 0.2s;
+}
+
+/* 移除过渡的元素 */
+.ant-message,
+.ant-message-notice,
+.ant-notification,
+.ant-notification-notice,
+.ant-modal-mask,
+.ant-drawer-mask,
+.ant-dropdown-menu,
+.ant-select-dropdown,
+.ant-picker-dropdown,
+.ant-popover,
+.ant-tooltip {
+  transition: none !important;
+}
+
+/* 全局动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* 通用动画类 */
+.fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.slide-in-up {
+  animation: slideInUp 0.4s ease-out forwards;
+}
+
+.slide-in-left {
+  animation: slideInLeft 0.4s ease-out forwards;
+}
+
+.scale-in {
+  animation: scaleIn 0.3s ease-out forwards;
+}
+
+/* 修复 ant-message 被 overflow:hidden 容器裁剪及浏览器广告拦截插件屏蔽的问题 */
+.ant-message {
+  position: fixed !important;
+  z-index: 10000 !important;
+  top: 24px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.ant-message-notice {
+  opacity: 1 !important;
+}
+
+html {
+  min-height: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--bg-secondary);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background: var(--bg-secondary);
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+}
+
+/* Ant Design 组件全局悬停效果增强 */
+.ant-btn {
+  transition: all var(--transition-normal);
+}
+
+.ant-btn:hover {
+  transform: translateY(-1px);
+}
+
+.ant-btn:active {
+  transform: translateY(0);
+}
+
+.ant-card {
+  transition: all var(--transition-normal);
+}
+
+.ant-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.ant-table-thead > tr > th,
+.ant-table-tbody > tr > td {
+  transition: all var(--transition-fast);
+}
+
+.ant-table-tbody > tr:hover > td {
+  transform: scale(1.002);
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select-selector,
+.ant-picker {
+  transition: all var(--transition-normal) !important;
+}
+
+.ant-input:hover,
+.ant-input-affix-wrapper:hover,
+.ant-select-selector:hover,
+.ant-picker:hover {
+  transform: translateY(-1px);
+}
+
+.ant-tabs-tab {
+  transition: all var(--transition-normal);
+}
+
+.ant-tabs-tab:hover {
+  transform: translateY(-2px);
+}

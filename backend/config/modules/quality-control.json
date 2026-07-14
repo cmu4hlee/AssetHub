@@ -1,0 +1,8 @@
+{
+  "warningDays": 30,
+  "autoRemind": true,
+  "maxPageSize": 2000,
+  "defaultPageSize": 20,
+  "requireApproval": false,
+  "notifyOnFailure": true
+}

@@ -1,0 +1,909 @@
+          const hasChinese = /[\u4e00-\u9fa5]/.test(file.originalname);
+          console.log(`[附件上传] multer originalname 是否包含中文: ${hasChinese}`);
+
+          // 如果文件名不包含中文，尝试修复编码（UTF-8 字节被错误解释为 Latin1）
+          if (!hasChinese) {
+            console.log('[附件上传] 检测到文件名可能乱码，开始修复...');
+            try {
+              // 将乱码字符串视为 Latin1 字节，然后用 UTF-8 解码
+              const latin1Buffer = Buffer.from(file.originalname, 'latin1');
+              const utf8Decoded = latin1Buffer.toString('utf8');
+              console.log(`[附件上传] UTF-8 解码结果: ${utf8Decoded}`);
+
+              // 检查解码结果是否包含有效的中文字符
+              const chineseMatch = utf8Decoded.match(/[\u4e00-\u9fa5]+/g);
+              if (chineseMatch && chineseMatch.length > 0) {
+                // 检查替换字符比例
+                const replacementCount = (utf8Decoded.match(/\uFFFD/g) || []).length;
+                const replacementRatio = replacementCount / utf8Decoded.length;
+
+                if (replacementRatio < 0.3) {
+                  fileName = utf8Decoded;
+                  console.log(`[附件上传] ✅ UTF-8 解码成功: ${fileName}`);
+                } else {
+                  console.log(
+                    `[附件上传] UTF-8 解码结果质量不好（替换字符比例: ${replacementRatio.toFixed(2)}）`
+                  );
+                }
+              }
+
+              // 如果 UTF-8 解码失败，尝试 Windows 中文编码
+              if (!/[\u4e00-\u9fa5]/.test(fileName)) {
+                const encodings = ['gbk', 'gb2312', 'gb18030'];
+                for (const encoding of encodings) {
+                  try {
+                    const decoded = iconv.decode(latin1Buffer, encoding);
+                    if (/[\u4e00-\u9fa5]/.test(decoded)) {
+                      fileName = decoded;
+                      console.log(`[附件上传] ✅ 使用 ${encoding} 编码成功: ${fileName}`);
+                      break;
+                    }
+                  } catch (e) {
+                    // 继续尝试下一个编码
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('[附件上传] 编码修复失败:', e);
+            }
+          }
+        }
+      }
+
+      // 最终验证
+      if (!fileName) {
+        fileName = file.originalname; // 如果所有方法都失败，使用原始值
+        console.warn(`[附件上传] ⚠️ 所有文件名解析方法都失败，使用原始值: ${fileName}`);
+      }
+
+      console.log(`[附件上传] 最终文件名: ${fileName}`);
+
+      const uploadedBy = req.user.real_name || req.user.username || '系统管理员';
+      // 使用相对路径，前端会根据需要构建完整URL
+      const filePath = `/uploads/maintenance-attachments/${file.filename}`;
+
+      // 构建完整的访问URL（用于前端直接显示）
+      const fileUrl = `${req.protocol}://${req.get('host')}${filePath}`;
+
+      console.log(`[附件上传] 准备插入数据库，文件名: ${fileName}`);
+      const [result] = await db.execute(
+        `INSERT INTO maintenance_log_attachments
+       (maintenance_log_id, file_name, file_path, file_type, file_size, uploaded_by, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [id, fileName, filePath, file.mimetype, file.size, uploadedBy, null]
+      );
+      console.log(`[附件上传] ✅ 数据库插入成功，附件ID: ${result.insertId}`);
+
+      res.json({
+        success: true,
+        message: '附件上传成功',
+        data: {
+          id: result.insertId,
+          file_name: fileName, // 使用处理后的文件名
+          file_path: filePath,
+          file_url: fileUrl,
+          file_type: file.mimetype,
+          file_size: file.size,
+          uploaded_by: uploadedBy,
+          upload_date: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('[附件上传] 上传失败:', error);
+      console.error('[附件上传] 错误堆栈:', error.stack);
+      // 如果是文件类型错误，返回更友好的错误信息
+      if (error.message && error.message.includes('不支持的文件类型')) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+      // 如果是文件大小超限
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, message: '文件大小超过限制（最大50MB）' });
+      }
+      res.status(500).json({ success: false, message: '上传附件失败', error: error.message });
+    }
+  }
+);
+
+// 获取附件（用于直接访问，特别是图片）
+router.get('/logs/:logId/attachments/:attachmentId', authenticate, async (req, res) => {
+  try {
+    const { logId, attachmentId } = req.params;
+    const [attachments] = await db.execute(
+      'SELECT * FROM maintenance_log_attachments WHERE id = ? AND maintenance_log_id = ?',
+      [attachmentId, logId]
+    );
+
+    if (attachments.length === 0) {
+      return res.status(404).json({ success: false, message: '附件不存在' });
+    }
+
+    const attachment = attachments[0];
+    const filePath = path.join(__dirname, '..', attachment.file_path);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: '文件不存在' });
+    }
+
+    // 如果是图片，设置正确的Content-Type
+    if (attachment.file_type && attachment.file_type.startsWith('image/')) {
+      res.setHeader('Content-Type', attachment.file_type);
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // 缓存1年
+    }
+
+    res.sendFile(path.resolve(filePath));
+  } catch (error) {
+    console.error('获取附件失败:', error);
+    res.status(500).json({ success: false, message: '获取附件失败', error: error.message });
+  }
+});
+
+// 下载维护日志附件
+router.get('/logs/:logId/attachments/:attachmentId/download', authenticate, async (req, res) => {
+  try {
+    const { logId, attachmentId } = req.params;
+    const [attachments] = await db.execute(
+      'SELECT * FROM maintenance_log_attachments WHERE id = ? AND maintenance_log_id = ?',
+      [attachmentId, logId]
+    );
+
+    if (attachments.length === 0) {
+      return res.status(404).json({ success: false, message: '附件不存在' });
+    }
+
+    const attachment = attachments[0];
+    const filePath = path.join(__dirname, '..', attachment.file_path);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: '文件不存在' });
+    }
+
+    // 设置下载响应头（使用 RFC 5987 标准，支持中文文件名）
+    const fileName = attachment.file_name;
+    // ASCII 文件名（用于兼容性）
+    const asciiFileName = Buffer.from(fileName, 'utf8').toString('latin1');
+    // UTF-8 编码的文件名（RFC 5987）
+    const encodedFileName = encodeURIComponent(fileName);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${asciiFileName}"; filename*=UTF-8''${encodedFileName}`
+    );
+    res.download(filePath, fileName);
+  } catch (error) {
+    console.error('下载附件失败:', error);
+    res.status(500).json({ success: false, message: '下载附件失败', error: error.message });
+  }
+});
+
+// 删除维护日志附件
+router.delete('/logs/:logId/attachments/:attachmentId', authenticate, async (req, res) => {
+  try {
+    const { logId, attachmentId } = req.params;
+
+    // 获取附件信息
+    const [attachments] = await db.execute(
+      'SELECT * FROM maintenance_log_attachments WHERE id = ? AND maintenance_log_id = ?',
+      [attachmentId, logId]
+    );
+
+    if (attachments.length === 0) {
+      return res.status(404).json({ success: false, message: '附件不存在' });
+    }
+
+    const attachment = attachments[0];
+    const filePath = path.join(__dirname, '..', attachment.file_path);
+
+    // 先删除数据库记录
+    await db.execute('DELETE FROM maintenance_log_attachments WHERE id = ?', [attachmentId]);
+
+    // 再删除物理文件
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`文件已删除: ${filePath}`);
+      } catch (unlinkError) {
+        console.error(`删除文件失败: ${filePath}`, unlinkError);
+        // 即使文件删除失败，也返回成功（因为数据库记录已删除）
+      }
+    } else {
+      console.warn(`文件不存在: ${filePath}`);
+    }
+
+    res.json({ success: true, message: '附件删除成功' });
+  } catch (error) {
+    console.error('删除附件失败:', error);
+    res.status(500).json({ success: false, message: '删除附件失败', error: error.message });
+  }
+});
+
+// 获取单个维护日志详情
+// 注意：此路由必须在附件路由之后定义，避免路由冲突
+// 如果放在附件路由之前，/logs/1/attachments 会被 /logs/:id 匹配（id='1/attachments'）
+router.get('/logs/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`[详情API] 获取维护日志详情，ID: ${id}`);
+    // 如果ID包含'attachments'，说明路由匹配错误
+    if (id && id.includes('attachments')) {
+      console.error(`[路由错误] /logs/:id 错误匹配了附件路由，ID: ${id}`);
+      return res.status(404).json({ success: false, message: '路由匹配错误，请检查路由顺序' });
+    }
+    const [rows] = await db.execute(
+      `SELECT ml.*, a.department, a.location, a.brand, a.model
+       FROM maintenance_logs ml
+       LEFT JOIN assets a ON ml.asset_code = a.asset_code
+       WHERE ml.id = ?`,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '维护日志不存在' });
+    }
+
+    res.json({ success: true, data: rows[0] });
+  } catch (error) {
+    console.error('获取维护日志详情失败:', error);
+    res.status(500).json({ success: false, message: '获取维护日志详情失败', error: error.message });
+  }
+});
+
+// ============================================
+// 维护统计相关接口
+// ============================================
+
+// 获取维护统计信息
+router.get('/statistics', authenticate, async (req, res) => {
+  try {
+    const { asset_code, start_date, end_date, selectedDepartmentId } = req.query;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    // 添加租户过滤
+    const tenantFilter = addTenantFilter(req, 'ml');
+    whereClause += tenantFilter.whereClause;
+    params.push(...tenantFilter.params);
+
+    // 根据用户的管理科室过滤
+    let departmentFilter = '';
+    const departmentParams = [];
+
+    if (selectedDepartmentId && !isNaN(parseInt(selectedDepartmentId))) {
+      // 检查用户是否有权限查看该科室
+      if (req.user.role === 'system_admin' || req.user.role === 'asset_admin') {
+        // 系统管理员和资产管理员可以查看任意科室
+        const [dept] = await db.execute(
+          'SELECT department_name FROM departments WHERE id = ? AND tenant_id = ?',
+          [selectedDepartmentId, getTenantId(req)]
+        );
+        if (dept.length > 0) {
+          departmentFilter = ` AND EXISTS (
+            SELECT 1 FROM assets a
+            WHERE a.asset_code = ml.asset_code
+            AND a.department = ?
+          )`;
+          departmentParams.push(dept[0].department_name);
+        } else {
+          // 科室不存在或不属于当前租户，返回空结果
+          return res.json({ success: true, data: {} });
+        }
+      } else if (req.user.role === 'department_admin') {
+        // 部门管理员只能查看自己管理的科室
+        if (
+          req.user.managed_departments &&
+          req.user.managed_departments.includes(parseInt(selectedDepartmentId))
+        ) {
+          const [dept] = await db.execute(
+            'SELECT department_name FROM departments WHERE id = ? AND tenant_id = ?',
+            [selectedDepartmentId, getTenantId(req)]
+          );
+          if (dept.length > 0) {
+            departmentFilter = ` AND EXISTS (
+              SELECT 1 FROM assets a
+              WHERE a.asset_code = ml.asset_code
+              AND a.department = ?
+            )`;
+            departmentParams.push(dept[0].department_name);
+          } else {
+            // 科室不存在或不属于当前租户，返回空结果
+            return res.json({ success: true, data: {} });
+          }
+        } else {
+          // 没有权限查看该科室，返回空结果
+          return res.json({ success: true, data: {} });
+        }
+      } else {
+        // 普通用户没有权限查看指定科室，返回空结果
+        return res.json({ success: true, data: {} });
+      }
+    } else if (req.user.role !== 'system_admin' && req.user.role !== 'asset_admin') {
+      // 没有指定科室，且不是系统管理员或资产管理员，根据用户的管理科室过滤
+      if (
+        req.user.managed_departments &&
+        Array.isArray(req.user.managed_departments) &&
+        req.user.managed_departments.length > 0
+      ) {
+        try {
+          const placeholders = req.user.managed_departments.map(() => '?').join(',');
+          const [deptRows] = await db.execute(
+            `SELECT department_name FROM departments WHERE id IN (${placeholders}) AND tenant_id = ?`,
+            [...req.user.managed_departments, getTenantId(req)]
+          );
+
+          if (deptRows.length > 0) {
+            const deptNames = deptRows.map(row => row.department_name);
+            const deptPlaceholders = deptNames.map(() => '?').join(',');
+            departmentFilter = ` AND EXISTS (
+              SELECT 1 FROM assets a
+              WHERE a.asset_code = ml.asset_code
+              AND a.department IN (${deptPlaceholders})
+            )`;
+            departmentParams.push(...deptNames);
+          } else {
+            // 没有管理的科室，返回空结果
+            return res.json({ success: true, data: {} });
+          }
+        } catch (deptError) {
+          console.error('获取管理科室名称失败:', deptError);
+          return res.json({ success: true, data: {} });
+        }
+      } else {
+        // 没有管理的科室，返回空结果
+        return res.json({ success: true, data: {} });
+      }
+    }
+
+    // 添加科室过滤
+    whereClause += departmentFilter;
+    params.push(...departmentParams);
+
+    if (asset_code) {
+      whereClause += ' AND ml.asset_code = ?';
+      params.push(asset_code);
+    }
+    if (start_date) {
+      whereClause += ' AND ml.maintenance_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND ml.maintenance_date <= ?';
+      params.push(end_date);
+    }
+
+    // 使用统计视图
+    const [stats] = await db.execute(
+      `SELECT
+        COUNT(*) as total_count,
+        SUM(maintenance_cost) as total_cost,
+        COUNT(CASE WHEN maintenance_type = '故障维修' THEN 1 END) as fault_repair_count,
+        COUNT(CASE WHEN maintenance_type = '预防性维护' THEN 1 END) as preventive_count,
+        COUNT(CASE WHEN maintenance_type = '日常维护' THEN 1 END) as routine_count,
+        COUNT(CASE WHEN status = '已完成' THEN 1 END) as completed_count,
+        COUNT(CASE WHEN status = '进行中' THEN 1 END) as in_progress_count
+       FROM maintenance_logs ml
+       ${whereClause}`,
+      params
+    );
+
+    res.json({ success: true, data: stats[0] || {} });
+  } catch (error) {
+    console.error('获取维护统计失败:', error);
+    res.status(500).json({ success: false, message: '获取维护统计失败', error: error.message });
+  }
+// ============================================
+// 维护效果评估相关接口
+// ============================================
+
+// 获取维护效果评估列表
+router.get('/evaluations', authenticate, async (req, res) => {
+  try {
+    const { page = 1, pageSize = 20, asset_code, maintenance_type, start_date, end_date } = req.query;
+    const offset = (page - 1) * pageSize;
+
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    // 添加租户过滤
+    const tenantFilter = addTenantFilter(req, 'me');
+    whereClause += tenantFilter.whereClause;
+    params.push(...tenantFilter.params);
+
+    if (asset_code) {
+      whereClause += ' AND me.asset_code LIKE ?';
+      params.push(`%${asset_code}%`);
+    }
+    if (maintenance_type) {
+      whereClause += ' AND me.maintenance_type = ?';
+      params.push(maintenance_type);
+    }
+    if (start_date) {
+      whereClause += ' AND me.maintenance_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND me.maintenance_date <= ?';
+      params.push(end_date);
+    }
+
+    // 获取总数
+    const [countResult] = await db.execute(
+      `SELECT COUNT(*) as total FROM maintenance_evaluations me ${whereClause}`,
+      params
+    );
+    const { total } = countResult[0];
+
+    // 获取数据
+    const [rows] = await db.execute(
+      `SELECT me.*, m.maintenance_person, m.maintenance_content
+       FROM maintenance_evaluations me
+       LEFT JOIN maintenance_logs m ON me.maintenance_log_id = m.id
+       ${whereClause}
+       ORDER BY me.evaluation_date DESC, me.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, parseInt(pageSize), offset]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: parseInt(page),
+        pageSize: parseInt(pageSize),
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error('获取维护效果评估列表失败:', error);
+    res.status(500).json({ success: false, message: '获取维护效果评估列表失败', error: error.message });
+  }
+});
+
+// 创建维护效果评估
+router.post('/evaluations', authenticate, async (req, res) => {
+  try {
+    const {
+      maintenance_log_id,
+      asset_code,
+      asset_name,
+      maintenance_date,
+      maintenance_type,
+      effectiveness_score,
+      problem_resolved,
+      downtime_hours,
+      production_impact,
+      technician_skill_score,
+      response_time_score,
+      quality_score,
+      overall_score,
+      evaluator,
+      evaluation_remark,
+    } = req.body;
+
+    if (!maintenance_log_id || !asset_code || !maintenance_date || !maintenance_type) {
+      return res.status(400).json({ success: false, message: '必填字段不能为空' });
+    }
+
+    // 验证维护日志是否存在
+    const [logs] = await db.execute('SELECT id FROM maintenance_logs WHERE id = ?', [maintenance_log_id]);
+    if (logs.length === 0) {
+      return res.status(404).json({ success: false, message: '维护日志不存在' });
+    }
+
+    const tenantId = getTenantId(req);
+    const evaluationDate = new Date();
+
+    const [result] = await db.execute(
+      `INSERT INTO maintenance_evaluations (
+        tenant_id, maintenance_log_id, asset_code, asset_name, maintenance_date, maintenance_type,
+        effectiveness_score, problem_resolved, downtime_hours, production_impact,
+        technician_skill_score, response_time_score, quality_score, overall_score,
+        evaluation_date, evaluator, evaluation_remark
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        maintenance_log_id,
+        asset_code,
+        asset_name || '',
+        maintenance_date,
+        maintenance_type,
+        effectiveness_score || null,
+        problem_resolved || true,
+        downtime_hours || 0,
+        production_impact || null,
+        technician_skill_score || null,
+        response_time_score || null,
+        quality_score || null,
+        overall_score || null,
+        evaluationDate,
+        evaluator || (req.user.real_name || req.user.username),
+        evaluation_remark || null,
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: '维护效果评估创建成功',
+      data: { id: result.insertId },
+    });
+  } catch (error) {
+    console.error('创建维护效果评估失败:', error);
+    res.status(500).json({ success: false, message: '创建维护效果评估失败', error: error.message });
+  }
+});
+
+// 更新维护效果评估
+router.put('/evaluations/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      effectiveness_score,
+      problem_resolved,
+      downtime_hours,
+      production_impact,
+      technician_skill_score,
+      response_time_score,
+      quality_score,
+      overall_score,
+      evaluator,
+      evaluation_remark,
+    } = req.body;
+
+    // 验证评估记录是否存在并验证租户
+    const tenantFilter = addTenantFilter(req, 'me');
+    const [existing] = await db.execute(
+      `SELECT id FROM maintenance_evaluations me WHERE me.id = ? ${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params]
+    );
+
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '维护效果评估记录不存在' });
+    }
+
+    const updateFields = [];
+    const updateValues = [];
+
+    if (effectiveness_score !== undefined) {
+      updateFields.push('effectiveness_score = ?');
+      updateValues.push(effectiveness_score);
+    }
+    if (problem_resolved !== undefined) {
+      updateFields.push('problem_resolved = ?');
+      updateValues.push(problem_resolved);
+    }
+    if (downtime_hours !== undefined) {
+      updateFields.push('downtime_hours = ?');
+      updateValues.push(downtime_hours);
+    }
+    if (production_impact !== undefined) {
+      updateFields.push('production_impact = ?');
+      updateValues.push(production_impact);
+    }
+    if (technician_skill_score !== undefined) {
+      updateFields.push('technician_skill_score = ?');
+      updateValues.push(technician_skill_score);
+    }
+    if (response_time_score !== undefined) {
+      updateFields.push('response_time_score = ?');
+      updateValues.push(response_time_score);
+    }
+    if (quality_score !== undefined) {
+      updateFields.push('quality_score = ?');
+      updateValues.push(quality_score);
+    }
+    if (overall_score !== undefined) {
+      updateFields.push('overall_score = ?');
+      updateValues.push(overall_score);
+    }
+    if (evaluator !== undefined) {
+      updateFields.push('evaluator = ?');
+      updateValues.push(evaluator);
+    }
+    if (evaluation_remark !== undefined) {
+      updateFields.push('evaluation_remark = ?');
+      updateValues.push(evaluation_remark);
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: '没有要更新的字段' });
+    }
+
+    updateFields.push('updated_at = NOW()');
+    updateValues.push(id);
+
+    await db.execute(
+      `UPDATE maintenance_evaluations me SET ${updateFields.join(', ')} WHERE me.id = ? ${tenantFilter.whereClause.replace('WHERE', 'AND')}`,
+      [...updateValues, ...tenantFilter.params]
+    );
+
+    res.json({ success: true, message: '维护效果评估更新成功' });
+  } catch (error) {
+    console.error('更新维护效果评估失败:', error);
+    res.status(500).json({ success: false, message: '更新维护效果评估失败', error: error.message });
+  }
+});
+
+// ============================================
+// 维护分析相关接口
+// ============================================
+
+// 获取资产维护历史分析
+router.get('/analysis/asset-history', authenticate, async (req, res) => {
+  try {
+    const { asset_code, start_date, end_date } = req.query;
+
+    if (!asset_code) {
+      return res.status(400).json({ success: false, message: '资产编号不能为空' });
+    }
+
+    const tenantId = getTenantId(req);
+
+    let whereClause = 'WHERE m.tenant_id = ? AND m.asset_code = ?';
+    const params = [tenantId, asset_code];
+
+    if (start_date) {
+      whereClause += ' AND m.maintenance_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND m.maintenance_date <= ?';
+      params.push(end_date);
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+        m.*,
+        e.effectiveness_score,
+        e.overall_score,
+        e.problem_resolved
+      FROM maintenance_logs m
+      LEFT JOIN maintenance_evaluations e ON m.id = e.maintenance_log_id
+      ${whereClause}
+      ORDER BY m.maintenance_date DESC`,
+      params
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('获取资产维护历史分析失败:', error);
+    res.status(500).json({ success: false, message: '获取资产维护历史分析失败', error: error.message });
+  }
+});
+
+// 获取维护效果统计
+router.get('/analysis/effectiveness-stats', authenticate, async (req, res) => {
+  try {
+    const { start_date, end_date, maintenance_type } = req.query;
+
+    if (!start_date || !end_date) {
+      return res.status(400).json({ success: false, message: '开始日期和结束日期不能为空' });
+    }
+
+    const tenantId = getTenantId(req);
+
+    let whereClause = 'WHERE e.tenant_id = ? AND m.maintenance_date BETWEEN ? AND ?';
+    const params = [tenantId, start_date, end_date];
+
+    if (maintenance_type) {
+      whereClause += ' AND maintenance_type = ?';
+      params.push(maintenance_type);
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+        maintenance_type,
+        COUNT(*) AS total_maintenance,
+        SUM(CASE WHEN problem_resolved THEN 1 ELSE 0 END) AS resolved_count,
+        ROUND(SUM(CASE WHEN problem_resolved THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) AS resolution_rate,
+        AVG(effectiveness_score) AS avg_effectiveness_score,
+        AVG(overall_score) AS avg_overall_score,
+        SUM(downtime_hours) AS total_downtime
+      FROM maintenance_evaluations e
+      JOIN maintenance_logs m ON e.maintenance_log_id = m.id
+      ${whereClause}
+      GROUP BY maintenance_type
+      ORDER BY resolution_rate DESC`,
+      params
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('获取维护效果统计失败:', error);
+    res.status(500).json({ success: false, message: '获取维护效果统计失败', error: error.message });
+  }
+});
+
+// 获取维护成本趋势
+router.get('/analysis/cost-trend', authenticate, async (req, res) => {
+  try {
+    const { period = 'monthly', start_date, end_date } = req.query;
+
+    const tenantId = getTenantId(req);
+
+    let whereClause = 'WHERE tenant_id = ?';
+    const params = [tenantId];
+
+    if (start_date) {
+      whereClause += ' AND maintenance_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND maintenance_date <= ?';
+      params.push(end_date);
+    }
+
+    let groupByClause = '';
+    let periodFormat = '';
+
+    switch (period) {
+      case 'monthly':
+        periodFormat = 'DATE_FORMAT(maintenance_date, "%Y-%m") AS period';
+        groupByClause = 'GROUP BY DATE_FORMAT(maintenance_date, "%Y-%m")';
+        break;
+      case 'quarterly':
+        periodFormat = 'CONCAT(YEAR(maintenance_date), "-Q", QUARTER(maintenance_date)) AS period';
+        groupByClause = 'GROUP BY YEAR(maintenance_date), QUARTER(maintenance_date)';
+        break;
+      case 'yearly':
+        periodFormat = 'YEAR(maintenance_date) AS period';
+        groupByClause = 'GROUP BY YEAR(maintenance_date)';
+        break;
+      default:
+        periodFormat = 'DATE_FORMAT(maintenance_date, "%Y-%m") AS period';
+        groupByClause = 'GROUP BY DATE_FORMAT(maintenance_date, "%Y-%m")';
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+        ${periodFormat},
+        COUNT(*) AS maintenance_count,
+        SUM(maintenance_cost) AS total_cost,
+        SUM(labor_cost) AS labor_cost,
+        SUM(material_cost) AS material_cost,
+        SUM(external_cost) AS external_cost,
+        AVG(maintenance_cost) AS avg_cost_per_maintenance
+      FROM maintenance_logs
+      ${whereClause}
+      ${groupByClause}
+      ORDER BY period`,
+      params
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('获取维护成本趋势失败:', error);
+    res.status(500).json({ success: false, message: '获取维护成本趋势失败', error: error.message });
+  }
+});
+
+// 获取维护人员绩效
+router.get('/analysis/technician-performance', authenticate, async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+
+    const tenantId = getTenantId(req);
+
+    let whereClause = 'WHERE tenant_id = ? AND maintenance_person IS NOT NULL AND maintenance_person != ""';
+    const params = [tenantId];
+
+    if (start_date) {
+      whereClause += ' AND maintenance_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND maintenance_date <= ?';
+      params.push(end_date);
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+        maintenance_person,
+        COUNT(*) AS maintenance_count,
+        SUM(maintenance_cost) AS total_cost,
+        AVG(maintenance_cost) AS avg_cost,
+        MAX(maintenance_cost) AS max_cost,
+        MIN(maintenance_cost) AS min_cost
+      FROM maintenance_logs
+      ${whereClause}
+      GROUP BY maintenance_person
+      ORDER BY maintenance_count DESC`,
+      params
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('获取维护人员绩效失败:', error);
+    res.status(500).json({ success: false, message: '获取维护人员绩效失败', error: error.message });
+  }
+});
+
+// 获取维护类型分布
+router.get('/analysis/type-distribution', authenticate, async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+
+    const tenantId = getTenantId(req);
+
+    let whereClause = 'WHERE tenant_id = ?';
+    const params = [tenantId];
+
+    if (start_date) {
+      whereClause += ' AND maintenance_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND maintenance_date <= ?';
+      params.push(end_date);
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+        maintenance_type,
+        COUNT(*) AS maintenance_count,
+        SUM(maintenance_cost) AS total_cost,
+        AVG(maintenance_cost) AS avg_cost,
+        MAX(maintenance_cost) AS max_cost,
+        MIN(maintenance_cost) AS min_cost
+      FROM maintenance_logs
+      ${whereClause}
+      GROUP BY maintenance_type
+      ORDER BY maintenance_count DESC`,
+      params
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('获取维护类型分布失败:', error);
+    res.status(500).json({ success: false, message: '获取维护类型分布失败', error: error.message });
+  }
+});
+
+// 获取资产维护频率分析
+router.get('/analysis/frequency', authenticate, async (req, res) => {
+  try {
+    const { start_date, end_date, limit = 10 } = req.query;
+
+    const tenantId = getTenantId(req);
+
+    let whereClause = 'WHERE tenant_id = ?';
+    const params = [tenantId];
+
+    if (start_date) {
+      whereClause += ' AND maintenance_date >= ?';
+      params.push(start_date);
+    }
+    if (end_date) {
+      whereClause += ' AND maintenance_date <= ?';
+      params.push(end_date);
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+        asset_code,
+        asset_name,
+        maintenance_type,
+        COUNT(*) AS maintenance_count,
+        MIN(maintenance_date) AS first_maintenance_date,
+        MAX(maintenance_date) AS last_maintenance_date,
+        DATEDIFF(MAX(maintenance_date), MIN(maintenance_date)) AS days_between,
+        CASE
+          WHEN DATEDIFF(MAX(maintenance_date), MIN(maintenance_date)) > 0
+          THEN COUNT(*) / (DATEDIFF(MAX(maintenance_date), MIN(maintenance_date)) / 30.44)
+          ELSE 0
+        END AS monthly_frequency,
+        SUM(maintenance_cost) AS total_cost
+      FROM maintenance_logs
+      ${whereClause}
+      GROUP BY asset_code, asset_name, maintenance_type
+      ORDER BY maintenance_count DESC
+      LIMIT ?`,
+      [...params, parseInt(limit)]
+    );
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('获取资产维护频率分析失败:', error);
+    res.status(500).json({ success: false, message: '获取资产维护频率分析失败', error: error.message });
+  }
+});
+
+module.exports = router;

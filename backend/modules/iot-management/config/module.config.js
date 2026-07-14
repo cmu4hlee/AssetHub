@@ -1,0 +1,350 @@
+const { DEVICE_TYPES } = require('../constants');
+
+module.exports = {
+  id: 'iot-management',
+  name: '物联网管理',
+  version: '1.0.0',
+  description: '物联网设备管理、数据采集、监控预警和资产定位集成',
+  category: '物联与定位',
+  type: 'system',
+  status: 'stable',
+  author: 'System Team',
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-15T00:00:00Z',
+
+  dependencies: [
+    {
+      module_id: 'asset-management',
+      dependency_type: 'required',
+      min_version: '1.0.0',
+      max_version: null,
+    },
+    {
+      module_id: 'maintenance-management',
+      dependency_type: 'optional',
+      min_version: '1.0.0',
+      max_version: null,
+    },
+  ],
+
+  compatibility: [],
+
+  frontend_config: {
+    menu_keys: [
+      '/iot-management-parent',
+      '/asset-location',
+      '/beacon-location',
+      '/asset-monitoring',
+      '/environment-monitoring',
+      '/iot-devices',
+    ],
+    menu_prefixes: [
+      '/asset-location',
+      '/beacon-location',
+      '/asset-monitoring',
+      '/environment-monitoring',
+      '/iot-devices',
+    ],
+    menu_routes: [
+      {
+        key: '/asset-location',
+        icon: 'EnvironmentOutlined',
+        label: '地理定位',
+        path: '/asset-location',
+        component: 'AssetLocationMap',
+        permissions: ['iot:data:read'],
+      },
+      {
+        key: '/beacon-location',
+        icon: 'AimOutlined',
+        label: '区域定位',
+        path: '/beacon-location',
+        component: 'BeaconLocation',
+        permissions: ['iot:data:read'],
+      },
+      {
+        key: '/asset-monitoring',
+        icon: 'LineChartOutlined',
+        label: '资产监测',
+        path: '/asset-monitoring',
+        component: 'AssetMonitoring',
+        permissions: ['iot:monitoring:view'],
+      },
+      {
+        key: '/environment-monitoring',
+        icon: 'DashboardOutlined',
+        label: '环境监测',
+        path: '/environment-monitoring',
+        component: 'EnvironmentMonitoring',
+        permissions: ['iot:monitoring:view'],
+      },
+      {
+        key: '/iot-devices',
+        icon: 'DeviceOutlined',
+        label: '设备管理',
+        path: '/iot-devices',
+        component: 'IoTDeviceManagement',
+        permissions: ['iot:device:read'],
+      },
+    ],
+    components: [
+      {
+        name: 'AssetLocationMap',
+        path: 'pages/AssetLocationMap',
+        export: 'default',
+      },
+      {
+        name: 'BeaconLocation',
+        path: 'pages/BeaconLocation',
+        export: 'default',
+      },
+      {
+        name: 'AssetMonitoring',
+        path: 'pages/AssetMonitoring',
+        export: 'default',
+      },
+      {
+        name: 'EnvironmentMonitoring',
+        path: 'pages/EnvironmentMonitoring',
+        export: 'default',
+      },
+      {
+        name: 'IoTDeviceManagement',
+        path: 'pages/IoTDeviceManagement',
+        export: 'default',
+      },
+    ],
+    permissions: [
+      'iot:device:read',
+      'iot:device:create',
+      'iot:device:update',
+      'iot:device:delete',
+      'iot:data:read',
+      'iot:data:manage',
+      'iot:monitoring:view',
+      'iot:alert:read',
+      'iot:alert:manage',
+      'iot:dashboard:view',
+      'iot:integration:manage',
+    ],
+  },
+
+  backend_config: {
+    api_endpoints: [
+      {
+        method: 'GET',
+        path: '/api/iot/devices',
+        handler: 'getDevices',
+        permissions: ['iot:device:read'],
+      },
+      {
+        method: 'POST',
+        path: '/api/iot/devices',
+        handler: 'createDevice',
+        permissions: ['iot:device:create'],
+      },
+      {
+        method: 'GET',
+        path: '/api/iot/devices/:id',
+        handler: 'getDeviceById',
+        permissions: ['iot:device:read'],
+      },
+      {
+        method: 'PUT',
+        path: '/api/iot/devices/:id',
+        handler: 'updateDevice',
+        permissions: ['iot:device:update'],
+      },
+      {
+        method: 'DELETE',
+        path: '/api/iot/devices/:id',
+        handler: 'deleteDevice',
+        permissions: ['iot:device:delete'],
+      },
+      {
+        method: 'POST',
+        path: '/api/iot/devices/assets/:assetCode/link',
+        handler: 'linkDeviceToAsset',
+        permissions: ['iot:device:update'],
+      },
+      {
+        method: 'POST',
+        path: '/api/iot/devices/assets/:assetCode/unlink',
+        handler: 'unlinkDeviceFromAsset',
+        permissions: ['iot:device:update'],
+      },
+      {
+        method: 'GET',
+        path: '/api/iot/devices/assets/:assetCode/devices',
+        handler: 'getAssetDevices',
+        permissions: ['iot:device:read'],
+      },
+      {
+        method: 'GET',
+        path: '/api/iot/devices/:deviceId/assets',
+        handler: 'getDeviceAssets',
+        permissions: ['iot:device:read'],
+      },
+      {
+        method: 'GET',
+        path: '/api/iot/devices/types',
+        handler: 'getDeviceTypes',
+        permissions: ['iot:device:read'],
+      },
+      {
+        method: 'GET',
+        path: '/api/iot/devices/:id/data',
+        handler: 'getDeviceData',
+        permissions: ['iot:data:read'],
+      },
+      {
+        method: 'GET',
+        path: '/api/iot/health',
+        handler: 'getModuleHealth',
+        permissions: [],
+      },
+    ],
+    database_tables: [
+      'iot_devices',
+      'iot_device_connectors',
+      'asset_locations',
+      'asset_location_history',
+      'iot_zone_location_ts',
+      'iot_asset_monitor_ts',
+      'iot_environment_monitor_ts',
+    ],
+    services: [
+      {
+        name: 'DeviceService',
+        path: 'services/device.service',
+      },
+      {
+        name: 'LocationService',
+        path: 'services/location.service',
+      },
+      {
+        name: 'ZoneLocationPipelineService',
+        path: 'services/zone-location-pipeline.service',
+      },
+      {
+        name: 'AssetMonitoringPipelineService',
+        path: 'services/asset-monitoring-pipeline.service',
+      },
+      {
+        name: 'EnvironmentMonitoringPipelineService',
+        path: 'services/environment-monitoring-pipeline.service',
+      },
+    ],
+    permissions: [
+      'iot:device:read',
+      'iot:device:create',
+      'iot:device:update',
+      'iot:device:delete',
+      'iot:data:read',
+      'iot:data:manage',
+      'iot:monitoring:view',
+      'iot:alert:read',
+      'iot:alert:manage',
+      'iot:dashboard:view',
+      'iot:integration:manage',
+    ],
+  },
+
+  config_schema: [
+    {
+      key: 'device_types',
+      name: '设备类型配置',
+      type: 'array',
+      required: false,
+      default: DEVICE_TYPES,
+      description: '物联网设备类型配置（与 constants.js 保持一致）',
+    },
+    {
+      key: 'data_collection_interval',
+      name: '数据采集间隔',
+      type: 'number',
+      required: false,
+      default: 60,
+      description: '数据采集间隔（秒）',
+      validation: {
+        min: 10,
+        max: 3600,
+      },
+    },
+    {
+      key: 'alert_thresholds',
+      name: '告警阈值配置',
+      type: 'object',
+      required: false,
+      default: {
+        battery: 20,
+        signal: -80,
+        temperature: { min: -20, max: 85 },
+        humidity: { min: 0, max: 95 },
+      },
+      description: '设备告警阈值配置',
+    },
+    {
+      key: 'cache_ttl',
+      name: '缓存时间',
+      type: 'number',
+      required: false,
+      default: 300,
+      description: '缓存时间（秒）',
+      validation: {
+        min: 60,
+        max: 3600,
+      },
+    },
+  ],
+  default_config: {
+    device_types: DEVICE_TYPES,
+    data_collection_interval: 60,
+    alert_thresholds: {
+      battery: 20,
+      signal: -80,
+      temperature: { min: -20, max: 85 },
+      humidity: { min: 0, max: 95 },
+    },
+    cache_ttl: 300,
+  },
+
+  interfaces: [
+    {
+      name: 'IDeviceService',
+      type: 'service',
+      methods: [
+        {
+          name: 'getDeviceById',
+          input: { deviceId: 'string' },
+          output: 'Device',
+          description: '根据ID获取设备',
+        },
+        {
+          name: 'getDevices',
+          input: { filters: 'object' },
+          output: 'Array<Device>',
+          description: '获取设备列表',
+        },
+        {
+          name: 'createDevice',
+          input: { deviceData: 'object' },
+          output: 'Device',
+          description: '创建设备',
+        },
+        {
+          name: 'updateDevice',
+          input: { deviceId: 'string', deviceData: 'object' },
+          output: 'Device',
+          description: '更新设备',
+        },
+        {
+          name: 'deleteDevice',
+          input: { deviceId: 'string' },
+          output: 'boolean',
+          description: '删除设备',
+        },
+      ],
+    },
+  ],
+};

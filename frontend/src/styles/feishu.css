@@ -1,0 +1,269 @@
+/* ============================================
+   FEISHU WEB APP ADAPTATION
+   ============================================
+   针对飞书网页应用(iframe 嵌套)的特殊适配:
+   1. 飞书移动工作台视口通常在 320-540px,顶部栏空间紧张
+   2. 飞书桌面工作台视口通常 700-1100px,需要更紧凑的侧边栏
+   3. 飞书宿主可能下发 dark/light 主题
+   4. 飞书 webview 支持安全区域(env safe-area-inset-*)
+   5. 飞书宿主可能限制滚动手势,需要 overscroll-behavior
+   ============================================ */
+
+/* 飞书窄视图(<= 540px,常见移动端工作台) */
+.app-shell--feishu-narrow {
+  font-size: 14px;
+}
+
+.app-shell--feishu-narrow .app-topbar {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 6px !important;
+  gap: 2px;
+  flex-wrap: nowrap !important;
+  overflow: hidden;
+}
+
+.app-shell--feishu-narrow .app-topbar-title {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.app-shell--feishu-narrow .header-selector {
+  display: none;
+}
+
+.app-shell--feishu-narrow .header-user-btn {
+  padding: 4px 6px;
+  flex-shrink: 0;
+}
+
+.app-shell--feishu-narrow .header-user-role {
+  display: none;
+}
+
+.app-shell--feishu-narrow .app-sider {
+  display: none !important;
+}
+
+.app-shell--feishu-narrow .app-content-surface {
+  margin: 6px;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.app-shell--feishu-narrow .app-content-surface--conversation {
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* 飞书通用增强 */
+.app-shell--feishu {
+  /* 飞书 webview 通常有顶部/底部安全区域 */
+  --feishu-safe-top: env(safe-area-inset-top, 0px);
+  --feishu-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .app-shell--feishu .app-topbar {
+    padding-top: calc(env(safe-area-inset-top, 0px)) !important;
+    padding-left: max(8px, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(8px, env(safe-area-inset-right, 0px)) !important;
+  }
+
+  .app-shell--feishu .app-content-surface {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .app-shell--feishu .app-sider {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* 飞书环境下的返回按钮样式 */
+.feishu-back-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.feishu-back-btn .anticon {
+  font-size: 18px;
+}
+
+/* 飞书中等视图(541px - 767px,常见平板端工作台) */
+@media (min-width: 541px) and (max-width: 767px) {
+  .app-shell--feishu .app-topbar {
+    padding: 0 12px !important;
+    gap: 8px;
+    min-height: 52px;
+  }
+
+  .app-shell--feishu .app-topbar-title {
+    font-size: 15px;
+  }
+
+  .app-shell--feishu .app-content-surface {
+    margin: 10px;
+    padding: 14px;
+  }
+
+  .app-shell--feishu .header-selector-label {
+    display: none;
+  }
+}
+
+/* 飞书桌面工作台(>= 768px) */
+@media (min-width: 768px) {
+  .app-shell--feishu .app-content-surface {
+    margin: 12px;
+    padding: 16px;
+  }
+
+  .app-shell--feishu .app-topbar {
+    padding: 0 16px !important;
+  }
+}
+
+/* 飞书宿主下发的暗色主题适配 */
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark),
+.app-shell--feishu.theme-dark {
+  background: #1a1d23;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .app-topbar,
+.app-shell--feishu.theme-dark .app-topbar {
+  background: #1f2329 !important;
+  border-bottom-color: #2c3038 !important;
+  color: #e4e6eb;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .app-sider,
+.app-shell--feishu.theme-dark .app-sider {
+  background: #1f2329 !important;
+  border-inline-end-color: #2c3038 !important;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .app-sider-brand,
+.app-shell--feishu.theme-dark .app-sider-brand {
+  background: #1f2329 !important;
+  color: #e4e6eb;
+  border-bottom-color: #2c3038;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .app-content-surface,
+.app-shell--feishu.theme-dark .app-content-surface {
+  background: #1f2329 !important;
+  color: #e4e6eb;
+  border-color: #2c3038 !important;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .app-menu,
+.app-shell--feishu.theme-dark .app-menu {
+  background: transparent !important;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .app-menu .ant-menu-item,
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .app-menu .ant-menu-submenu-title,
+.app-shell--feishu.theme-dark .app-menu .ant-menu-item,
+.app-shell--feishu.theme-dark .app-menu .ant-menu-submenu-title {
+  color: #c9ccd1 !important;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .app-menu .ant-menu-item:hover,
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .app-menu .ant-menu-submenu-title:hover,
+.app-shell--feishu.theme-dark .app-menu .ant-menu-item:hover,
+.app-shell--feishu.theme-dark .app-menu .ant-menu-submenu-title:hover {
+  background: rgba(217, 119, 87, 0.16) !important;
+  color: #ff9968 !important;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .app-menu .ant-menu-item-selected,
+.app-shell--feishu.theme-dark .app-menu .ant-menu-item-selected {
+  background: #d97757 !important;
+  color: #ffffff !important;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .header-selector-label,
+.app-shell--feishu.theme-dark .header-selector-label {
+  color: #a8acb3 !important;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .header-user-btn,
+.app-shell--feishu.theme-dark .header-user-btn {
+  color: #e4e6eb !important;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .header-user-role,
+.app-shell--feishu.theme-dark .header-user-role {
+  color: #a8acb3 !important;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .feishu-back-btn,
+.app-shell--feishu.theme-dark .feishu-back-btn {
+  color: #e4e6eb !important;
+}
+
+body[data-feishu-theme='dark'] .app-shell:not(.theme-light):not(.theme-dark) .feishu-back-btn:hover,
+.app-shell--feishu.theme-dark .feishu-back-btn:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #ff9968 !important;
+}
+
+/* 飞书宿主下发的浅色主题强制覆盖(防止双重主题冲突) */
+body[data-feishu-theme='light'] .app-shell:not(.theme-dark):not(.theme-light) {
+  background: var(--bg-secondary);
+}
+
+/* 飞书极小屏(<= 360px) - 进一步压缩 */
+@media (max-width: 360px) {
+  .app-shell--feishu-narrow .app-content-surface {
+    margin: 4px;
+    padding: 8px;
+  }
+
+  .app-shell--feishu-narrow .feishu-back-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .app-shell--feishu-narrow .app-topbar {
+    padding: 0 6px !important;
+    gap: 2px;
+  }
+}
+
+/* 飞书 webview 关闭浏览器默认橡皮筋/过度滚动 */
+.app-shell--feishu {
+  overscroll-behavior-y: contain;
+}
+
+/* 飞书 iframe 内禁用文本选择拖拽时的橡皮筋闪烁 */
+.app-shell--feishu .ant-layout-content,
+.app-shell--feishu .app-content-surface {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* 飞书环境下表格行紧凑一些 */
+.app-shell--feishu .ant-table-thead > tr > th,
+.app-shell--feishu .ant-table-tbody > tr > td {
+  padding: 8px 8px;
+}
+
+/* 飞书嵌入下按钮高度适配(略紧凑) */
+@media (max-width: 767px) {
+  .app-shell--feishu .ant-btn {
+    min-height: 36px;
+  }
+}

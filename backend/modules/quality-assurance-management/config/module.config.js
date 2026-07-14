@@ -1,0 +1,178 @@
+module.exports = {
+  id: 'quality-assurance-management',
+  name: '质控管理',
+  version: '1.0.0',
+  description: '质控管理模块，支持质控记录、统计分析和质量趋势评估。',
+  category: '质量与安全',
+  type: 'system',
+  status: 'stable',
+  author: 'System Team',
+  created_at: '2026-02-23T00:00:00Z',
+  updated_at: '2026-02-23T00:00:00Z',
+
+  dependencies: [
+    {
+      module_id: 'quality-common',
+      dependency_type: 'required',
+      min_version: '1.0.0',
+      max_version: '2.0.0',
+    },
+    {
+      module_id: 'asset-management',
+      dependency_type: 'required',
+      min_version: '1.0.0',
+      max_version: '2.0.0',
+    },
+    {
+      module_id: 'user-management',
+      dependency_type: 'required',
+      min_version: '1.0.0',
+      max_version: '2.0.0',
+    },
+  ],
+
+  compatibility: {
+    min_node_version: '14.0.0',
+    max_node_version: '24.0.0',
+    supported_databases: ['mysql'],
+    browser_compatibility: {
+      chrome: '>=80',
+      firefox: '>=75',
+      safari: '>=13',
+      edge: '>=80',
+    },
+  },
+
+  frontend_config: {
+    menu_keys: ['/quality-control/qc', '/quality-control/statistics'],
+    menu_prefixes: ['/quality-control/qc', '/quality-control/statistics'],
+    menu_routes: [
+      {
+        key: '/quality-control/qc',
+        icon: 'CheckCircleOutlined',
+        label: '质控管理',
+        path: '/quality-control/qc',
+        component: 'QualityControlList',
+        permissions: ['quality-control:qc:read'],
+      },
+      {
+        key: '/quality-control/qc/new',
+        icon: 'PlusOutlined',
+        label: '新增质控记录',
+        path: '/quality-control/qc/new',
+        component: 'QualityControlForm',
+        permissions: ['quality-control:qc:create'],
+        parent: '/quality-control/qc',
+      },
+      {
+        key: '/quality-control/qc/edit/:id',
+        icon: 'EditOutlined',
+        label: '编辑质控记录',
+        path: '/quality-control/qc/edit/:id',
+        component: 'QualityControlForm',
+        permissions: ['quality-control:qc:update'],
+        parent: '/quality-control/qc',
+      },
+      {
+        key: '/quality-control/qc/:id',
+        icon: 'EyeOutlined',
+        label: '质控记录详情',
+        path: '/quality-control/qc/:id',
+        component: 'QualityControlDetail',
+        permissions: ['quality-control:qc:read'],
+        parent: '/quality-control/qc',
+      },
+      {
+        key: '/quality-control/statistics',
+        icon: 'BarChartOutlined',
+        label: '统计分析',
+        path: '/quality-control/statistics',
+        component: 'StatisticsPage',
+        permissions: ['quality-control:analysis:read'],
+        parent: '/quality-assurance-parent',
+      },
+    ],
+    components: [
+      { name: 'QualityControlList', path: 'pages/QualityControlList', export: 'default' },
+      { name: 'QualityControlForm', path: 'pages/QualityControlForm', export: 'default' },
+      { name: 'QualityControlDetail', path: 'pages/QualityControlDetail', export: 'default' },
+      { name: 'StatisticsPage', path: 'pages/quality-control/StatisticsPage', export: 'default' },
+    ],
+    permissions: [
+      'quality-control:qc:read',
+      'quality-control:qc:create',
+      'quality-control:qc:update',
+      'quality-control:qc:delete',
+      'quality-control:analysis:read',
+    ],
+  },
+
+  backend_config: {
+    api_endpoints: [
+      { method: 'GET', path: '/api/quality-control/quality-control', handler: 'getQualityControlList', permissions: ['quality-control:qc:read'] },
+      { method: 'GET', path: '/api/quality-control/quality-control/:id', handler: 'getQualityControlById', permissions: ['quality-control:qc:read'] },
+      { method: 'POST', path: '/api/quality-control/quality-control', handler: 'createQualityControl', permissions: ['quality-control:qc:create'] },
+      { method: 'PUT', path: '/api/quality-control/quality-control/:id', handler: 'updateQualityControl', permissions: ['quality-control:qc:update'] },
+      { method: 'DELETE', path: '/api/quality-control/quality-control/:id', handler: 'deleteQualityControl', permissions: ['quality-control:qc:delete'] },
+      { method: 'GET', path: '/api/quality-control/quality-control/expiring', handler: 'getExpiringQualityControl', permissions: ['quality-control:qc:read'] },
+      { method: 'GET', path: '/api/quality-control/quality-control/statistics', handler: 'getQualityControlStatistics', permissions: ['quality-control:qc:read'] },
+      { method: 'GET', path: '/api/quality-control/asset/:assetCode/history', handler: 'getAssetQualityHistory', permissions: ['quality-control:qc:read'] },
+      { method: 'GET', path: '/api/quality-control/analysis/trend', handler: 'analyzeQualityTrend', permissions: ['quality-control:analysis:read'] },
+      { method: 'GET', path: '/api/quality-control/analysis/distribution', handler: 'analyzeDefectDistribution', permissions: ['quality-control:analysis:read'] },
+      { method: 'GET', path: '/api/quality-control/analysis/report', handler: 'generateQualityReport', permissions: ['quality-control:analysis:read'] },
+    ],
+    database_tables: ['quality_control_records', 'quality_control_attachments', 'quality_management_cycles'],
+    services: [
+      { name: 'QualityAssuranceService', path: 'services/quality-assurance.service' },
+    ],
+    permissions: [
+      'quality-control:qc:read',
+      'quality-control:qc:create',
+      'quality-control:qc:update',
+      'quality-control:qc:delete',
+      'quality-control:analysis:read',
+    ],
+  },
+
+  config_schema: [
+    {
+      key: 'enable_quality_control',
+      name: '启用质控管理',
+      type: 'boolean',
+      required: false,
+      default: true,
+      description: '是否启用质控管理功能',
+    },
+    {
+      key: 'quality_inspection_frequency',
+      name: '质量检查频率',
+      type: 'select',
+      required: false,
+      default: 'monthly',
+      description: '质量检查的默认频率',
+      options: [
+        { label: '每日', value: 'daily' },
+        { label: '每周', value: 'weekly' },
+        { label: '每月', value: 'monthly' },
+        { label: '每季度', value: 'quarterly' },
+        { label: '每年', value: 'yearly' },
+      ],
+    },
+    {
+      key: 'enable_data_analysis',
+      name: '启用数据分析',
+      type: 'boolean',
+      required: false,
+      default: true,
+      description: '是否启用质控统计分析',
+    },
+  ],
+
+  default_config: {
+    enable_quality_control: true,
+    quality_inspection_frequency: 'monthly',
+    enable_data_analysis: true,
+  },
+
+  interfaces: [],
+};

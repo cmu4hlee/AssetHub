@@ -1,0 +1,32 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "lmstudio/qwen/qwen3.5-35b-a3b",
+  "mcp": {
+    "assethub": {
+      "type": "local",
+      "command": [
+        "/Users/cjlee/PJ/AssetHub/tools/mcp-assethub/mcp-assethub"
+      ],
+      "environment": {
+        "ASSETHUB_API_URL": "http://localhost:5183/api",
+        "ASSETHUB_RUNTIME_AUTH_STORE_DIR": "/tmp/assethub-ai-runtime-auth",
+        "ASSETHUB_TOOL_PREFIX": "assethub"
+      },
+      "enabled": true
+    }
+  },
+  "provider": {
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio (local)",
+      "options": {
+        "baseURL": "https://agencies-double-song-handled.trycloudflare.com/v1"
+      },
+      "models": {
+        "qwen/qwen3.5-35b-a3b": {
+          "name": "Qwen3.5-35B-A3B (LM Studio)"
+        }
+      }
+    }
+  }
+}

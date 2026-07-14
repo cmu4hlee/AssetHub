@@ -1,0 +1,240 @@
+{
+  "generated_at": "2026-03-07T04:53:58.021Z",
+  "summary": {
+    "disk_module_config_count": 26,
+    "db_module_count": 28,
+    "discovery_warning_count": 5,
+    "discovery_error_count": 0,
+    "missing_in_db_count": 0,
+    "orphan_in_db_count": 2,
+    "disk_dependency_issue_count": 0,
+    "db_broken_dependency_row_count": 0
+  },
+  "discovery": {
+    "warnings": [
+      "skip module \"asset-usage-management\": config file not found",
+      "skip module \"dingtalk-binding\": config file not found",
+      "skip module \"feishu-binding\": config file not found",
+      "skip module \"sms-notification\": config file not found",
+      "skip module \"wechat-binding\": config file not found"
+    ],
+    "errors": []
+  },
+  "missing_in_db": [],
+  "orphan_in_db": [
+    "asset-usage-management",
+    "ct-maintenance-assistant-management"
+  ],
+  "disk_dependency_issues": [],
+  "db_broken_dependency_rows": [],
+  "disk_modules": [
+    {
+      "id": "adverse-event",
+      "name": "不良事件",
+      "version": "1.0.0",
+      "directory": "adverse-event",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/adverse-event/config/module.config.js",
+      "dependency_count": 3
+    },
+    {
+      "id": "asset-ai-assistant",
+      "name": "资产AI助手",
+      "version": "1.0.0",
+      "directory": "asset-ai-assistant",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/asset-ai-assistant/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "asset-management",
+      "name": "库存管理",
+      "version": "1.0.0",
+      "directory": "asset-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/asset-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "asset-risk-management",
+      "name": "风险管理",
+      "version": "1.0.0",
+      "directory": "asset-risk-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/asset-risk-management/config/module.config.js",
+      "dependency_count": 1
+    },
+    {
+      "id": "compliance-management",
+      "name": "合规性管理",
+      "version": "1.0.0",
+      "directory": "compliance-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/compliance-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "department-management",
+      "name": "部门管理",
+      "version": "1.0.0",
+      "directory": "department-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/department-management/config/module.config.js",
+      "dependency_count": 0
+    },
+    {
+      "id": "depreciation-management",
+      "name": "折旧管理",
+      "version": "1.0.0",
+      "directory": "depreciation-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/depreciation-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "inventory-management",
+      "name": "盘点管理",
+      "version": "1.0.0",
+      "directory": "inventory-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/inventory-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "iot-asset-monitoring-management",
+      "name": "资产监测模块",
+      "version": "1.0.0",
+      "directory": "iot-asset-monitoring-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/iot-asset-monitoring-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "iot-environment-monitoring-management",
+      "name": "环境监测模块",
+      "version": "1.0.0",
+      "directory": "iot-environment-monitoring-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/iot-environment-monitoring-management/config/module.config.js",
+      "dependency_count": 1
+    },
+    {
+      "id": "iot-geo-location-management",
+      "name": "地理定位模块",
+      "version": "1.0.0",
+      "directory": "iot-geo-location-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/iot-geo-location-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "iot-management",
+      "name": "物联网管理",
+      "version": "1.0.0",
+      "directory": "iot-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/iot-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "iot-zone-location-management",
+      "name": "区域定位模块",
+      "version": "1.0.0",
+      "directory": "iot-zone-location-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/iot-zone-location-management/config/module.config.js",
+      "dependency_count": 1
+    },
+    {
+      "id": "label-management",
+      "name": "标签管理",
+      "version": "1.0.0",
+      "directory": "label-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/label-management/config/module.config.js",
+      "dependency_count": 1
+    },
+    {
+      "id": "maintenance-management",
+      "name": "日常维修",
+      "version": "1.0.0",
+      "directory": "maintenance-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/maintenance-management/config/module.config.js",
+      "dependency_count": 3
+    },
+    {
+      "id": "message-integration",
+      "name": "消息平台集成",
+      "version": "1.0.0",
+      "directory": "message-integration",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/message-integration/config/module.config.js",
+      "dependency_count": 1
+    },
+    {
+      "id": "preventive-maintenance-management",
+      "name": "预防性维护",
+      "version": "1.0.0",
+      "directory": "preventive-maintenance-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/preventive-maintenance-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "procurement-management",
+      "name": "采购管理",
+      "version": "1.0.0",
+      "directory": "procurement-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/procurement-management/config/module.config.js",
+      "dependency_count": 1
+    },
+    {
+      "id": "quality-assurance-management",
+      "name": "质控管理",
+      "version": "1.0.0",
+      "directory": "quality-assurance-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/quality-assurance-management/config/module.config.js",
+      "dependency_count": 3
+    },
+    {
+      "id": "quality-common",
+      "name": "平台公共能力",
+      "version": "1.0.0",
+      "directory": "quality-common",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/quality-common/config/module.config.js",
+      "dependency_count": 1
+    },
+    {
+      "id": "quality-control",
+      "name": "计量管理",
+      "version": "1.1.0",
+      "directory": "quality-control",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/quality-control/config/module.config.js",
+      "dependency_count": 3
+    },
+    {
+      "id": "safety-inspection-management",
+      "name": "安全检测管理",
+      "version": "1.0.0",
+      "directory": "safety-inspection-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/safety-inspection-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "special-equipment-management",
+      "name": "特种设备管理",
+      "version": "1.0.0",
+      "directory": "special-equipment-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/special-equipment-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "staff-qualification",
+      "name": "人员资质管理",
+      "version": "1.0.0",
+      "directory": "staff-qualification",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/staff-qualification/config/module.config.js",
+      "dependency_count": 1
+    },
+    {
+      "id": "uptime-management",
+      "name": "开机率管理",
+      "version": "1.0.0",
+      "directory": "uptime-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/uptime-management/config/module.config.js",
+      "dependency_count": 2
+    },
+    {
+      "id": "user-management",
+      "name": "用户管理",
+      "version": "1.0.0",
+      "directory": "user-management",
+      "config_path": "/Users/cjlee/PJ/AssetHub/backend/modules/user-management/config/module.config.js",
+      "dependency_count": 0
+    }
+  ]
+}

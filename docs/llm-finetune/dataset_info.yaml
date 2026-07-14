@@ -1,0 +1,8 @@
+assethub_sft_500:
+  file_name: assethub_sft_500_openai.jsonl
+  format: openai
+  columns:
+    prompt: ""
+    response: ""
+    system: system
+    tools: ""

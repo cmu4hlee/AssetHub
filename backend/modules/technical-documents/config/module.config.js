@@ -1,0 +1,138 @@
+module.exports = {
+  id: 'technical-documents',
+  name: '技术资料管理',
+  version: '1.0.0',
+  description: '提供技术资料管理功能，包括资料上传、下载、审核、分享、关联资产等。',
+  category: '系统基础',
+  type: 'system',
+  status: 'stable',
+  author: 'System Team',
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-15T00:00:00Z',
+
+  dependencies: [],
+
+  compatibility: [],
+
+  frontend_config: {
+    menu_routes: [
+      {
+        key: '/technical-documents',
+        icon: 'FileTextOutlined',
+        label: '技术资料',
+        path: '/technical-documents',
+        component: 'TechnicalDocumentsList',
+        permissions: ['technical_document:read'],
+      },
+      {
+        key: '/technical-documents/upload',
+        icon: 'UploadOutlined',
+        label: '上传资料',
+        path: '/technical-documents/upload',
+        component: 'TechnicalDocumentsUpload',
+        permissions: ['technical_document:create'],
+        parent: '/technical-documents',
+      },
+      {
+        key: '/technical-documents/review',
+        icon: 'CheckSquareOutlined',
+        label: '资料审核',
+        path: '/technical-documents/review',
+        component: 'TechnicalDocumentsReview',
+        permissions: ['technical_document:review'],
+      },
+      {
+        key: '/technical-documents/ai',
+        icon: 'RobotOutlined',
+        label: 'AI 助手',
+        path: '/technical-documents/ai',
+        component: 'TechnicalDocumentsAI',
+        permissions: ['technical_document:read'],
+      },
+    ],
+    components: [
+      { name: 'TechnicalDocumentsList', path: 'pages/TechnicalDocumentsList', export: 'default' },
+      { name: 'TechnicalDocumentsUpload', path: 'pages/TechnicalDocumentsUpload', export: 'default' },
+      { name: 'TechnicalDocumentsReview', path: 'pages/TechnicalDocumentsReview', export: 'default' },
+      { name: 'TechnicalDocumentsAI', path: 'pages/TechnicalDocumentsAI', export: 'default' },
+      { name: 'TechnicalDocumentsExternalUpload', path: 'pages/TechnicalDocumentsExternalUpload', export: 'default' },
+    ],
+    permissions: [
+      'technical_document:read',
+      'technical_document:create',
+      'technical_document:update',
+      'technical_document:delete',
+      'technical_document:review',
+      'technical_document:share',
+    ],
+  },
+
+  backend_config: {
+    api_endpoints: [
+      { method: 'GET', path: '/api/technical-documents', handler: 'getDocuments', permissions: ['technical_document:read'] },
+      { method: 'GET', path: '/api/technical-documents/categories', handler: 'getCategories', permissions: ['technical_document:read'] },
+      { method: 'GET', path: '/api/technical-documents/:id', handler: 'getDocumentById', permissions: ['technical_document:read'] },
+      { method: 'POST', path: '/api/technical-documents', handler: 'createDocument', permissions: ['technical_document:create'] },
+      { method: 'PUT', path: '/api/technical-documents/:id', handler: 'updateDocument', permissions: ['technical_document:update'] },
+      { method: 'DELETE', path: '/api/technical-documents/:id', handler: 'deleteDocument', permissions: ['technical_document:delete'] },
+      { method: 'GET', path: '/api/technical-documents/:id/file', handler: 'downloadDocument', permissions: ['technical_document:read'] },
+      { method: 'GET', path: '/api/technical-documents/assets/:assetIdOrCode', handler: 'getAssetDocuments', permissions: ['technical_document:read'] },
+      { method: 'POST', path: '/api/technical-documents/assets/:assetIdOrCode/link/:documentId', handler: 'linkDocumentToAsset', permissions: ['technical_document:update'] },
+      { method: 'DELETE', path: '/api/technical-documents/assets/:assetIdOrCode/link/:documentId', handler: 'unlinkDocumentFromAsset', permissions: ['technical_document:update'] },
+      { method: 'POST', path: '/api/technical-documents/:id/review', handler: 'reviewDocument', permissions: ['technical_document:review'] },
+      { method: 'GET', path: '/api/technical-documents/pending', handler: 'getPendingDocuments', permissions: ['technical_document:review'] },
+      { method: 'POST', path: '/api/technical-documents/:id/share', handler: 'createShare', permissions: ['technical_document:share'] },
+      { method: 'GET', path: '/api/technical-documents/:id/shares', handler: 'getShares', permissions: ['technical_document:read'] },
+      { method: 'DELETE', path: '/api/technical-documents/shares/:shareId', handler: 'deleteShare', permissions: ['technical_document:share'] },
+      { method: 'GET', path: '/api/technical-documents/upload/:token', handler: 'verifyUploadToken', permissions: [] },
+      { method: 'POST', path: '/api/technical-documents/upload/:token', handler: 'externalUpload', permissions: [] },
+    ],
+    database_tables: ['technical_documents', 'technical_document_asset_relations', 'technical_document_shares'],
+    services: [
+      { name: 'TechnicalDocumentService', path: 'services/technical-document.service' },
+    ],
+    controllers: [
+      { name: 'TechnicalDocumentController', path: 'controllers/technical-document.controller' },
+    ],
+    permissions: [
+      'technical_document:read',
+      'technical_document:create',
+      'technical_document:update',
+      'technical_document:delete',
+      'technical_document:review',
+      'technical_document:share',
+    ],
+  },
+
+  config_schema: [
+    { key: 'max_file_size', name: '最大文件大小', type: 'number', default: 10, description: '上传文件的最大大小（MB）' },
+    { key: 'max_files_per_upload', name: '单次上传最大文件数', type: 'number', default: 10, description: '单次上传的最大文件数量' },
+    { key: 'allowed_file_types', name: '允许的文件类型', type: 'array', default: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'jpg', 'png'], description: '允许上传的文件扩展名列表' },
+    { key: 'enable_ai_features', name: '启用AI功能', type: 'boolean', default: true, description: '是否启用AI辅助功能' },
+    { key: 'require_review', name: '需要审核', type: 'boolean', default: true, description: '上传的资料是否需要审核' },
+  ],
+  default_config: {
+    max_file_size: 10,
+    max_files_per_upload: 10,
+    allowed_file_types: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'jpg', 'png', 'zip'],
+    enable_ai_features: true,
+    require_review: true,
+  },
+
+  interfaces: [
+    {
+      name: 'ITechnicalDocumentService',
+      type: 'service',
+      methods: [
+        { name: 'getDocuments', input: '{ page, pageSize, keyword, category, status }', output: 'PaginationResult', description: '获取技术资料列表' },
+        { name: 'getDocumentById', input: '{ id, tenantId }', output: 'TechnicalDocument', description: '根据ID获取技术资料' },
+        { name: 'createDocument', input: '{ tenantId, documentData }', output: 'TechnicalDocument', description: '创建技术资料' },
+        { name: 'updateDocument', input: '{ id, tenantId, documentData }', output: 'TechnicalDocument', description: '更新技术资料' },
+        { name: 'deleteDocument', input: '{ id, tenantId }', output: 'boolean', description: '删除技术资料' },
+        { name: 'reviewDocument', input: '{ id, tenantId, reviewData }', output: 'TechnicalDocument', description: '审核技术资料' },
+        { name: 'linkDocumentToAsset', input: '{ documentId, assetCode, tenantId }', output: 'boolean', description: '关联资料到资产' },
+        { name: 'unlinkDocumentFromAsset', input: '{ documentId, assetCode, tenantId }', output: 'boolean', description: '解除资料与资产的关联' },
+      ],
+    },
+  ],
+};

@@ -1,0 +1,14 @@
+.responsive-table-desktop {
+  width: 100%;
+}
+.responsive-table-mobile {
+  width: 100%;
+}
+.responsive-table-mobile-pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+.responsive-table-mobile-pagination .ant-pagination-simple-pager {
+  margin: 0 8px;
+}

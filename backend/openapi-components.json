@@ -1,0 +1,605 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AssetHub 维修维护模块 API",
+    "description": "AssetHub企业资产管理系统的维修维护模块完整API文档",
+    "version": "1.0.0",
+    "contact": {
+      "name": "AssetHub技术支持",
+      "email": "support@assethub.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5183/api",
+      "description": "本地开发服务器"
+    },
+    {
+      "url": "https://api.assethub.com/api",
+      "description": "生产环境服务器"
+    }
+  ],
+  "paths": {
+    "/maintenance/logs": {
+      "get": {
+        "tags": ["维修日志"],
+        "summary": "获取维修日志列表",
+        "description": "分页获取维修日志列表，支持筛选",
+        "operationId": "getMaintenanceLogs",
+        "parameters": [
+          {"name": "page", "in": "query", "schema": {"type": "integer", "default": 1}},
+          {"name": "pageSize", "in": "query", "schema": {"type": "integer", "default": 20}},
+          {"name": "asset_code", "in": "query", "schema": {"type": "string"}},
+          {"name": "maintenance_type", "in": "query", "schema": {"type": "string"}},
+          {"name": "status", "in": "query", "schema": {"type": "string"}},
+          {"name": "start_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+          {"name": "end_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+          {"name": "keyword", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PaginatedResponse"}}}
+        }
+      },
+      "post": {
+        "tags": ["维修日志"],
+        "summary": "创建维修日志",
+        "operationId": "createMaintenanceLog",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MaintenanceLogCreate"}}
+        },
+        "responses": {
+          "200": {"description": "成功"},
+          "400": {"description": "参数错误"},
+          "428": {"description": "需要幂等性确认"}
+        }
+      }
+    },
+    "/maintenance/logs/{id}": {
+      "get": {
+        "tags": ["维修日志"],
+        "summary": "获取维修日志详情",
+        "operationId": "getMaintenanceLogById",
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "responses": {"200": {"description": "成功"}}
+      },
+      "put": {
+        "tags": ["维修日志"],
+        "summary": "更新维修日志",
+        "operationId": "updateMaintenanceLog",
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object"}}},
+        "responses": {"200": {"description": "成功"}}
+      },
+      "delete": {
+        "tags": ["维修日志"],
+        "summary": "删除维修日志",
+        "operationId": "deleteMaintenanceLog",
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "responses": {"200": {"description": "成功"}}
+      }
+    },
+    "/maintenance/plans": {
+      "get": {
+        "tags": ["预防性维护"],
+        "summary": "获取预防性维护计划列表",
+        "operationId": "getMaintenancePlans",
+        "parameters": [
+          {"name": "page", "in": "query", "schema": {"type": "integer", "default": 1}},
+          {"name": "pageSize", "in": "query", "schema": {"type": "integer", "default": 20}},
+          {"name": "asset_code", "in": "query", "schema": {"type": "string"}},
+          {"name": "status", "in": "query", "schema": {"type": "string"}},
+          {"name": "keyword", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "成功"}}
+      },
+      "post": {
+        "tags": ["预防性维护"],
+        "summary": "创建预防性维护计划",
+        "operationId": "createMaintenancePlan",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MaintenancePlanCreate"}}
+        },
+        "responses": {"200": {"description": "成功"}}
+      }
+    },
+    "/maintenance/plans/{id}/complete": {
+      "post": {
+        "tags": ["预防性维护"],
+        "summary": "完成预防性维护计划",
+        "description": "执行完成预防性维护计划，系统自动创建维修日志并更新下次维护日期",
+        "operationId": "completeMaintenancePlan",
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"type": "object", "properties": {
+            "maintenance_date": {"type": "string", "format": "date"},
+            "maintenance_person": {"type": "string"},
+            "maintenance_content": {"type": "string"},
+            "maintenance_cost": {"type": "number"},
+            "parts_replaced": {"type": "string"},
+            "actual_hours": {"type": "number"},
+            "remark": {"type": "string"}
+          }}
+        },
+        "responses": {"200": {"description": "成功完成"}}
+      }
+    },
+    "/maintenance/requests": {
+      "get": {
+        "tags": ["故障维修申请"],
+        "summary": "获取故障维修申请列表",
+        "operationId": "getMaintenanceRequests",
+        "parameters": [
+          {"name": "page", "in": "query", "schema": {"type": "integer", "default": 1}},
+          {"name": "pageSize", "in": "query", "schema": {"type": "integer", "default": 20}},
+          {"name": "status", "in": "query", "schema": {"type": "string"}},
+          {"name": "fault_level", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "成功"}}
+      },
+      "post": {
+        "tags": ["故障维修申请"],
+        "summary": "创建故障维修申请",
+        "operationId": "createMaintenanceRequest",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MaintenanceRequestCreate"}}
+        },
+        "responses": {"200": {"description": "成功"}}
+      }
+    },
+    "/maintenance/requests/{id}/approve": {
+      "post": {
+        "tags": ["故障维修申请"],
+        "summary": "审批故障维修申请",
+        "operationId": "approveMaintenanceRequest",
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {
+            "type": "object",
+            "properties": {
+              "approved": {"type": "boolean", "description": "是否批准"},
+              "comment": {"type": "string", "description": "审批意见"}
+            },
+            "required": ["approved"]
+          }}
+        },
+        "responses": {"200": {"description": "审批完成"}}
+      }
+    },
+    "/maintenance/requests/{id}/complete": {
+      "post": {
+        "tags": ["故障维修申请"],
+        "summary": "完成维修（自动沉淀日志）",
+        "operationId": "completeMaintenanceRequest",
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}],
+        "requestBody": {
+          "content": {"application/json": {"schema": {
+            "type": "object",
+            "properties": {
+              "repair_end_date": {"type": "string", "format": "date"},
+              "repair_cost": {"type": "number"},
+              "repair_content": {"type": "string"},
+              "parts_replaced": {"type": "string"},
+              "remark": {"type": "string"}
+            }
+          }}
+        },
+        "responses": {"200": {"description": "完成成功"}}
+      }
+    },
+    "/maintenance/workorders": {
+      "get": {
+        "tags": ["维修工单"],
+        "summary": "获取维修工单列表",
+        "operationId": "getMaintenanceWorkOrders",
+        "parameters": [
+          {"name": "page", "in": "query", "schema": {"type": "integer", "default": 1}},
+          {"name": "pageSize", "in": "query", "schema": {"type": "integer", "default": 20}},
+          {"name": "status", "in": "query", "schema": {"type": "string"}},
+          {"name": "priority", "in": "query", "schema": {"type": "integer"}},
+          {"name": "assigned_to", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "成功"}}
+      },
+      "post": {
+        "tags": ["维修工单"],
+        "summary": "创建维修工单",
+        "operationId": "createMaintenanceWorkOrder",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MaintenanceWorkOrderCreate"}}
+        },
+        "responses": {"200": {"description": "成功"}}
+      }
+    },
+    "/maintenance/templates/recommend-by-asset": {
+      "get": {
+        "tags": ["维修模板"],
+        "summary": "根据资产编号获取推荐模板",
+        "operationId": "getRecommendedTemplatesByAsset",
+        "parameters": [
+          {"name": "asset_code", "in": "query", "required": true, "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "成功",
+            "content": {"application/json": {"schema": {
+              "type": "object",
+              "properties": {
+                "success": {"type": "boolean"},
+                "asset_info": {
+                  "type": "object",
+                  "properties": {
+                    "asset_type": {"type": "string"},
+                    "brand": {"type": "string"},
+                    "model": {"type": "string"}
+                  }
+                },
+                "data": {"type": "array", "items": {"$ref": "#/components/schemas/MaintenanceTemplate"}}
+              }
+            }}
+          }
+        }
+      }
+    },
+    "/maintenance/reminders/check": {
+      "get": {
+        "tags": ["维护提醒"],
+        "summary": "检查维护提醒",
+        "description": "检查近期即将到期的维护计划并生成提醒",
+        "operationId": "checkMaintenanceReminders",
+        "responses": {
+          "200": {"description": "检查完成"}
+        }
+      }
+    },
+    "/maintenance/usage/records": {
+      "get": {
+        "tags": ["资产使用量"],
+        "summary": "获取使用量记录列表",
+        "operationId": "getUsageRecords",
+        "parameters": [
+          {"name": "page", "in": "query", "schema": {"type": "integer", "default": 1}},
+          {"name": "pageSize", "in": "query", "schema": {"type": "integer", "default": 20}},
+          {"name": "asset_code", "in": "query", "schema": {"type": "string"}},
+          {"name": "usage_type", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "成功"}}
+      },
+      "post": {
+        "tags": ["资产使用量"],
+        "summary": "记录资产使用量",
+        "operationId": "createUsageRecord",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {
+            "type": "object",
+            "properties": {
+              "asset_code": {"type": "string", "description": "资产编号"},
+              "usage_date": {"type": "string", "format": "date"},
+              "usage_value": {"type": "number", "description": "本次使用值"},
+              "usage_type": {"type": "string"},
+              "cumulative_value": {"type": "number", "description": "累计使用值"},
+              "operator": {"type": "string"},
+              "remark": {"type": "string"}
+            },
+            "required": ["asset_code", "usage_date", "usage_value", "usage_type", "cumulative_value"]
+          }}
+        },
+        "responses": {"200": {"description": "成功"}}
+      }
+    },
+    "/maintenance/efficiency/overview": {
+      "get": {
+        "tags": ["维修效率"],
+        "summary": "获取维修效率概览",
+        "operationId": "getEfficiencyOverview",
+        "parameters": [
+          {"name": "start_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+          {"name": "end_date", "in": "query", "schema": {"type": "string", "format": "date"}},
+          {"name": "department", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "成功",
+            "content": {"application/json": {"schema": {
+              "type": "object",
+              "properties": {
+                "success": {"type": "boolean"},
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "total_requests": {"type": "integer"},
+                    "completed_requests": {"type": "integer"},
+                    "pending_requests": {"type": "integer"},
+                    "avg_completion_time": {"type": "number"},
+                    "first_response_rate": {"type": "number"},
+                    "satisfaction_score": {"type": "number"}
+                  }
+                }
+              }
+            }}
+          }
+        }
+      }
+    },
+    "/maintenance/ai/init": {
+      "post": {
+        "tags": ["AI维修助手"],
+        "summary": "初始化AI维修对话",
+        "operationId": "initAICConversation",
+        "requestBody": {
+          "content": {"application/json": {"schema": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string", "description": "对话类型"},
+              "userId": {"type": "string", "description": "用户ID"}
+            }
+          }}
+        },
+        "responses": {
+          "200": {"description": "初始化成功",
+            "content": {"application/json": {"schema": {
+              "type": "object",
+              "properties": {
+                "success": {"type": "boolean"},
+                "conversationId": {"type": "string"},
+                "message": {"type": "string"},
+                "pendingRequests": {"type": "object"}
+              }
+            }}
+          }
+        }
+      }
+    },
+    "/maintenance/ai/message": {
+      "post": {
+        "tags": ["AI维修助手"],
+        "summary": "发送AI维修对话消息",
+        "operationId": "sendAIMessage",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {
+            "type": "object",
+            "properties": {
+              "conversationId": {"type": "string"},
+              "message": {"type": "string"},
+              "context": {"type": "object"},
+              "history": {"type": "array", "items": {"type": "object"}}
+            },
+            "required": ["conversationId", "message"]
+          }}
+        },
+        "responses": {
+          "200": {"description": "消息发送成功",
+            "content": {"application/json": {"schema": {
+              "type": "object",
+              "properties": {
+                "success": {"type": "boolean"},
+                "response": {"type": "string"},
+                "intent": {"type": "string"},
+                "maintenanceForm": {"type": "object"},
+                "assetLookup": {"type": "object"}
+              }
+            }}
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "Idempotency-Key": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Idempotency-Key"
+      },
+      "X-Tenant-ID": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Tenant-ID"
+      }
+    },
+    "schemas": {
+      "MaintenanceLog": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "asset_code": {"type": "string"},
+          "asset_name": {"type": "string"},
+          "maintenance_type": {"type": "string", "enum": ["故障维修", "预防性维护", "定期保养", "日常维护", "其他"]},
+          "maintenance_date": {"type": "string", "format": "date"},
+          "maintenance_person": {"type": "string"},
+          "maintenance_content": {"type": "string"},
+          "maintenance_cost": {"type": "number"},
+          "status": {"type": "string"}
+        }
+      },
+      "MaintenanceLogCreate": {
+        "type": "object",
+        "required": ["asset_code", "maintenance_type", "maintenance_date", "maintenance_person", "maintenance_content"],
+        "properties": {
+          "asset_code": {"type": "string", "example": "000000555"},
+          "maintenance_type": {"type": "string"},
+          "maintenance_date": {"type": "string", "format": "date"},
+          "maintenance_person": {"type": "string"},
+          "maintenance_content": {"type": "string"},
+          "maintenance_cost": {"type": "number"},
+          "maintenance_duration": {"type": "number"},
+          "parts_replaced": {"type": "string"},
+          "remark": {"type": "string"}
+        }
+      },
+      "MaintenancePlan": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "asset_code": {"type": "string"},
+          "plan_name": {"type": "string"},
+          "maintenance_type": {"type": "string"},
+          "cycle_type": {"type": "string"},
+          "cycle_value": {"type": "integer"},
+          "next_maintenance_date": {"type": "string", "format": "date"},
+          "status": {"type": "string"}
+        }
+      },
+      "MaintenancePlanCreate": {
+        "type": "object",
+        "required": ["asset_code", "plan_name", "maintenance_type", "cycle_type", "cycle_value"],
+        "properties": {
+          "asset_code": {"type": "string"},
+          "plan_name": {"type": "string"},
+          "maintenance_type": {"type": "string"},
+          "cycle_type": {"type": "string"},
+          "cycle_value": {"type": "integer"},
+          "next_maintenance_date": {"type": "string", "format": "date"},
+          "maintenance_content": {"type": "string"},
+          "responsible_person": {"type": "string"},
+          "remark": {"type": "string"}
+        }
+      },
+      "MaintenanceRequest": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "request_no": {"type": "string"},
+          "asset_code": {"type": "string"},
+          "fault_description": {"type": "string"},
+          "fault_level": {"type": "string"},
+          "status": {"type": "string"}
+        }
+      },
+      "MaintenanceRequestCreate": {
+        "type": "object",
+        "required": ["asset_code", "fault_description"],
+        "properties": {
+          "asset_code": {"type": "string"},
+          "fault_description": {"type": "string"},
+          "fault_level": {"type": "string"},
+          "request_date": {"type": "string", "format": "date"},
+          "request_department": {"type": "string"},
+          "contact_phone": {"type": "string"},
+          "expected_repair_date": {"type": "string", "format": "date"},
+          "remark": {"type": "string"}
+        }
+      },
+      "MaintenanceWorkOrder": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "order_no": {"type": "string"},
+          "asset_code": {"type": "string"},
+          "title": {"type": "string"},
+          "priority": {"type": "integer"},
+          "status": {"type": "string"},
+          "assigned_to": {"type": "string"}
+        }
+      },
+      "MaintenanceWorkOrderCreate": {
+        "type": "object",
+        "required": ["asset_code", "title"],
+        "properties": {
+          "asset_code": {"type": "string"},
+          "title": {"type": "string"},
+          "description": {"type": "string"},
+          "priority": {"type": "integer"},
+          "planned_start_date": {"type": "string", "format": "date"},
+          "planned_end_date": {"type": "string", "format": "date"},
+          "estimated_hours": {"type": "number"},
+          "assigned_to": {"type": "string"},
+          "materials": {"type": "array", "items": {"type": "object"}},
+          "remark": {"type": "string"}
+        }
+      },
+      "MaintenanceTemplate": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": "string"},
+          "asset_type": {"type": "string"},
+          "maintenance_type": {"type": "string"},
+          "content": {"type": "string"},
+          "check_items": {"type": "array", "items": {"type": "string"}}
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "page": {"type": "integer"},
+          "pageSize": {"type": "integer"},
+          "total": {"type": "integer"},
+          "totalPages": {"type": "integer"}
+        }
+      },
+      "PaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {"type": "array", "items": {"type": "object"}},
+          "pagination": {"$ref": "#/components/schemas/Pagination"}
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "请求参数错误",
+        "content": {"application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "success": {"type": "boolean", "example": false},
+              "message": {"type": "string", "example": "参数错误"}
+            }
+          }
+        }}
+      },
+      "Unauthorized": {
+        "description": "未认证",
+        "content": {"application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "success": {"type": "boolean", "example": false},
+              "message": {"type": "string", "example": "登录已过期"}
+            }
+          }
+        }}
+      },
+      "NotFound": {
+        "description": "资源不存在",
+        "content": {"application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "success": {"type": "boolean", "example": false},
+              "message": {"type": "string", "example": "资源不存在"}
+            }
+          }
+        }}
+      },
+      "IdempotencyRequired": {
+        "description": "需要幂等性键",
+        "content": {"application/json": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "success": {"type": "boolean", "example": false},
+              "code": {"type": "string"},
+              "message": {"type": "string"}
+            }
+          }
+        }}
+      }
+    }
+  },
+  "security": [{"BearerAuth": []}]
+}

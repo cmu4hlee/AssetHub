@@ -1,0 +1,95 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-01-29",
+  "tracking_mechanism": {
+    "check_frequency": "quarterly",
+    "notification_system": false,
+    "auto_update": false
+  },
+  "referenced_resources": [
+    {
+      "id": "cmms-opensource",
+      "name": "CMMS-OpenSource/CMMS-OpenSource",
+      "source": "GitHub",
+      "url": "https://github.com/CMMS-OpenSource/CMMS-OpenSource",
+      "current_version": "latest",
+      "last_checked": "2026-01-29",
+      "license": "Unknown (GitHub default)",
+      "status": "active",
+      "integration_date": "2026-01-29",
+      "updated_features": [
+        "Maintenance plan management system",
+        "Work order management workflow",
+        "Inventory management module",
+        "Maintenance cost tracking"
+      ],
+      "update_history": [
+        {
+          "date": "2026-01-29",
+          "version": "latest",
+          "changes": "Initial integration",
+          "status": "completed",
+          "notes": "Integrated core maintenance management features"
+        }
+      ]
+    },
+    {
+      "id": "eam-open-source",
+      "name": "eam-open-source/eam",
+      "source": "GitHub",
+      "url": "https://github.com/eam-open-source/eam",
+      "current_version": "latest",
+      "last_checked": "2026-01-29",
+      "license": "Unknown (GitHub default)",
+      "status": "active",
+      "integration_date": "2026-01-29",
+      "updated_features": [
+        "Enterprise asset management lifecycle",
+        "Maintenance plan template system",
+        "Supplier management",
+        "Contract management"
+      ],
+      "update_history": [
+        {
+          "date": "2026-01-29",
+          "version": "latest",
+          "changes": "Initial integration",
+          "status": "completed",
+          "notes": "Integrated enterprise asset management features"
+        }
+      ]
+    },
+    {
+      "id": "openmaint",
+      "name": "OpenMAINT",
+      "source": "SourceForge",
+      "url": "https://sourceforge.net/projects/openmaint/",
+      "current_version": "latest",
+      "last_checked": "2026-01-29",
+      "license": "Unknown (Open Source)",
+      "status": "active",
+      "integration_date": "2026-01-29",
+      "updated_features": [
+        "Preventive maintenance plan management",
+        "Maintenance workflow engine",
+        "Inventory and material management",
+        "Energy management"
+      ],
+      "update_history": [
+        {
+          "date": "2026-01-29",
+          "version": "latest",
+          "changes": "Initial integration",
+          "status": "completed",
+          "notes": "Integrated preventive maintenance features"
+        }
+      ]
+    }
+  ],
+  "security_monitoring": {
+    "enabled": true,
+    "last_scan": "2026-01-29",
+    "vulnerabilities": [],
+    "scan_frequency": "monthly"
+  }
+}

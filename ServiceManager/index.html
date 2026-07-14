@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>资产管理服务管理器</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📦 资产管理系统服务管理器</h1>
+    </header>
+
+    <div class="content">
+      <!-- 配置区域 -->
+      <section class="config-section">
+        <h2>⚙️ 服务配置</h2>
+        <h3 style="margin-top: 15px; margin-bottom: 10px; color: #667eea; font-size: 16px;">运行模式</h3>
+        <div class="config-grid">
+          <div class="config-item" style="grid-column: 1 / -1;">
+            <label>运行模式:</label>
+            <select id="run-mode" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+              <option value="development">开发模式 (前端: 13579, 后端: 5183)</option>
+              <option value="production">生产模式 (前端: 4000, 后端: 4001)</option>
+            </select>
+            <div style="font-size: 12px; color: #666; margin-top: 5px;">
+              <p>• 开发模式：使用 npm run dev，支持热重载</p>
+              <p>• 生产模式：使用 npm run preview，使用构建后的代码</p>
+            </div>
+          </div>
+        </div>
+        <h3 style="margin-top: 15px; margin-bottom: 10px; color: #667eea; font-size: 16px;">服务端口配置</h3>
+        <div class="config-grid">
+          <div class="config-item">
+            <label>后端端口:</label>
+            <input type="number" id="backend-port" min="1000" max="65535" value="5183" title="开发模式默认5183，生产模式默认4001">
+          </div>
+          <div class="config-item">
+            <label>后端主机:</label>
+            <input type="text" id="backend-host" value="0.0.0.0">
+          </div>
+          <div class="config-item">
+            <label>前端端口:</label>
+            <input type="number" id="frontend-port" min="1000" max="65535" value="13579" title="开发模式默认13579，生产模式默认4000">
+          </div>
+          <div class="config-item">
+            <label>前端主机:</label>
+            <input type="text" id="frontend-host" value="0.0.0.0">
+          </div>
+        </div>
+
+        <h3 style="margin-top: 20px; margin-bottom: 10px; color: #667eea; font-size: 16px;">数据库配置</h3>
+        <div class="config-grid">
+          <div class="config-item">
+            <label>数据库IP/主机:</label>
+            <input type="text" id="db-host" placeholder="例如: 101.37.236.101">
+          </div>
+          <div class="config-item">
+            <label>数据库端口:</label>
+            <input type="number" id="db-port" min="1" max="65535" value="3306">
+          </div>
+          <div class="config-item">
+            <label>数据库名称:</label>
+            <input type="text" id="db-name" placeholder="例如: zcgl">
+          </div>
+          <div class="config-item">
+            <label>用户名:</label>
+            <input type="text" id="db-user" placeholder="例如: root">
+          </div>
+          <div class="config-item" style="grid-column: 1 / -1;">
+            <label>密码:</label>
+            <input type="password" id="db-password" placeholder="输入数据库密码" style="width: 100%;">
+          </div>
+        </div>
+        
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+          <button id="save-config" class="btn btn-primary">💾 保存配置</button>
+          <button id="test-db-connection" class="btn btn-success">🔌 测试数据库连接</button>
+        </div>
+        <div id="db-test-result" style="margin-top: 10px; padding: 10px; border-radius: 5px; display: none;"></div>
+      </section>
+
+      <!-- 后端服务控制 -->
+      <section class="service-section">
+        <h2>🔧 后端服务</h2>
+        <div class="service-control">
+          <div class="status-indicator">
+            <span class="status-dot" id="backend-status-dot"></span>
+            <span id="backend-status-text">检查中...</span>
+          </div>
+          <div class="button-group">
+            <button id="start-backend" class="btn btn-success">▶️ 启动</button>
+            <button id="stop-backend" class="btn btn-danger">⏹️ 停止</button>
+            <button id="restart-backend" class="btn btn-warning">🔄 重启</button>
+          </div>
+        </div>
+        <div class="log-container">
+          <h3 style="display: flex; justify-content: space-between; align-items: center;">
+            日志输出
+            <button id="clear-backend-log" class="btn btn-secondary" style="margin: 0; padding: 5px 12px; font-size: 12px;">🗑️ 清空</button>
+          </h3>
+          <div id="backend-log" class="log-output"></div>
+        </div>
+      </section>
+
+      <!-- 前端服务控制 -->
+      <section class="service-section">
+        <h2>🌐 前端服务</h2>
+        <div class="service-control">
+          <div class="status-indicator">
+            <span class="status-dot" id="frontend-status-dot"></span>
+            <span id="frontend-status-text">检查中...</span>
+          </div>
+          <div class="button-group">
+            <button id="start-frontend" class="btn btn-success">▶️ 启动</button>
+            <button id="stop-frontend" class="btn btn-danger">⏹️ 停止</button>
+            <button id="restart-frontend" class="btn btn-warning">🔄 重启</button>
+          </div>
+        </div>
+        <div class="log-container">
+          <h3 style="display: flex; justify-content: space-between; align-items: center;">
+            日志输出
+            <button id="clear-frontend-log" class="btn btn-secondary" style="margin: 0; padding: 5px 12px; font-size: 12px;">🗑️ 清空</button>
+          </h3>
+          <div id="frontend-log" class="log-output"></div>
+        </div>
+      </section>
+
+      <!-- Redis服务控制 -->
+      <section class="service-section">
+        <h2>🗄️ Redis服务</h2>
+        <div class="service-control">
+          <div class="status-indicator">
+            <span class="status-dot" id="redis-status-dot"></span>
+            <span id="redis-status-text">检查中...</span>
+          </div>
+          <div class="button-group">
+            <button id="start-redis" class="btn btn-success">▶️ 启动</button>
+            <button id="stop-redis" class="btn btn-danger">⏹️ 停止</button>
+            <button id="restart-redis" class="btn btn-warning">🔄 重启</button>
+          </div>
+        </div>
+        <div class="log-container">
+          <h3 style="display: flex; justify-content: space-between; align-items: center;">
+            日志输出
+            <button id="clear-redis-log" class="btn btn-secondary" style="margin: 0; padding: 5px 12px; font-size: 12px;">🗑️ 清空</button>
+          </h3>
+          <div id="redis-log" class="log-output"></div>
+        </div>
+      </section>
+
+      <!-- 自动监控 -->
+      <section class="monitoring-section">
+        <h2>🔄 自动监控与重启</h2>
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="auto-restart-toggle" style="width: 18px; height: 18px; cursor: pointer;">
+            <span style="font-size: 14px; font-weight: 500;">启用自动监控和重启</span>
+          </label>
+          <span id="monitoring-status" style="padding: 5px 10px; border-radius: 5px; font-size: 12px; background: #f0f0f0;">未启用</span>
+        </div>
+        <div style="font-size: 12px; color: #666; margin-bottom: 15px;">
+          <p>• 每10秒检查一次服务状态</p>
+          <p>• 检测到服务停止或异常时自动重启</p>
+          <p>• 最多自动重启5次，超过后停止自动重启</p>
+        </div>
+        <div id="restart-info" style="font-size: 12px; color: #666; display: none;">
+          <p id="backend-restart-info" style="margin: 5px 0;">后端重启次数: 0</p>
+          <p id="frontend-restart-info" style="margin: 5px 0;">前端重启次数: 0</p>
+          <p id="redis-restart-info" style="margin: 5px 0;">Redis重启次数: 0</p>
+        </div>
+      </section>
+
+      <!-- 诊断信息 -->
+      <section class="diagnostic-section" style="background: white; border-radius: 12px; padding: 25px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-top: 20px;">
+        <h2>🔍 诊断信息</h2>
+        <button id="check-paths" class="btn btn-info" style="margin-bottom: 15px;">检查路径配置</button>
+        <div id="diagnostic-info" class="log-output" style="max-height: 200px; overflow-y: auto; background: #f5f5f5; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; white-space: pre-wrap; display: none;"></div>
+      </section>
+
+      <!-- 快速操作 -->
+      <section class="quick-actions">
+        <h2>⚡ 快速操作</h2>
+        <div class="button-group">
+          <button id="start-all" class="btn btn-primary">🚀 启动所有服务</button>
+          <button id="stop-all" class="btn btn-danger">🛑 停止所有服务</button>
+          <button id="restart-all" class="btn btn-warning">🔄 重启所有服务</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

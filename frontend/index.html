@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      // 早于 main.jsx 执行的 TRAE 内部错误屏蔽器
+      (function () {
+        var PATTERNS = [
+          'Unable to load preload script',
+          'ENOENT: no such file or directory, open \'/Applications/TRAE',
+          '[getThemeColors]',
+          'exportedColors',
+          'preload-browserView.js',
+        ];
+        function toText(a) {
+          if (typeof a === 'string') return a;
+          if (a instanceof Error) return a.message || '';
+          if (a && typeof a === 'object') {
+            try { return JSON.stringify(a); } catch (e) { return String(a); }
+          }
+          return String(a || '');
+        }
+        function shouldSuppress(args) {
+          for (var i = 0; i < args.length; i++) {
+            var t = toText(args[i]);
+            if (!t) continue;
+            for (var j = 0; j < PATTERNS.length; j++) {
+              if (t.indexOf(PATTERNS[j]) !== -1) return true;
+            }
+          }
+          return false;
+        }
+        ['log', 'warn', 'error', 'info', 'debug'].forEach(function (level) {
+          var orig = console[level].bind(console);
+          console[level] = function () {
+            if (shouldSuppress(arguments)) return;
+            return orig.apply(console, arguments);
+          };
+        });
+        // 同时拦截未捕获错误
+        window.addEventListener('error', function (e) {
+          if (e && e.message && shouldSuppress([e.message])) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return false;
+          }
+        }, true);
+        window.addEventListener('unhandledrejection', function (e) {
+          var reason = e && e.reason;
+          if (shouldSuppress([reason])) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
+    <meta name="format-detection" content="telephone=no,email=no,address=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Lora:wght@400;500;600&display=swap" rel="stylesheet" />
+    <title>AssetHost</title>
+
+  </head>
+  <body>
+    <div id="root">
+      <div id="app-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui,sans-serif;color:#666;">
+        <p id="loading-message">加载中…</p>
+        <p id="loading-timeout" style="display:none;color:#c00;margin-top:12px;"></p>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var TIMEOUT_MS = 60000;
+        var HEALTH_CHECK_TIMEOUT_MS = 5000;
+
+        async function checkBackendHealth() {
+          try {
+            var controller = new AbortController();
+            var timer = setTimeout(function () {
+              controller.abort();
+            }, HEALTH_CHECK_TIMEOUT_MS);
+
+            var response = await fetch('/api/health', {
+              method: 'GET',
+              cache: 'no-store',
+              signal: controller.signal,
+            });
+
+            clearTimeout(timer);
+            return response.ok;
+          } catch (error) {
+            return false;
+          }
+        }
+
+        setTimeout(async function () {
+          var loading = document.getElementById('app-loading');
+          if (!loading || !loading.parentNode) return;
+
+          var loadingMessage = document.getElementById('loading-message');
+          var timeoutMessage = document.getElementById('loading-timeout');
+          if (!timeoutMessage) return;
+
+          if (loadingMessage) loadingMessage.style.display = 'none';
+
+          var backendHealthy = await checkBackendHealth();
+          if (backendHealthy) {
+            timeoutMessage.textContent = '页面加载时间较长，请刷新页面重试。';
+          } else {
+            timeoutMessage.textContent =
+              '页面加载失败：无法连接后端接口(/api/health)。请确认后端服务、端口映射和网络策略。';
+          }
+          timeoutMessage.style.display = 'block';
+        }, TIMEOUT_MS);
+      })();
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

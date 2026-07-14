@@ -1,0 +1,634 @@
+/* ============================================
+   维护工单模块 - 视觉优化样式
+   设计理念：温暖专业 · 数据清晰 · 操作高效
+   ============================================ */
+
+/* ===== 调度中心面板 ===== */
+.maintenance-workorder-list .dispatch-panel {
+  background: var(--gradient-surface);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  position: relative;
+}
+
+.maintenance-workorder-list .dispatch-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, 
+    var(--primary-color) 0%, 
+    var(--info-color) 50%, 
+    var(--success-color) 100%);
+}
+
+.maintenance-workorder-list .dispatch-panel .ant-card-head {
+  background: var(--gradient-subtle);
+  border-bottom: 1px solid var(--border-secondary);
+  min-height: 56px;
+  padding: 0 var(--spacing-lg);
+}
+
+.maintenance-workorder-list .dispatch-panel .ant-card-head-title {
+  font-family: var(--font-family-heading);
+  font-weight: 600;
+  font-size: var(--font-size-lg);
+}
+
+.maintenance-workorder-list .dispatch-panel .ant-card-extra {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+/* ===== 统计概览卡片 ===== */
+.maintenance-workorder-list .dispatch-stat-card {
+  position: relative;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
+  transition: all var(--transition-normal);
+  overflow: hidden;
+}
+
+.maintenance-workorder-list .dispatch-stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  opacity: 0.06;
+  transform: translate(20px, -20px);
+  transition: transform var(--transition-smooth);
+}
+
+.maintenance-workorder-list .dispatch-stat-card:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.maintenance-workorder-list .dispatch-stat-card:hover::after {
+  transform: translate(15px, -15px) scale(1.5);
+}
+
+.maintenance-workorder-list .dispatch-stat-card--total::after { background: var(--info-color); }
+.maintenance-workorder-list .dispatch-stat-card--pending::after { background: var(--warning-color); }
+.maintenance-workorder-list .dispatch-stat-card--progress::after { background: var(--primary-color); }
+.maintenance-workorder-list .dispatch-stat-card--completed::after { background: var(--success-color); }
+
+.maintenance-workorder-list .dispatch-stat-card .ant-statistic-title {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--spacing-xs);
+}
+
+.maintenance-workorder-list .dispatch-stat-card .ant-statistic-content-value {
+  font-family: var(--font-family-heading);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.maintenance-workorder-list .dispatch-stat-card .ant-statistic-content-prefix {
+  font-size: 20px;
+  margin-right: var(--spacing-xs);
+  opacity: 0.7;
+}
+
+.maintenance-workorder-list .dispatch-stat-card--total .ant-statistic-content-value { color: var(--info-color); }
+.maintenance-workorder-list .dispatch-stat-card--pending .ant-statistic-content-value { color: var(--warning-color); }
+.maintenance-workorder-list .dispatch-stat-card--progress .ant-statistic-content-value { color: var(--primary-color); }
+.maintenance-workorder-list .dispatch-stat-card--completed .ant-statistic-content-value { color: var(--success-color); }
+
+/* ===== 工程师/房间卡片 ===== */
+.maintenance-workorder-list .dispatch-entity-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+  transition: all var(--transition-normal);
+  position: relative;
+}
+
+.maintenance-workorder-list .dispatch-entity-card:hover {
+  border-color: var(--primary-color-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.maintenance-workorder-list .dispatch-entity-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.maintenance-workorder-list .dispatch-entity-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.maintenance-workorder-list .dispatch-entity-avatar--engineer {
+  background: linear-gradient(135deg, var(--primary-color-light), var(--primary-color-lightest));
+  color: var(--primary-color);
+}
+
+.maintenance-workorder-list .dispatch-entity-avatar--room {
+  background: linear-gradient(135deg, rgba(106, 155, 204, 0.15), rgba(106, 155, 204, 0.05));
+  color: var(--info-color);
+}
+
+.maintenance-workorder-list .dispatch-entity-name {
+  font-family: var(--font-family-heading);
+  font-weight: 600;
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.maintenance-workorder-list .dispatch-entity-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.maintenance-workorder-list .dispatch-entity-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.maintenance-workorder-list .dispatch-entity-tag--total {
+  background: rgba(106, 155, 204, 0.1);
+  color: var(--info-color);
+}
+
+.maintenance-workorder-list .dispatch-entity-tag--pending {
+  background: rgba(212, 168, 67, 0.12);
+  color: var(--warning-color);
+}
+
+.maintenance-workorder-list .dispatch-entity-tag--progress {
+  background: rgba(217, 119, 87, 0.1);
+  color: var(--primary-color);
+}
+
+.maintenance-workorder-list .dispatch-entity-bar {
+  margin-top: var(--spacing-sm);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.maintenance-workorder-list .dispatch-entity-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width var(--transition-smooth);
+}
+
+.maintenance-workorder-list .dispatch-entity-bar-fill--progress {
+  background: linear-gradient(90deg, var(--primary-color), var(--primary-color-light));
+}
+
+.maintenance-workorder-list .dispatch-entity-bar-fill--pending {
+  background: linear-gradient(90deg, var(--warning-color), #e8c87a);
+}
+
+.maintenance-workorder-list .dispatch-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  color: var(--text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+/* ===== 筛选表单 ===== */
+.maintenance-workorder-list .filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: flex-end;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-secondary);
+  margin-bottom: var(--spacing-lg);
+}
+
+.maintenance-workorder-list .filter-form .ant-form-item {
+  margin-bottom: 0;
+}
+
+.maintenance-workorder-list .filter-form .ant-form-item-label > label {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+/* ===== 表格优化 ===== */
+.maintenance-workorder-list .workorder-table-wrapper {
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+}
+
+.maintenance-workorder-list .workorder-table-wrapper .ant-table-thead > tr > th {
+  background: var(--bg-secondary);
+  font-family: var(--font-family-heading);
+  font-weight: 600;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-secondary);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.maintenance-workorder-list .workorder-table-wrapper .ant-table-tbody > tr > td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  transition: background var(--transition-fast);
+}
+
+.maintenance-workorder-list .workorder-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: var(--primary-light) !important;
+}
+
+.maintenance-workorder-list .workorder-table-wrapper .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: rgba(217, 119, 87, 0.06) !important;
+}
+
+.maintenance-workorder-list .workorder-no-link {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+  font-size: var(--font-size-xs);
+  color: var(--primary-color);
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.maintenance-workorder-list .workorder-cost {
+  font-family: var(--font-family-heading);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.maintenance-workorder-list .workorder-cost-zero {
+  color: var(--text-quaternary);
+  font-weight: 400;
+}
+
+/* ===== 状态标签增强 ===== */
+.maintenance-workorder-list .status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 20px;
+  border: none;
+}
+
+.maintenance-workorder-list .status-tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.maintenance-workorder-list .status-tag--pending { background: rgba(212, 168, 67, 0.12); color: var(--warning-color); }
+.maintenance-workorder-list .status-tag--pending::before { background: var(--warning-color); }
+.maintenance-workorder-list .status-tag--assigned { background: rgba(106, 155, 204, 0.12); color: var(--info-color); }
+.maintenance-workorder-list .status-tag--assigned::before { background: var(--info-color); }
+.maintenance-workorder-list .status-tag--in_progress { background: rgba(217, 119, 87, 0.1); color: var(--primary-color); }
+.maintenance-workorder-list .status-tag--in_progress::before { background: var(--primary-color); }
+.maintenance-workorder-list .status-tag--pending_acceptance { background: rgba(250, 173, 20, 0.12); color: #d48806; }
+.maintenance-workorder-list .status-tag--pending_acceptance::before { background: #faad14; }
+.maintenance-workorder-list .status-tag--completed { background: rgba(120, 140, 93, 0.12); color: var(--success-color); }
+.maintenance-workorder-list .status-tag--completed::before { background: var(--success-color); }
+.maintenance-workorder-list .status-tag--closed { background: var(--bg-tertiary); color: var(--text-tertiary); }
+.maintenance-workorder-list .status-tag--closed::before { background: var(--text-tertiary); }
+.maintenance-workorder-list .status-tag--cancelled { background: rgba(201, 69, 58, 0.1); color: var(--error-color); }
+.maintenance-workorder-list .status-tag--cancelled::before { background: var(--error-color); }
+
+/* ===== 优先级标签增强 ===== */
+.maintenance-workorder-list .priority-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.maintenance-workorder-list .priority-badge--urgent {
+  background: rgba(201, 69, 58, 0.1);
+  color: var(--error-color);
+  border: 1px solid rgba(201, 69, 58, 0.2);
+}
+
+.maintenance-workorder-list .priority-badge--high {
+  background: rgba(217, 119, 87, 0.1);
+  color: var(--primary-color);
+  border: 1px solid rgba(217, 119, 87, 0.2);
+}
+
+.maintenance-workorder-list .priority-badge--normal {
+  background: rgba(106, 155, 204, 0.1);
+  color: var(--info-color);
+  border: 1px solid rgba(106, 155, 204, 0.2);
+}
+
+.maintenance-workorder-list .priority-badge--low {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-secondary);
+}
+
+/* ===== 来源类型标签 ===== */
+.maintenance-workorder-list .source-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.maintenance-workorder-list .source-tag--fault {
+  background: rgba(201, 69, 58, 0.08);
+  color: var(--error-color);
+}
+
+.maintenance-workorder-list .source-tag--plan,
+.maintenance-workorder-list .source-tag--preventive {
+  background: rgba(120, 140, 93, 0.08);
+  color: var(--success-color);
+}
+
+.maintenance-workorder-list .source-tag--request {
+  background: rgba(106, 155, 204, 0.08);
+  color: var(--info-color);
+}
+
+.maintenance-workorder-list .source-tag--other,
+.maintenance-workorder-list .source-tag--manual {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+}
+
+/* ===== 批量操作栏 ===== */
+.maintenance-workorder-list .batch-action-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--bg-primary);
+  border: 1px solid var(--primary-color-light);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-lg);
+  margin-top: var(--spacing-lg);
+  z-index: 10;
+}
+
+.maintenance-workorder-list .batch-action-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--primary-color);
+  border-radius: var(--border-radius-md) 0 0 var(--border-radius-md);
+}
+
+.maintenance-workorder-list .batch-count {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-family: var(--font-family-heading);
+  font-weight: 600;
+  color: var(--primary-color);
+  font-size: var(--font-size-sm);
+  padding-right: var(--spacing-md);
+  border-right: 1px solid var(--border-secondary);
+  margin-right: var(--spacing-xs);
+}
+
+/* ===== 详情抽屉 ===== */
+.maintenance-workorder-list .detail-drawer .ant-drawer-header {
+  border-bottom: 2px solid var(--border-secondary);
+  padding: var(--spacing-lg) var(--spacing-xl);
+}
+
+.maintenance-workorder-list .detail-drawer .ant-drawer-title {
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+}
+
+.maintenance-workorder-list .detail-section-title {
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--border-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.maintenance-workorder-list .detail-section-title::before {
+  content: '';
+  width: 3px;
+  height: 14px;
+  background: var(--primary-color);
+  border-radius: 2px;
+}
+
+.maintenance-workorder-list .detail-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.maintenance-workorder-list .detail-value {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.maintenance-workorder-list .detail-cost-total {
+  font-family: var(--font-family-heading);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+/* ===== 时间线增强 ===== */
+.maintenance-workorder-list .detail-timeline .ant-timeline-item-head {
+  border: 3px solid;
+  background: var(--bg-primary) !important;
+}
+
+/* ===== 弹窗表单优化 ===== */
+.maintenance-workorder-list .action-modal .ant-modal-header {
+  border-bottom: 2px solid var(--border-secondary);
+  padding-bottom: var(--spacing-md);
+}
+
+.maintenance-workorder-list .action-modal .ant-modal-title {
+  font-family: var(--font-family-heading);
+  font-weight: 600;
+}
+
+.maintenance-workorder-list .complete-modal .ant-form-item-label > label {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.maintenance-workorder-list .material-divider {
+  position: relative;
+  margin: var(--spacing-lg) 0 var(--spacing-md);
+}
+
+.maintenance-workorder-list .material-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-secondary);
+}
+
+.maintenance-workorder-list .material-divider-text {
+  position: relative;
+  display: inline-block;
+  padding: 0 var(--spacing-md);
+  background: var(--bg-primary);
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ===== 操作按钮组 ===== */
+.maintenance-workorder-list .action-btn-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.maintenance-workorder-list .action-btn {
+  padding: 4px 8px;
+  border-radius: var(--border-radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.maintenance-workorder-list .action-btn:hover {
+  background: var(--bg-hover);
+}
+
+/* ===== 刷新提示 ===== */
+.maintenance-workorder-list .refresh-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
+.maintenance-workorder-list .refresh-meta-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success-color);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* ===== 卡片入场动画 ===== */
+.maintenance-workorder-list .stat-card-enter {
+  animation: statCardEnter 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes statCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.maintenance-workorder-list .stat-card-enter:nth-child(1) { animation-delay: 0ms; }
+.maintenance-workorder-list .stat-card-enter:nth-child(2) { animation-delay: 60ms; }
+.maintenance-workorder-list .stat-card-enter:nth-child(3) { animation-delay: 120ms; }
+.maintenance-workorder-list .stat-card-enter:nth-child(4) { animation-delay: 180ms; }
+
+/* ===== 暗色主题适配 ===== */
+[data-theme="dark"] .maintenance-workorder-list .dispatch-stat-card {
+  background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .maintenance-workorder-list .dispatch-entity-card {
+  background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .maintenance-workorder-list .filter-form {
+  background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .maintenance-workorder-list .batch-action-bar {
+  background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .maintenance-workorder-list .material-divider-text {
+  background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .maintenance-workorder-list .detail-timeline .ant-timeline-item-head {
+  background: var(--bg-secondary) !important;
+}

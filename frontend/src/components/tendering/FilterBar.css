@@ -1,0 +1,21 @@
+.filter-bar {
+  background: #fafbfc;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.filter-bar-fields {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .filter-bar {
+    padding: 10px 12px;
+  }
+  .filter-bar .ant-input,
+  .filter-bar .ant-select,
+  .filter-bar .ant-picker {
+    width: 100% !important;
+  }
+}

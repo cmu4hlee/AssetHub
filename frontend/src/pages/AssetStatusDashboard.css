@@ -1,0 +1,648 @@
+/**
+ * 资产状态大屏 Dashboard - 大屏幕展示样式
+ * 设计目标：暗色科技感，适合 1920x1080+ 大屏
+ */
+
+/* ===== 基础重置 & 全屏 ===== */
+.asset-dashboard-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 0%, #0c1929 0%, #060e1a 70%);
+  color: #e2e8f0;
+  font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  z-index: 9999;
+}
+
+/* ===== 顶部 Header ===== */
+.asset-dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 80px;
+  padding: 0 40px;
+  background: linear-gradient(180deg, rgba(10, 26, 52, 0.95) 0%, rgba(6, 14, 26, 0.5) 100%);
+  border-bottom: 1px solid rgba(56, 132, 255, 0.2);
+  position: relative;
+  z-index: 10;
+}
+
+.asset-dashboard-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(56, 132, 255, 0.6), transparent);
+}
+
+.asset-dashboard-logo-area {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.asset-dashboard-logo-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #3884ff, #00d4ff);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(56, 132, 255, 0.3);
+}
+
+.asset-dashboard-title {
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #e2e8f0, #94a3b8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 4px;
+}
+
+.asset-dashboard-title-sub {
+  font-size: 14px;
+  color: #64748b;
+  margin-left: 12px;
+  letter-spacing: 2px;
+  -webkit-text-fill-color: #64748b;
+}
+
+.asset-dashboard-header-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.asset-dashboard-header-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.asset-dashboard-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+}
+
+.asset-dashboard-clock {
+  text-align: right;
+}
+
+.asset-dashboard-clock-time {
+  font-size: 32px;
+  font-weight: 700;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+  line-height: 1.1;
+}
+
+.asset-dashboard-clock-date {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* ===== 主体内容 ===== */
+.asset-dashboard-body {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 80px);
+  padding: 16px 24px 20px;
+  gap: 14px;
+}
+
+/* ===== Top KPI 指标行 ===== */
+.asset-dashboard-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.asset-dashboard-kpi-card {
+  background: linear-gradient(135deg, rgba(15, 30, 60, 0.8), rgba(10, 20, 40, 0.9));
+  border: 1px solid rgba(56, 132, 255, 0.12);
+  border-radius: 12px;
+  padding: 16px 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s, transform 0.2s;
+}
+
+.asset-dashboard-kpi-card:hover {
+  border-color: rgba(56, 132, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+.asset-dashboard-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 12px 12px 0 0;
+}
+
+.asset-dashboard-kpi-card:nth-child(1)::before { background: linear-gradient(90deg, #3884ff, #00d4ff); }
+.asset-dashboard-kpi-card:nth-child(2)::before { background: linear-gradient(90deg, #22c55e, #4ade80); }
+.asset-dashboard-kpi-card:nth-child(3)::before { background: linear-gradient(90deg, #eab308, #facc15); }
+.asset-dashboard-kpi-card:nth-child(4)::before { background: linear-gradient(90deg, #f97316, #fb923c); }
+.asset-dashboard-kpi-card:nth-child(5)::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+.asset-dashboard-kpi-card:nth-child(6)::before { background: linear-gradient(90deg, #a855f7, #c084fc); }
+
+.asset-dashboard-kpi-label {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.asset-dashboard-kpi-value {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.asset-dashboard-kpi-card:nth-child(1) .asset-dashboard-kpi-value { color: #60a5fa; }
+.asset-dashboard-kpi-card:nth-child(2) .asset-dashboard-kpi-value { color: #4ade80; }
+.asset-dashboard-kpi-card:nth-child(3) .asset-dashboard-kpi-value { color: #facc15; }
+.asset-dashboard-kpi-card:nth-child(4) .asset-dashboard-kpi-value { color: #fb923c; }
+.asset-dashboard-kpi-card:nth-child(5) .asset-dashboard-kpi-value { color: #f87171; }
+.asset-dashboard-kpi-card:nth-child(6) .asset-dashboard-kpi-value { color: #c084fc; }
+
+.asset-dashboard-kpi-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* ===== 中间图表行 ===== */
+.asset-dashboard-charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr 1fr;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+
+.asset-dashboard-chart-card {
+  background: linear-gradient(135deg, rgba(15, 30, 60, 0.7), rgba(10, 20, 40, 0.85));
+  border: 1px solid rgba(56, 132, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.asset-dashboard-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.asset-dashboard-chart-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asset-dashboard-chart-title-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.asset-dashboard-chart-title-icon.blue { background: rgba(56, 132, 255, 0.2); color: #60a5fa; }
+.asset-dashboard-chart-title-icon.green { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+.asset-dashboard-chart-title-icon.purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+.asset-dashboard-chart-title-icon.orange { background: rgba(249, 115, 22, 0.2); color: #fb923c; }
+.asset-dashboard-chart-title-icon.cyan { background: rgba(6, 182, 212, 0.2); color: #22d3ee; }
+
+.asset-dashboard-chart-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* ===== 空状态 ===== */
+.dashboard-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.chart-icon {
+  font-size: 13px;
+  margin-right: 4px;
+}
+
+/* ===== 底部信息行 ===== */
+.asset-dashboard-bottom-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.9fr 0.9fr;
+  gap: 14px;
+  flex-shrink: 0;
+  height: 180px;
+}
+
+.asset-dashboard-bottom-card {
+  background: linear-gradient(135deg, rgba(15, 30, 60, 0.7), rgba(10, 20, 40, 0.85));
+  border: 1px solid rgba(56, 132, 255, 0.1);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.asset-dashboard-bottom-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.asset-dashboard-bottom-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asset-dashboard-bottom-body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ===== 图表全局样式覆盖 (recharts) ===== */
+.recharts-text {
+  fill: #94a3b8 !important;
+  font-size: 11px !important;
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(56, 132, 255, 0.06) !important;
+}
+
+.recharts-default-tooltip {
+  background: rgba(10, 20, 40, 0.95) !important;
+  border: 1px solid rgba(56, 132, 255, 0.2) !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+}
+
+.recharts-legend-item-text {
+  fill: #94a3b8 !important;
+  color: #94a3b8 !important;
+  font-size: 12px !important;
+}
+
+/* ===== 部门列表 ===== */
+.dept-list-scroll {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 132, 255, 0.2) transparent;
+}
+
+.dept-list-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+
+.dept-list-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dept-list-scroll::-webkit-scrollbar-thumb {
+  background: rgba(56, 132, 255, 0.3);
+  border-radius: 3px;
+}
+
+.dept-item {
+  display: flex;
+  align-items: center;
+  padding: 5px 0;
+  gap: 10px;
+}
+
+.dept-item-name {
+  font-size: 12px;
+  color: #94a3b8;
+  width: 70px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dept-item-bar-wrap {
+  flex: 1;
+  height: 16px;
+  background: rgba(56, 132, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.dept-item-bar {
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #3884ff, #00d4ff);
+  transition: width 1s ease-out;
+  min-width: 2px;
+}
+
+.dept-item-count {
+  font-size: 12px;
+  color: #e2e8f0;
+  width: 50px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.dept-item-value {
+  font-size: 11px;
+  color: #64748b;
+  width: 65px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ===== 维护统计 ===== */
+.maint-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  height: 100%;
+}
+
+.maint-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 132, 255, 0.05);
+  border-radius: 10px;
+  border: 1px solid rgba(56, 132, 255, 0.08);
+  padding: 8px;
+}
+
+.maint-stat-value {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.maint-stat-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.maint-stat-item:nth-child(1) .maint-stat-value { color: #60a5fa; }
+.maint-stat-item:nth-child(2) .maint-stat-value { color: #facc15; }
+.maint-stat-item:nth-child(3) .maint-stat-value { color: #4ade80; }
+.maint-stat-item:nth-child(4) .maint-stat-value { color: #f87171; }
+
+/* ===== 保修到期列表 ===== */
+.warranty-list-scroll {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 132, 255, 0.2) transparent;
+}
+
+.warranty-list-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+
+.warranty-list-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.warranty-list-scroll::-webkit-scrollbar-thumb {
+  background: rgba(56, 132, 255, 0.3);
+  border-radius: 3px;
+}
+
+.warranty-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 0;
+  gap: 8px;
+  border-bottom: 1px solid rgba(56, 132, 255, 0.06);
+}
+
+.warranty-item:last-child {
+  border-bottom: none;
+}
+
+.warranty-item-name {
+  flex: 1;
+  font-size: 12px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.warranty-item-date {
+  font-size: 11px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.warranty-day-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.warranty-day-badge.urgent {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.warranty-day-badge.warning {
+  background: rgba(234, 179, 8, 0.15);
+  color: #facc15;
+}
+
+.warranty-day-badge.normal {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.warranty-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* ===== 加载状态 ===== */
+.asset-dashboard-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background: #060e1a;
+}
+
+.asset-dashboard-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(56, 132, 255, 0.1);
+  border-top-color: #3884ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== 渐变背景动画 ===== */
+.asset-dashboard-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at 30% 20%, rgba(56, 132, 255, 0.03) 0%, transparent 50%),
+              radial-gradient(circle at 70% 80%, rgba(168, 85, 247, 0.03) 0%, transparent 50%);
+  animation: bg-drift 20s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes bg-drift {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(2%, 1%); }
+}
+
+/* ===== 数字动画 ===== */
+.asset-dashboard-count-up {
+  display: inline-block;
+  animation: countFadeIn 0.6s ease-out;
+}
+
+@keyframes countFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== 底部装饰线 ===== */
+.asset-dashboard-footer {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.asset-dashboard-footer-text {
+  font-size: 11px;
+  color: #475569;
+  letter-spacing: 1px;
+}
+
+.asset-dashboard-footer-line {
+  height: 1px;
+  flex: 1;
+  max-width: 200px;
+  background: linear-gradient(90deg, transparent, rgba(56, 132, 255, 0.15), transparent);
+}
+
+/* ===== 关闭按钮 ===== */
+.asset-dashboard-close {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 99999;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #64748b;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+  backdrop-filter: blur(8px);
+}
+
+.asset-dashboard-container:hover .asset-dashboard-close {
+  display: flex;
+}
+
+.asset-dashboard-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
