@@ -399,6 +399,62 @@ async function initDatabase() {
 
     logger.info('assets表所有必要字段和索引已存在');
 
+    // 确保 system_configs 表存在（系统配置/凭据存储）
+    try {
+      const conn = await db.getConnection();
+      const [scTable] = await conn.execute(
+        "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'system_configs'",
+      );
+      if (scTable.length === 0) {
+        logger.warn('system_configs 表不存在，正在自动创建...');
+        await conn.execute(`CREATE TABLE IF NOT EXISTS system_configs (
+          id INT NOT NULL AUTO_INCREMENT,
+          tenant_id INT NOT NULL DEFAULT 0 COMMENT '租户ID',
+          config_key VARCHAR(100) NOT NULL COMMENT '配置键',
+          config_value TEXT COMMENT '配置值（AES加密存储）',
+          description VARCHAR(500) DEFAULT NULL COMMENT '配置描述',
+          is_encrypted TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否加密存储',
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+          updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+          updated_by VARCHAR(50) DEFAULT NULL COMMENT '更新人',
+          PRIMARY KEY (id),
+          UNIQUE KEY uk_tenant_key (tenant_id, config_key),
+          KEY idx_tenant_config (tenant_id, config_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='系统配置表（敏感凭证存储）'`);
+        logger.info('system_configs 表创建成功');
+
+        // 从环境变量迁移阿里云 SMS 配置到数据库
+        if (process.env.ALIYUN_ACCESS_KEY_ID) {
+          await conn.execute(
+            'INSERT INTO system_configs (tenant_id, config_key, config_value, description, is_encrypted) VALUES (0, ?, ?, ?, 1)',
+            ['aliyun.access_key_id', process.env.ALIYUN_ACCESS_KEY_ID, '阿里云 AccessKey ID（SMS 短信服务）']
+          );
+        }
+        if (process.env.ALIYUN_ACCESS_KEY_SECRET) {
+          await conn.execute(
+            'INSERT INTO system_configs (tenant_id, config_key, config_value, description, is_encrypted) VALUES (0, ?, ?, ?, 1)',
+            ['aliyun.access_key_secret', process.env.ALIYUN_ACCESS_KEY_SECRET, '阿里云 AccessKey Secret（SMS 短信服务）']
+          );
+        }
+        if (process.env.ALIYUN_SMS_SIGN_NAME) {
+          await conn.execute(
+            'INSERT INTO system_configs (tenant_id, config_key, config_value, description, is_encrypted) VALUES (0, ?, ?, ?, 0)',
+            ['aliyun.sms_sign_name', process.env.ALIYUN_SMS_SIGN_NAME, '阿里云短信签名名称']
+          );
+        }
+        if (process.env.ALIYUN_SMS_TEMPLATE_CODE) {
+          await conn.execute(
+            'INSERT INTO system_configs (tenant_id, config_key, config_value, description, is_encrypted) VALUES (0, ?, ?, ?, 0)',
+            ['aliyun.sms_template_code', process.env.ALIYUN_SMS_TEMPLATE_CODE, '阿里云短信模板代码']
+          );
+        }
+        logger.info('阿里云 SMS 配置已从环境变量迁移到 system_configs 表');
+      }
+      conn.release();
+    } catch (scTableErr) {
+      logger.warn('system_configs 表检查/创建跳过:', scTableErr.message);
+    }
+
     logger.info('数据库表结构初始化完成');
   } catch (error) {
     logger.error('数据库表结构初始化失败:', error.message);
@@ -412,7 +468,18 @@ async function initDatabase() {
 // 否则首个 TCP 握手回调会被启动期的长同步阻塞挡住，撑不到 connectTimeout 就误报 ETIMEDOUT，
 // 并连带导致 initDatabase 内部的迁移检查只试一次就"跳过"。
 setImmediate(() => {
-  initDatabase();
+  initDatabase().then(() => {
+    // 数据库初始化完成后，预加载系统配置到内存缓存
+    const sysConfig = require('./services/system-config.service');
+    sysConfig.loadAllConfigs().then(() => {
+      logger.info('系统配置已加载到内存缓存');
+      // 预加载 SMS 配置（供后续短信服务使用）
+      const smsService = require('./services/sms-code-service');
+      smsService.loadSmsConfig().catch(() => {});
+    }).catch(err => {
+      logger.warn('系统配置缓存预加载失败:', err.message);
+    });
+  });
 });
 
 // ============================================

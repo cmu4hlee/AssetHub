@@ -1,6 +1,7 @@
 /**
  * 阿里云短信认证服务
  * 使用 Dypns API SDK
+ * 凭证优先从 system_configs 表读取，fallback 到环境变量
  */
 
 let Dypnsapi20170525, OpenApi, Util;
@@ -15,15 +16,51 @@ try {
   console.warn('⚠️ 短信SDK未安装或加载失败，将使用模拟模式（验证码将在控制台打印）:', error.message);
 }
 
-const SMS_CONFIG = {
-  accessKeyId: process.env.ALIYUN_ACCESS_KEY_ID || '',
-  accessKeySecret: process.env.ALIYUN_ACCESS_KEY_SECRET || '',
-  signName: process.env.ALIYUN_SMS_SIGN_NAME || '',
-  templateCode: process.env.ALIYUN_SMS_TEMPLATE_CODE || '',
+// 内部配置对象，由 init 填充
+let SMS_CONFIG = {
+  accessKeyId: '',
+  accessKeySecret: '',
+  signName: '',
+  templateCode: '',
 };
 
 let client = null;
 const lastSendTime = {};
+let configLoaded = false;
+
+/**
+ * 从 system_configs 表加载 SMS 配置
+ * fallback: 数据库 -> 环境变量
+ */
+async function loadSmsConfig() {
+  try {
+    const sysConfig = require('./system-config.service');
+    const dbConfig = await sysConfig.getSmsConfig();
+    if (dbConfig.accessKeyId || dbConfig.accessKeySecret) {
+      SMS_CONFIG = {
+        accessKeyId: dbConfig.accessKeyId || process.env.ALIYUN_ACCESS_KEY_ID || '',
+        accessKeySecret: dbConfig.accessKeySecret || process.env.ALIYUN_ACCESS_KEY_SECRET || '',
+        signName: dbConfig.signName || process.env.ALIYUN_SMS_SIGN_NAME || '',
+        templateCode: dbConfig.templateCode || process.env.ALIYUN_SMS_TEMPLATE_CODE || '',
+      };
+      configLoaded = true;
+      console.log('✅ SMS 配置已从数据库加载');
+      return;
+    }
+  } catch (error) {
+    console.warn('⚠️ 从数据库加载 SMS 配置失败，使用环境变量:', error.message);
+  }
+
+  // fallback 到环境变量
+  SMS_CONFIG = {
+    accessKeyId: process.env.ALIYUN_ACCESS_KEY_ID || '',
+    accessKeySecret: process.env.ALIYUN_ACCESS_KEY_SECRET || '',
+    signName: process.env.ALIYUN_SMS_SIGN_NAME || '',
+    templateCode: process.env.ALIYUN_SMS_TEMPLATE_CODE || '',
+  };
+  configLoaded = true;
+  console.log('✅ SMS 配置已从环境变量加载');
+}
 
 function assertSmsConfig() {
   const missing = [];
@@ -69,6 +106,11 @@ function canSend(phone) {
 }
 
 async function sendVerificationCode(phone) {
+  // 确保 SMS 配置已加载（首次调用时从数据库读取）
+  if (!configLoaded) {
+    await loadSmsConfig();
+  }
+
   const maskedPhone = typeof phone === 'string' ? phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2') : '';
   console.log('📱 发送验证码到:', maskedPhone);
 
@@ -181,4 +223,5 @@ module.exports = {
   verifyCode,
   generateCode,
   SMS_CONFIG,
+  loadSmsConfig,
 };

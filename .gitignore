@@ -3,9 +3,8 @@ node_modules/
 
 # Environment variables (contains sensitive information)
 .env
-.env.local
-.env.production
-.env.development
+.env.*
+!.env.example
 
 # Logs
 logs/
@@ -214,3 +213,14 @@ quality-management-test-report-*.json
 # Git backup
 .git_backup_*.tar.gz
 .git_meta_backup_*.tar.gz
+
+# Deployment archives
+deploy-feiniu/*.tar
+deploy-fnnas/*.tar
+deploy-local/*.tar
+
+# Large data dumps / generated reports
+backend/detailed-report.json
+
+# Large binaries / executables
+tools/mcp-assethub/mcp-assethub

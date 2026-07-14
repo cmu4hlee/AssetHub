@@ -675,4 +675,66 @@ router.get('/status', authenticate, requireSuperAdmin, async (req, res) => {
   }
 });
 
+/**
+ * 获取短信服务配置（隐藏敏感值）
+ */
+router.get('/sms', authenticate, requireSuperAdmin, async (req, res) => {
+  try {
+    const sysConfig = require('../services/system-config.service');
+    const smsConfig = await sysConfig.getSmsConfig();
+    res.json({
+      success: true,
+      data: {
+        accessKeyId: smsConfig.accessKeyId ? smsConfig.accessKeyId.slice(0, 8) + '****' : '',
+        hasAccessKeySecret: !!smsConfig.accessKeySecret,
+        signName: smsConfig.signName,
+        templateCode: smsConfig.templateCode,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: '获取短信配置失败', error: error.message });
+  }
+});
+
+/**
+ * 更新短信服务配置
+ */
+router.put('/sms', authenticate, requireSuperAdmin, auditLogger('update', 'system_config'), async (req, res) => {
+  try {
+    const { accessKeyId, accessKeySecret, signName, templateCode } = req.body;
+    const sysConfig = require('../services/system-config.service');
+
+    if (accessKeyId) {
+      await sysConfig.setConfig(sysConfig.CONFIG_KEYS.ALIYUN_ACCESS_KEY_ID, accessKeyId, {
+        description: '阿里云 AccessKey ID（SMS 短信服务）',
+        updatedBy: req.user?.real_name || req.user?.username || 'admin',
+      });
+    }
+    if (accessKeySecret) {
+      await sysConfig.setConfig(sysConfig.CONFIG_KEYS.ALIYUN_ACCESS_KEY_SECRET, accessKeySecret, {
+        description: '阿里云 AccessKey Secret（SMS 短信服务）',
+        updatedBy: req.user?.real_name || req.user?.username || 'admin',
+      });
+    }
+    if (signName) {
+      await sysConfig.setConfig(sysConfig.CONFIG_KEYS.ALIYUN_SMS_SIGN_NAME, signName, {
+        description: '阿里云短信签名名称',
+        isEncrypted: 0,
+        updatedBy: req.user?.real_name || req.user?.username || 'admin',
+      });
+    }
+    if (templateCode) {
+      await sysConfig.setConfig(sysConfig.CONFIG_KEYS.ALIYUN_SMS_TEMPLATE_CODE, templateCode, {
+        description: '阿里云短信模板代码',
+        isEncrypted: 0,
+        updatedBy: req.user?.real_name || req.user?.username || 'admin',
+      });
+    }
+
+    res.json({ success: true, message: '短信配置已更新（服务重启后生效）' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: '更新短信配置失败', error: error.message });
+  }
+});
+
 module.exports = router;

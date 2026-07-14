@@ -9,8 +9,8 @@ const crypto = require('crypto');
 const https = require('https');
 
 const config = {
-  accessKeyId: 'LTAI5t77Vhimvhksx1dMsmc9',
-  accessKeySecret: 'gZbt2Dg8H2xxougBhHMUPXocKanChC',
+  accessKeyId: process.env.ALIYUN_ACCESS_KEY_ID || '',
+  accessKeySecret: process.env.ALIYUN_ACCESS_KEY_SECRET || '',
   region: 'ap-southeast-1',  // 新加坡区域
 };
 

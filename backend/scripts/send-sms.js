@@ -19,7 +19,7 @@ async function sendCode(phone) {
     console.log(`🔢 验证码: ${code}`);
 
     const params = {
-      AccessKeyId: 'LTAI5t77Vhimvhksx1dMsmc9',
+      AccessKeyId: process.env.ALIYUN_ACCESS_KEY_ID || '',
       Action: 'SendSms',
       Format: 'JSON',
       PhoneNumbers: phone,
@@ -37,7 +37,7 @@ async function sendCode(phone) {
     const sortedParams = sortedKeys.map(k => `${encodeURIComponent(k)  }=${  encodeURIComponent(params[k])}`).join('&');
 
     const stringToSign = `POST&%2F&${  encodeURIComponent(sortedParams)}`;
-    const signature = crypto.createHmac('sha1', 'gZbt2Dg8H2xxougBhHMUPXocKanChC&').update(stringToSign).digest('base64');
+    const signature = crypto.createHmac('sha1', (process.env.ALIYUN_ACCESS_KEY_SECRET || '') + '&').update(stringToSign).digest('base64');
 
     params.Signature = signature;
     const postData = Object.keys(params).map(k => `${k  }=${  encodeURIComponent(params[k])}`).join('&');
