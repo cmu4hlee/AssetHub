@@ -786,6 +786,7 @@ router.get('/asset/:assetCode/history', authenticate, authorize(QC_GET_ROLES), a
 router.post(
   '/metrology/analyze-report',
   authenticate,
+  authorize(QC_WRITE_ROLES),
   upload.single('reportFile'),
   fileSecurity(),
   async (req, res) => {

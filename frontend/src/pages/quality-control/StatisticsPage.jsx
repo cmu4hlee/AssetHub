@@ -32,7 +32,7 @@ const StatisticsPage = () => {
   const [metrologyStats, setMetrologyStats] = useState(null);
   const [qualityControlStats, setQualityControlStats] = useState(null);
   const [activeTab, setActiveTab] = useState('metrology');
-  const useSimulatedData = true;
+  const useSimulatedData = false;
 
   const simulatedMetrologyData = useMemo(
     () => ({
@@ -148,7 +148,12 @@ const StatisticsPage = () => {
       });
 
       if (metrologyResponse.success) {
-        setMetrologyStats(metrologyResponse.data);
+        const data = metrologyResponse.data;
+        // avgCost 后端未直接返回，由 totalCost / total 推算
+        if (data.total > 0 && data.avgCost === undefined) {
+          data.avgCost = Math.round((data.totalCost || 0) / data.total * 100) / 100;
+        }
+        setMetrologyStats(data);
       } else {
         message.error('获取计量统计数据失败');
       }

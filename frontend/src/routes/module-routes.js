@@ -103,6 +103,7 @@ const qualityRoutes = [
   { path: '/quality-control/new', component: lazyPage(() => import('../pages/QualityControlForm')), key: 'qc-new' },
   { path: '/quality-control/metrology', component: lazyPage(() => import('../pages/MetrologyList')), key: 'metrology-list' },
   { path: '/quality-control/metrology/new', component: lazyPage(() => import('../pages/MetrologyForm')), key: 'metrology-new' },
+  { path: '/quality-control/metrology/edit/:id', component: lazyPage(() => import('../pages/MetrologyForm')), key: 'metrology-edit' },
   { path: '/quality-control/metrology/:id', component: lazyPage(() => import('../pages/MetrologyDetail')), key: 'metrology-detail' },
   { path: '/quality-control/metrology-upload', component: lazyPage(() => import('../pages/quality-control/MetrologyUploadPage')), key: 'metrology-upload' },
   { path: '/quality-control/metrology-page', component: lazyPage(() => import('../pages/quality-control/MetrologyPage')), key: 'metrology-page' },

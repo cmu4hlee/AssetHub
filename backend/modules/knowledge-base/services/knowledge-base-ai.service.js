@@ -108,6 +108,13 @@ class KnowledgeBaseAIService extends BaseService {
       errorMessage = err.message || 'AI 服务调用异常';
     }
 
+    // AI 失败时 fallback 到纯检索模式：返回检索到的文档片段
+    if (status === 'failed' && chunks.length > 0) {
+      const fallback = chunks.map((c, i) => `**[${i + 1}] ${c.doc_title || c.file_name || '文档'}**\n> ${String(c.content || '').slice(0, 200)}`).join('\n\n');
+      answer = `⚠️ AI 服务暂时不可用 (${errorMessage})\n\n以下是在知识库中检索到的相关片段：\n\n${fallback}`;
+      status = 'fallback';
+    }
+
     const latency = Date.now() - startedAt;
     const citations = chunks.map((c, i) => ({
       index: i + 1,
@@ -149,10 +156,7 @@ class KnowledgeBaseAIService extends BaseService {
       this._db && console.warn('保存问答记录失败:', e.message);
     }
 
-    if (status === 'failed') {
-      throw new AppError(errorMessage || 'AI 问答失败', 502, 'AI_FAILED');
-    }
-
+    // fallback 或完整成功都返回答案（不再 throw，让前端能展示检索结果）
     return {
       answer,
       provider,

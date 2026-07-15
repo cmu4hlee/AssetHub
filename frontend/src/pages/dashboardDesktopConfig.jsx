@@ -152,12 +152,12 @@ export const desktopMenuItems = [
     path: '/quality-control/metrology',
     children: [
       { key: 'metrology', label: '计量管理', path: '/quality-control/metrology' },
-      { key: 'metrology-management', label: '计量管理页', path: '/quality-control/metrology/management' },
+      { key: 'metrology-management', label: '计量管理页', path: '/quality-control/metrology-page' },
       { key: 'quality-qc', label: '质控管理', path: '/quality-control/qc' },
       { key: 'quality-statistics', label: '统计分析', path: '/quality-control/statistics' },
       { key: 'quality-management', label: '质量管理总览', path: '/quality-control/management' },
       { key: 'adverse-reaction', label: '不良事件管理', path: '/adverse-reaction' },
-      { key: 'metrology-upload', label: '报告智能识别', path: '/quality-control/metrology/upload' },
+      { key: 'metrology-upload', label: '报告智能识别', path: '/quality-control/metrology-upload' },
     ],
   },
   {

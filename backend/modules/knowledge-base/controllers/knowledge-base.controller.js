@@ -233,7 +233,7 @@ class KnowledgeBaseController {
   // 流式问答 — 通过 SSE 返回,前端用 fetch+ReadableStream 接收
   async askStream(req, res) {
     try {
-      const tenantId = req.user?.tenant_id;
+      const tenantId = req.user?.tenant_id || req.headers['x-tenant-id'];
       if (!tenantId) return fail(res, 400, '缺少租户ID', 'MISSING_TENANT');
 
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');

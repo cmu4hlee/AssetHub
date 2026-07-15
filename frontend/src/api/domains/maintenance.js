@@ -346,6 +346,8 @@ export const qualityControlAPI = {
   getExpiringMetrology: params =>
     getNormalizedList(api.get('/quality-control/metrology/expiring', { params })),
   getMetrologyStatistics: params => api.get('/quality-control/metrology/statistics', { params }),
+  getAdvancedMetrologyStatistics: params => api.get('/quality-control/metrology/statistics/advanced', { params }),
+  getMetrologyReport: params => api.get('/quality-control/reports/metrology', { params, responseType: 'blob' }),
   getQualityControlRecords: params =>
     getNormalizedList(api.get('/quality-control/quality-control', { params })),
   getQualityControlRecord: id => api.get(`/quality-control/quality-control/${id}`),

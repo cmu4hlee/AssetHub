@@ -144,16 +144,14 @@ const KnowledgeBaseQA = () => {
 
     try {
       if (streamEnabled) {
-        // 流式模式
-        const params = new URLSearchParams({ kb_id: selectedKb, question: content });
-        const response = await fetch(`/api/knowledge-base/ask-stream?${params}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        });
-        if (!response.ok) {
-          const errText = await response.text().catch(() => '请求失败');
-          throw new Error(errText);
+        // 流式模式 — 使用 API 客户端的 askStream（自动处理 token、租户头）
+        let streamResp;
+        try {
+          streamResp = await knowledgeBaseAPI.askStream({ kb_id: selectedKb, question: content });
+        } catch (fetchErr) {
+          throw new Error(fetchErr.message || '流式请求失败');
         }
-        const reader = response.body.getReader();
+        const reader = streamResp.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
         let fullContent = '';
@@ -166,20 +164,22 @@ const KnowledgeBaseQA = () => {
           const parts = buffer.split('\n\n');
           buffer = parts.pop() || '';
           for (const part of parts) {
-            if (!part.startsWith('data: ')) continue;
-            const data = part.slice(6).trim();
+            // 从 SSE 块中提取 data 行（可能含 event: 前缀行）
+            const dataLines = part.split('\n').filter(l => l.startsWith('data: '));
+            if (dataLines.length === 0) continue;
+            const data = dataLines[dataLines.length - 1].slice(6).trim();
             if (!data) continue;
             try {
               const parsed = JSON.parse(data);
-              if (parsed.type === 'chunk' && parsed.content !== undefined) {
-                fullContent += parsed.content;
+              // 后端格式: delta → { text, citations? }; done → { ok, citations }; error → { message, code }
+              if (parsed.text !== undefined) {
+                fullContent += parsed.text;
                 updateLastMessage(() => ({ content: fullContent }));
-              } else if (parsed.type === 'reference' && parsed.data) {
-                refs = parsed.data;
-              } else if (parsed.type === 'done') {
+              } else if (parsed.ok) {
+                refs = parsed.citations || [];
                 updateLastMessage(() => ({ content: fullContent, references: refs }));
-              } else if (parsed.type === 'error') {
-                updateLastMessage(() => ({ content: `错误: ${parsed.message || '未知错误'}` }));
+              } else if (parsed.message) {
+                updateLastMessage(() => ({ content: `错误: ${parsed.message}` }));
               }
             } catch (_e) {
               // 忽略解析错误
@@ -189,11 +189,11 @@ const KnowledgeBaseQA = () => {
         updateLastMessage(prev => ({ references: refs }));
       } else {
         // 非流式
-        const res = await knowledgeBaseAPI.askKnowledgeBase(selectedKb, content);
+        const res = await knowledgeBaseAPI.ask({ question: content, kb_id: selectedKb });
         if (res?.success && res.data) {
           updateLastMessage(() => ({
-            content: res.data.answer || res.data.content || '未获取到回答',
-            references: res.data.references || [],
+            content: res.data.answer || '未获取到回答',
+            references: res.data.citations || [],
           }));
         } else {
           updateLastMessage(() => ({ content: '抱歉，无法获取回答' }));
@@ -220,7 +220,7 @@ const KnowledgeBaseQA = () => {
   const loadHistory = useCallback(async () => {
     if (!selectedKb) return;
     try {
-      const res = await knowledgeBaseAPI.getQARecords(selectedKb, { pageSize: 50 });
+      const res = await knowledgeBaseAPI.listQaRecords({ kb_id: selectedKb, pageSize: 50 });
       if (res?.success && Array.isArray(res.data)) {
         setSessions(prev => {
           const existing = prev.map(s => ({ ...s, messages: s.messages || [] }));
@@ -369,7 +369,7 @@ const KnowledgeBaseQA = () => {
                   onChange={setSelectedKb}
                   loading={loadingKbs}
                   style={{ minWidth: 200 }}
-                  options={kbs.map(kb => ({ label: kb.name, value: kb.id }))}
+                  options={kbs.map(kb => ({ label: kb.kb_name, value: kb.id }))}
                 />
               </Space>
             }

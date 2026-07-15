@@ -260,9 +260,10 @@ const MetrologyList = () => {
                 setPagination({ ...pagination, current: 1 });
               }}
             >
-              <Option value="首次检定">首次检定</Option>
-              <Option value="周期检定">周期检定</Option>
+              <Option value="强制检定">强制检定</Option>
+              <Option value="非强制检定">非强制检定</Option>
               <Option value="校准">校准</Option>
+              <Option value="测试">测试</Option>
               <Option value="期间核查">期间核查</Option>
               <Option value="其他">其他</Option>
             </Select>

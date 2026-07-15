@@ -8,6 +8,7 @@ import auth from '../../utils/auth';
 export const knowledgeBaseAPI = {
   // 知识库
   listKnowledgeBases: params => api.get('/knowledge-base/knowledge-bases', { params }),
+  getKnowledgeBases: params => api.get('/knowledge-base/knowledge-bases', { params }),
   createKnowledgeBase: data => api.post('/knowledge-base/knowledge-bases', data),
   getKnowledgeBase: id => api.get(`/knowledge-base/knowledge-bases/${id}`),
   updateKnowledgeBase: (id, data) => api.put(`/knowledge-base/knowledge-bases/${id}`, data),
