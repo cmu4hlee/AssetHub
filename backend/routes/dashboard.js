@@ -262,14 +262,14 @@ router.get('/stats', authenticate, async (req, res) => {
          ROUND(SUM(purchase_price), 2) AS total_purchase_value,
          ROUND(SUM(current_value), 2) AS total_current_value
        FROM assets
-       WHERE tenant_id = ?`,
+       WHERE tenant_id = ? AND is_deleted = 0`,
       [tenantId],
     );
 
     const [statusRows] = await db.execute(
       `SELECT status, COUNT(*) AS cnt
        FROM assets
-       WHERE tenant_id = ?
+       WHERE tenant_id = ? AND is_deleted = 0
        GROUP BY status`,
       [tenantId],
     );
@@ -277,7 +277,7 @@ router.get('/stats', authenticate, async (req, res) => {
     const [categoryRows] = await db.execute(
       `SELECT c.name AS category, COUNT(*) AS cnt
        FROM assets a LEFT JOIN asset_categories c ON a.category_id = c.id
-       WHERE a.tenant_id = ?
+       WHERE a.tenant_id = ? AND a.is_deleted = 0
        GROUP BY c.name
        ORDER BY cnt DESC
        LIMIT 10`,

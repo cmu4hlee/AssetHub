@@ -270,7 +270,7 @@ const fetchComplianceSignals = async ({ tenantId, assetCodes = [] }) => {
 
   const tenant = normalizeTenantId(tenantId);
   const codePlaceholders = normalizedCodes.map(() => '?').join(',');
-  const assetClause = `a.asset_code IN (${codePlaceholders})`;
+  const assetClause = `a.asset_code IN (${codePlaceholders}) AND a.is_deleted = 0`;
   const tenantClause = tenant ? ' AND a.tenant_id = ?' : '';
   const assetParams = tenant ? [...normalizedCodes, tenant] : [...normalizedCodes];
 

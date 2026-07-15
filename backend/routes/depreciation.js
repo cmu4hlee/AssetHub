@@ -487,6 +487,11 @@ function buildWhereClause(req, assetColumns, alias = 'a') {
   const whereParts = ['1=1'];
   const params = [];
 
+  // 软删除过滤：折旧的资产必须未删除（不论用户是否传 include_disposed，都排除）
+  if (hasColumn(assetColumns, 'is_deleted')) {
+    whereParts.push(`${alias}.is_deleted = 0`);
+  }
+
   const tenantFilter = addTenantFilter(req, alias);
   const tenantCondition = tenantFilterToCondition(tenantFilter.whereClause);
   if (tenantCondition) {

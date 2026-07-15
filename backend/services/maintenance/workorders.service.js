@@ -323,6 +323,7 @@ async function getDispatchPanel(query, req) {
       LEFT JOIN assets a
         ON a.asset_code = wo.asset_code COLLATE utf8mb4_unicode_ci
         AND a.tenant_id = wo.tenant_id
+        AND a.is_deleted = 0
       ${whereClause}
       GROUP BY room_name
       ORDER BY ${orderMetric} DESC, in_progress_count DESC, total_count DESC, room_name ASC

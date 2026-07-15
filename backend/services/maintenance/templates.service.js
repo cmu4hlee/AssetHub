@@ -270,7 +270,7 @@ async function getTemplates(query, req) {
     const [assets] = await db.execute(
       `SELECT ac.name as asset_type, a.brand, a.model FROM assets a
        LEFT JOIN asset_categories ac ON a.category_id = ac.id
-       WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
+       WHERE a.asset_code = ? AND a.is_deleted = 0 ${assetTenantFilter.whereClause}`,
       [asset_code, ...assetTenantFilter.params],
     );
 
@@ -349,7 +349,7 @@ async function recommendByAsset(assetCode, req) {
   const [assets] = await db.execute(
     `SELECT ac.name as asset_type, a.brand, a.model FROM assets a
      LEFT JOIN asset_categories ac ON a.category_id = ac.id
-     WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
+     WHERE a.asset_code = ? AND a.is_deleted = 0 ${assetTenantFilter.whereClause}`,
     [assetCode, ...assetTenantFilter.params],
   );
 

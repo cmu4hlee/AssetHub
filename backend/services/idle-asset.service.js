@@ -22,7 +22,7 @@ class IdleAssetService extends BaseService {
         whereClause += ` AND (
           EXISTS (
             SELECT 1 FROM assets a
-            WHERE a.id = ia.asset_id AND a.tenant_id = ia.tenant_id
+            WHERE a.id = ia.asset_id AND a.tenant_id = ia.tenant_id AND a.is_deleted = 0
             AND (a.department IN (
               SELECT department_name FROM departments WHERE tenant_id = ia.tenant_id AND department_code IN (${placeholders})
             ) OR a.department_new IN (${placeholders}))

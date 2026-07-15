@@ -143,12 +143,12 @@ router.get('/', authenticate, async (req, res) => {
     ] = await Promise.all([
       // 按分类统计
       db.execute(
-        `SELECT c.name as category, COUNT(*) as count, 
+        `SELECT c.name as category, COUNT(*) as count,
                 SUM(a.purchase_price) as total_value,
                 AVG(a.current_value) as avg_value
          FROM assets a
          LEFT JOIN asset_categories c ON a.category_id = c.id
-         WHERE a.tenant_id = ?
+         WHERE a.tenant_id = ? AND a.is_deleted = 0
          GROUP BY a.category_id
          ORDER BY count DESC
          LIMIT 10`,
@@ -156,10 +156,10 @@ router.get('/', authenticate, async (req, res) => {
       ),
       // 按部门统计
       db.execute(
-        `SELECT COALESCE(a.department_new, a.department) as department, 
+        `SELECT COALESCE(a.department_new, a.department) as department,
                 COUNT(*) as count, SUM(a.purchase_price) as total_value
          FROM assets a
-         WHERE a.tenant_id = ?
+         WHERE a.tenant_id = ? AND a.is_deleted = 0
          GROUP BY COALESCE(a.department_new, a.department)
          ORDER BY count DESC
          LIMIT 10`,
