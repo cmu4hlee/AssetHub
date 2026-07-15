@@ -3,6 +3,12 @@ const router = express.Router();
 const db = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 const { addTenantFilter, getTenantId, requireTenantId } = require('../middleware/tenant-filter');
+const eventBus = require('../core/EventBus').getEventBus();
+
+// 安全发布事件（fail-soft）
+function safeEmit(eventName, payload) {
+  try { eventBus.emit(eventName, payload || {}); } catch (e) { /* 静默 */ }
+}
 
 // 调配模块权限集合
 const TR_GET_ROLES = ['transfer.view', 'asset.view_all', 'asset.view_own_department'];
@@ -351,6 +357,10 @@ router.post('/', authenticate, requireTenantId, authorize(TR_WRITE_ROLES), async
     }
 
     await connection.commit();
+    safeEmit('transfer:created', {
+      tenantId, transferId: createResult.id, assetCode: createResult.asset_code,
+      actorUserId: req.user?.id, source: 'transfer.create',
+    });
     res.json({
       success: true,
       message: req.user?.role === 'system_admin' ? '调配申请已创建并直接执行' : '调配申请已提交，等待审批',
@@ -390,6 +400,10 @@ router.put('/:id/approve', authenticate, authorize(TR_APPROVE_ROLES), async (req
     }
 
     await connection.commit();
+    safeEmit('transfer:approved', {
+      tenantId, transferId: parseInt(id), approver,
+      actorUserId: req.user?.id, source: 'transfer.approve',
+    });
     res.json({ success: true, message: result.message });
   } catch (error) {
     await connection.rollback();
@@ -420,6 +434,10 @@ router.put('/:id/complete', authenticate, authorize(TR_APPROVE_ROLES), async (re
     if (request.status === 'approved') {
       // 已审批的调拨即为已完成，直接成功（幂等）
       await connection.commit();
+      safeEmit('transfer:completed', {
+        tenantId, transferId: parseInt(id),
+        actorUserId: req.user?.id, source: 'transfer.complete',
+      });
       connection.release();
       return res.json({ success: true, message: '调配已完成' });
     }
@@ -443,6 +461,10 @@ router.put('/:id/complete', authenticate, authorize(TR_APPROVE_ROLES), async (re
     }
 
     await connection.commit();
+    safeEmit('transfer:completed', {
+      tenantId, transferId: parseInt(id),
+      actorUserId: req.user?.id, source: 'transfer.complete-approve',
+    });
     res.json({ success: true, message: result.message });
   } catch (error) {
     await connection.rollback();
@@ -478,6 +500,10 @@ router.put('/:id/reject', authenticate, authorize(TR_APPROVE_ROLES), async (req,
     }
 
     await connection.commit();
+    safeEmit('transfer:rejected', {
+      tenantId, transferId: parseInt(id), rejecter,
+      actorUserId: req.user?.id, source: 'transfer.reject',
+    });
     res.json({ success: true, message: result.message });
   } catch (error) {
     await connection.rollback();

@@ -159,8 +159,7 @@ const FeishuConfigManagement = () => {
           </div>
         ) : (
           <>
-            <Alert
-              message="配置说明"
+            <Alert title="配置说明"
               description="配置当前企业空间的飞书自建应用凭证（App ID / App Secret），用于发送业务通知卡片。不同企业空间可独立配置各自的飞书应用。配置保存后立即生效，无需重启服务器。App Secret 显示为 ****** 表示已配置，如需修改请输入新值。建议保存前先点击「测试连接」验证凭证。"
               type="info"
               showIcon
@@ -168,8 +167,7 @@ const FeishuConfigManagement = () => {
             />
 
             {testResult && (
-              <Alert
-                message={testResult.success ? '连接测试成功' : '连接测试失败'}
+              <Alert title={testResult.success ? '连接测试成功' : '连接测试失败'}
                 description={
                   <div>
                     <div>{testResult.message}</div>

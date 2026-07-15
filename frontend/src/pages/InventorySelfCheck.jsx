@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Card, Select, Table, Button, Modal, Form, Input, Tag, Space, message, List, Typography, Alert, Spin, Upload } from 'antd';
+import { Card, Select, Button, Modal, Form, Input, Tag, Space, message, List, Typography, Alert, Spin, Upload } from 'antd';
 import { inventoryAPI } from '../utils/api';
 import { useIsMobile } from '../hooks';
 import { ScanOutlined, CheckCircleOutlined, ClockCircleOutlined, ArrowLeftOutlined, CameraOutlined, CloseOutlined, PictureOutlined, LoadingOutlined, QrcodeOutlined } from '@ant-design/icons';
@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import jsQR from 'jsqr';
 import ScannerDialog from '../components/Scanner/ScannerDialog';
+import { ResponsiveTable } from '../components';
 
 const { Dragger } = Upload;
 
@@ -602,13 +603,35 @@ const InventorySelfCheck = () => {
       </Card>
 
       <Card title="盘点资产列表">
-        <Table
+        <ResponsiveTable
           rowKey="asset_code"
           dataSource={assets}
           columns={columns}
           loading={loadingAssets}
           pagination={{ pageSize: 10 }}
           scroll={{ x: 900 }}
+          mobileTitleKey="asset_name"
+          mobileStatusRender={r => r.checked_at
+            ? <Tag color="success">已盘点</Tag>
+            : <Tag color="warning">未盘点</Tag>}
+          mobileFields={[
+            { label: '资产编号', key: 'asset_code' },
+            { label: '责任人', key: 'responsible_person' },
+            { label: '当前状态', key: 'status' },
+            { label: '差异类型', key: 'discrepancy_type' },
+            {
+              label: '盘点时间',
+              key: 'checked_at',
+              render: v => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
+            },
+          ]}
+          mobileActions={[
+            {
+              key: 'check',
+              text: r => (r.checked_at ? '更新' : '盘点'),
+              onClick: openModal,
+            },
+          ]}
         />
       </Card>
 

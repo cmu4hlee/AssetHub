@@ -95,6 +95,7 @@ const DatabaseConnectionManagement = lazyPage(() => import('./pages/DatabaseConn
 const FeishuConfigManagement = lazyPage(() => import('./pages/FeishuConfigManagement'));
 const EmailConfigManagement = lazyPage(() => import('./pages/EmailConfigManagement'));
 const NotificationManagement = lazyPage(() => import('./pages/NotificationManagement'));
+const NotificationPreferences = lazyPage(() => import('./pages/NotificationPreferences'));
 const ApiDocs = lazyPage(() => import('./pages/ApiDocs'));
 const APIDocumentation = lazyPage(() => import('./pages/APIDocumentation'));
 const AcceptanceList = lazyPage(() => import('./pages/AcceptanceList'));
@@ -411,6 +412,7 @@ function App() {
                   <Route path="feishu-config" element={<AdminOnly><FeishuConfigManagement /></AdminOnly>} />
                   <Route path="email-config" element={<AdminOnly><EmailConfigManagement /></AdminOnly>} />
                   <Route path="notification-config" element={<AdminOnly><NotificationManagement /></AdminOnly>} />
+                  <Route path="notification-preferences" element={<NotificationPreferences />} />
                   <Route path="api-docs" element={<AdminOnly><ApiDocs /></AdminOnly>} />
                   <Route path="api-documentation" element={<AdminOnly><APIDocumentation /></AdminOnly>} />
                   <Route path="dashboard-configs" element={<DashboardConfigManager />} />
@@ -465,6 +467,11 @@ function App() {
                     <Route path="/transfer/requests" element={<TransferRequestList />} />
                     <Route path="/idle" element={<IdleAssetList />} />
                     <Route path="/idle/new" element={<IdleAssetForm />} />
+                    <Route path="/idle/:id" element={<IdleAssetDetail />} />
+                    <Route path="/scrapping" element={<ScrappingList />} />
+                    <Route path="/scrapping/new" element={<ScrappingForm />} />
+                    <Route path="/scrapping/:id" element={<ScrappingDetail />} />
+                    <Route path="/scrapping/:id/edit" element={<ScrappingForm />} />
                     <Route path="/tenants" element={<AdminOnly><TenantList /></AdminOnly>} />
                     <Route path="/tenants/new" element={<AdminOnly><TenantForm /></AdminOnly>} />
                     <Route path="/tenants/edit/:id" element={<AdminOnly><TenantForm /></AdminOnly>} />
@@ -487,6 +494,7 @@ function App() {
                     <Route path="/feishu-config" element={<AdminOnly><FeishuConfigManagement /></AdminOnly>} />
                     <Route path="/email-config" element={<AdminOnly><EmailConfigManagement /></AdminOnly>} />
                     <Route path="/notification-config" element={<AdminOnly><NotificationManagement /></AdminOnly>} />
+                    <Route path="/notification-preferences" element={<NotificationPreferences />} />
                     <Route path="/api-docs" element={<AdminOnly><ApiDocs /></AdminOnly>} />
                     <Route path="/api-documentation" element={<AdminOnly><APIDocumentation /></AdminOnly>} />
                     <Route path="/maintenance/temporary" element={<TemporaryMaintenanceList />} />
@@ -628,6 +636,9 @@ function App() {
                     <Route path="/acceptance/applications/edit/:id" element={<AcceptanceApplicationForm />} />
                     <Route path="/acceptance/templates" element={<AcceptanceTemplateList />} />
                     <Route path="/acceptance/statistics" element={<AcceptanceStatistics />} />
+                    <Route path="/acceptance/reminders" element={<AcceptanceReminders />} />
+                    <Route path="/acceptance/report/:id" element={<AcceptanceReport />} />
+                    <Route path="/acceptance/teams/:id" element={<AcceptanceTeam />} />
                     <Route path="/acceptance/:id" element={<AcceptanceDetail />} />
                     <Route path="/quality-control/metrology" element={<MetrologyList />} />
                     <Route path="/quality-control/metrology/new" element={<MetrologyForm />} />

@@ -163,8 +163,7 @@ const EmailConfigManagement = () => {
           </div>
         ) : (
           <>
-            <Alert
-              message="配置说明"
+            <Alert title="配置说明"
               description="配置当前企业空间的 SMTP 邮件服务器，用于向供应商发送中标通知、资质审核结果、招标邀请等邮件。不同企业空间可独立配置各自的 SMTP。配置保存后立即生效，无需重启服务器。密码字段显示为 ****** 表示已配置（如 126 邮箱需填客户端授权码而非登录密码），留空或保持 ****** 不修改原值。建议保存前先填写测试收件人并点击「测试发送」验证配置。"
               type="info"
               showIcon
@@ -172,8 +171,7 @@ const EmailConfigManagement = () => {
             />
 
             {testResult && (
-              <Alert
-                message={testResult.success ? '测试发送成功' : '测试发送失败'}
+              <Alert title={testResult.success ? '测试发送成功' : '测试发送失败'}
                 description={
                   <div>
                     <div>{testResult.message}</div>

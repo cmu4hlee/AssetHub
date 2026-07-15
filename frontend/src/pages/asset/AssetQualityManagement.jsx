@@ -11,13 +11,14 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Tabs, Table, Tag, Drawer, Descriptions, Empty, Spin,
+  Card, Tabs, Tag, Drawer, Descriptions, Empty, Spin,
   Button, Space, message, Divider,
 } from 'antd';
 import { SafetyCertificateOutlined, EyeOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { qualityControlAPI } from '../../api/domains/maintenance';
+import { ResponsiveTable } from '../../components';
 
 const resultColor = {
   合格: 'green',
@@ -169,17 +170,42 @@ const AssetQualityManagement = ({ assetId, asset }) => {
     },
   ];
 
-  const renderTable = (records, columns) => (
-    <Table
-      rowKey="id"
-      size="small"
-      loading={loading}
-      dataSource={records}
-      columns={columns}
-      pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
-      locale={{ emptyText: <Empty description="暂无记录" /> }}
-    />
-  );
+  const metrologyMobileFields = [
+    { label: '计量类型', key: 'metrology_type' },
+    { label: '计量日期', key: 'metrology_date', render: fmtDate },
+    { label: '下次计量', key: 'next_metrology_date', render: fmtDate },
+    { label: '计量机构', key: 'metrology_agency' },
+  ];
+  const metrologyMobileActions = [
+    { key: 'view', text: '查看', icon: <EyeOutlined />, onClick: openDetail },
+  ];
+  const qcMobileFields = [
+    { label: '质控类型', key: 'qc_type' },
+    { label: '质控日期', key: 'qc_date', render: fmtDate },
+    { label: '质控项目', key: 'qc_item' },
+  ];
+  const qcMobileActions = [
+    { key: 'view', text: '查看', icon: <EyeOutlined />, onClick: openDetail },
+  ];
+
+  const renderTable = (records, columns, mobileKind) => {
+    const mobileFields = mobileKind === 'metrology' ? metrologyMobileFields : qcMobileFields;
+    const mobileActions = mobileKind === 'metrology' ? metrologyMobileActions : qcMobileActions;
+    return (
+      <ResponsiveTable
+        rowKey="id"
+        size="small"
+        loading={loading}
+        dataSource={records}
+        columns={columns}
+        pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
+        mobileTitleKey="record_no"
+        mobileStatusRender={r => <Tag color={statusColor[r.status] || 'default'}>{r.status || '-'}</Tag>}
+        mobileFields={mobileFields}
+        mobileActions={mobileActions}
+      />
+    );
+  };
 
   const renderDetailBody = () => {
     if (!detail) return null;
@@ -234,7 +260,7 @@ const AssetQualityManagement = ({ assetId, asset }) => {
         {Array.isArray(detail.attachments) && detail.attachments.length > 0 && (
           <>
             <Divider>附件</Divider>
-            <Space direction="vertical">
+            <Space orientation="vertical">
               {detail.attachments.map((att, i) => (
                 <a key={i} href={att.file_path || att.url} target="_blank" rel="noopener noreferrer">
                   {att.file_name || att.original_file_name || `附件${i + 1}`}
@@ -272,12 +298,12 @@ const AssetQualityManagement = ({ assetId, asset }) => {
           {
             key: 'metrology',
             label: `计量管理 (${metrologyRecords.length})`,
-            children: renderTable(metrologyRecords, metrologyColumns),
+            children: renderTable(metrologyRecords, metrologyColumns, 'metrology'),
           },
           {
             key: 'quality_control',
             label: `质控管理 (${qcRecords.length})`,
-            children: renderTable(qcRecords, qcColumns),
+            children: renderTable(qcRecords, qcColumns, 'qc'),
           },
         ]}
       />
@@ -287,7 +313,7 @@ const AssetQualityManagement = ({ assetId, asset }) => {
         width={560}
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        destroyOnClose
+        destroyOnHidden
       >
         {detailLoading ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>

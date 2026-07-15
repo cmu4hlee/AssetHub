@@ -73,7 +73,7 @@ function StatusOverview({ status, loading, onRefresh }) {
             title="数据库"
             value={dbConnected ? '正常' : '断开'}
             prefix={dbConnected ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <CloseCircleOutlined style={{ color: '#ff4d4f' }} />}
-            valueStyle={{ color: dbConnected ? '#52c41a' : '#ff4d4f' }}
+            styles={{ content: { color: dbConnected ? '#52c41a' : '#ff4d4f' } }}
             suffix={status.database?.version ? <Text type="secondary" style={{ fontSize: 12 }}>v{status.database.version}</Text> : null}
           />
         </Col>
@@ -97,7 +97,7 @@ function StatusOverview({ status, loading, onRefresh }) {
             title="运行环境"
             value={status.env === 'production' ? '生产' : status.env === 'development' ? '开发' : (status.env || '-')}
             prefix={<GlobalOutlined />}
-            valueStyle={{ color: status.env === 'production' ? '#1890ff' : '#faad14' }}
+            styles={{ content: { color: status.env === 'production' ? '#1890ff' : '#faad14' } }}
           />
         </Col>
       </Row>
@@ -194,7 +194,7 @@ function StatsRow({ status }) {
             <Statistic
               title={item.title}
               value={item.value}
-              valueStyle={{ fontSize: 22, fontWeight: 600 }}
+              styles={{ content: { fontSize: 22, fontWeight: 600 } }}
               suffix={item.suffix ? <Text type="secondary" style={{ fontSize: 11 }}>{item.suffix}</Text> : undefined}
             />
           </Card>
@@ -294,7 +294,7 @@ export default function SystemSettings() {
                   styles={{ body: { padding: '14px 16px' } }}
                   onClick={() => navigate(item.path)}
                 >
-                  <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                  <Space orientation="vertical" size={4} style={{ width: '100%' }}>
                     <Space>
                       <span style={{ fontSize: 18, color: '#1890ff' }}>{item.icon}</span>
                       <Text strong style={{ fontSize: 14 }}>{item.title}</Text>

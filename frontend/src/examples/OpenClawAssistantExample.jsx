@@ -103,7 +103,7 @@ export default function OpenClawAssistantExample() {
         </Paragraph>
 
         <List
-          bordered
+          variant="outlined"
           dataSource={messages}
           renderItem={item => (
             <List.Item>

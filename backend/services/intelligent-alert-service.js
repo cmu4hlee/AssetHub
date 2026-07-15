@@ -362,12 +362,12 @@ class IntelligentAlertService {
 
       const [qualifications] = await db.execute(
         `
-        SELECT
+        SELECT 
           sq.id,
           COALESCE(u.real_name, u.username, CONCAT('用户#', sq.user_id)) AS staff_name,
           sq.qualification_type,
           sq.qualification_name AS certificate_name,
-          sq.certificate_no,
+          sq.certificate_no AS certificate_no,
           sq.expiry_date,
           DATEDIFF(sq.expiry_date, ?) as days_remaining
         FROM staff_qualifications sq
@@ -420,7 +420,7 @@ class IntelligentAlertService {
           se.registration_code AS registration_no,
           DATEDIFF(se.next_inspection_date, ?) as days_remaining
         FROM special_equipment se
-        LEFT JOIN assets a ON a.id = se.asset_id AND a.tenant_id = se.tenant_id
+        LEFT JOIN assets a ON a.id = se.asset_id
         WHERE se.tenant_id = ?
           AND se.next_inspection_date IS NOT NULL
           AND se.next_inspection_date BETWEEN ? AND ?
@@ -470,7 +470,7 @@ class IntelligentAlertService {
           si.next_inspection_date,
           DATEDIFF(si.next_inspection_date, ?) as days_remaining
         FROM safety_inspections si
-        LEFT JOIN assets a ON a.id = si.asset_id AND a.tenant_id = si.tenant_id
+        LEFT JOIN assets a ON a.id = si.asset_id
         WHERE si.tenant_id = ?
           AND si.status != 'expired'
           AND si.next_inspection_date IS NOT NULL
@@ -521,7 +521,7 @@ class IntelligentAlertService {
           us.planned_hours AS total_planned_hours,
           us.actual_hours AS total_actual_hours
         FROM uptime_statistics us
-        LEFT JOIN assets a ON a.id = us.asset_id AND a.tenant_id = us.tenant_id
+        LEFT JOIN assets a ON a.id = us.asset_id
         WHERE us.tenant_id = ?
           AND DATE_FORMAT(us.statistics_date, '%Y-%m') = ?
           AND us.uptime_rate < ?
@@ -550,23 +550,22 @@ class IntelligentAlertService {
    * 获取所有预警列表
    */
   async getAllAlerts(tenantId, options = {}) {
-    const {
-      type,
-      urgency,
-      status,
-      unreadOnly = false,
-      page = 1,
-      pageSize = 20,
-      userId,
-    } = options;
-    const currentPage = Number(page) > 0 ? Number(page) : 1;
-    const currentPageSize = Number(pageSize) > 0 ? Number(pageSize) : 20;
-    const normalizedType = this.normalizeAlertType(type);
-    const normalizedStatus = String(status || '').trim().toLowerCase();
-    const unreadOnlyEnabled = this.normalizeBoolean(unreadOnly);
-    const normalizedUserId = Number.parseInt(String(userId ?? ''), 10);
-
     try {
+      const {
+        type,
+        urgency,
+        status,
+        unreadOnly = false,
+        page = 1,
+        pageSize = 20,
+        userId,
+      } = options;
+      const currentPage = Number(page) > 0 ? Number(page) : 1;
+      const currentPageSize = Number(pageSize) > 0 ? Number(pageSize) : 20;
+      const normalizedType = this.normalizeAlertType(type);
+      const normalizedStatus = String(status || '').trim().toLowerCase();
+      const unreadOnlyEnabled = this.normalizeBoolean(unreadOnly);
+
       if (type && !normalizedType) {
         return {
           success: true,
@@ -627,6 +626,7 @@ class IntelligentAlertService {
         allAlerts = allAlerts.filter(a => a.urgency === urgency);
       }
 
+      const normalizedUserId = Number.parseInt(String(userId ?? ''), 10);
       if (Number.isInteger(normalizedUserId) && normalizedUserId > 0 && allAlerts.length > 0) {
         const readStateMap = await this.getReadStateMap(
           tenantId,

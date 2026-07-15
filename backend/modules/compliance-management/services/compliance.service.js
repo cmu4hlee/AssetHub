@@ -504,6 +504,7 @@ class ComplianceService {
   async getDashboardStats(tenantId) {
     const result = {
       maintenance: { total: 0, pending: 0, processing: 0, completed: 0 },
+      specialEquipment: { total: 0, normal: 0, expiring: 0, expired: 0 },
     };
 
     try {
@@ -527,6 +528,30 @@ class ComplianceService {
       }
     } catch (e) {
       logger.warn('maintenance_level_plans table query failed:', e.message);
+    }
+
+    // 特种设备统计
+    try {
+      const [seStats] = await db.execute(`
+        SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN next_inspection_date > DATE_ADD(CURDATE(), INTERVAL 90 DAY) OR next_inspection_date IS NULL THEN 1 ELSE 0 END) as normal,
+          SUM(CASE WHEN next_inspection_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) as expiring,
+          SUM(CASE WHEN next_inspection_date < CURDATE() THEN 1 ELSE 0 END) as expired
+        FROM special_equipment
+        WHERE tenant_id = ?
+      `, [tenantId]);
+
+      if (seStats[0]) {
+        result.specialEquipment = {
+          total: Number(seStats[0].total || 0),
+          normal: Number(seStats[0].normal || 0),
+          expiring: Number(seStats[0].expiring || 0),
+          expired: Number(seStats[0].expired || 0),
+        };
+      }
+    } catch (e) {
+      logger.warn('special_equipment stats query failed:', e.message);
     }
 
     return result;

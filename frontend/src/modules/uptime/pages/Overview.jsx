@@ -183,8 +183,7 @@ const UptimeOverview = () => {
 
         {/* 警告提示 */}
         {data.lowUptimeAssets?.length > 0 && (
-          <Alert
-            message={`警告：有 ${data.lowUptimeAssets.length} 台设备开机率低于90%，建议立即检查维护！`}
+          <Alert title={`警告：有 ${data.lowUptimeAssets.length} 台设备开机率低于90%，建议立即检查维护！`}
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}

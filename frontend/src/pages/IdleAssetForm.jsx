@@ -151,7 +151,7 @@ const IdleAssetForm = () => {
                 </Select>
               </Form.Item>
             ) : (
-              <Space direction="vertical" className="w-full">
+              <Space orientation="vertical" className="w-full">
                 <Space size="large" className="w-full">
                   <Form.Item
                     name="asset_name"
@@ -201,7 +201,7 @@ const IdleAssetForm = () => {
           </Card>
 
           <Card title="发布信息" className="mb-4">
-            <Space direction="vertical" className="w-full">
+            <Space orientation="vertical" className="w-full">
               <Space size="large" className="w-full">
                 <Form.Item
                   name="publish_date"

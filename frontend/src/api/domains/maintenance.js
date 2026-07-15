@@ -301,21 +301,21 @@ export const acceptanceManagementAPI = {
     apiWithBatching.post(`/acceptance-management/reports/${id}/generate`),
 };
 
-// warranty 模块后端尚未实现，stub 避免 import 失败；调用方需处理空数据
+// warranty 模块后端 API 已实现 (路径 /api/maintenance/warranty/*)
 export const warrantyAPI = {
-  getReminders: () => Promise.resolve({ success: true, data: [] }),
-  getReminderConfigs: () => Promise.resolve({ success: true, data: [] }),
-  createReminderConfig: () => Promise.resolve({ success: false, message: 'warranty 模块未实现' }),
-  updateReminderConfig: () => Promise.resolve({ success: false, message: 'warranty 模块未实现' }),
-  deleteReminderConfig: () => Promise.resolve({ success: false, message: 'warranty 模块未实现' }),
-  getContracts: () => Promise.resolve({ success: true, data: [] }),
-  createContract: () => Promise.resolve({ success: false, message: 'warranty 模块未实现' }),
-  updateContract: () => Promise.resolve({ success: false, message: 'warranty 模块未实现' }),
-  deleteContract: () => Promise.resolve({ success: false, message: 'warranty 模块未实现' }),
-  // 在保清单 / Dashboard 保修卡片需要 — 后端路由未实现时返回空数据
-  getInWarrantyList: (params) => Promise.resolve({ success: true, data: [], pagination: { page: 1, pageSize: params?.pageSize || 20, total: 0, totalPages: 0 } }),
-  getStatistics: () => Promise.resolve({ success: true, data: { status_stats: [], contract_stats: [], expiring_soon: 0 } }),
-  checkExpiringWarranties: () => Promise.resolve({ success: true, data: { warranty_info_expiring: [], assets_expiring: [] } }),
+  getReminders: params => api.get('/maintenance/warranty/reminders', { params }),
+  getReminderConfigs: () => api.get('/maintenance/warranty/reminder-configs'),
+  createReminderConfig: data => api.post('/maintenance/warranty/reminder-configs', data),
+  updateReminderConfig: (id, data) => api.put(`/maintenance/warranty/reminder-configs/${id}`, data),
+  deleteReminderConfig: id => api.delete(`/maintenance/warranty/reminder-configs/${id}`),
+  getContracts: params => api.get('/maintenance/warranty/contracts', { params }),
+  createContract: data => api.post('/maintenance/warranty/contracts', data),
+  updateContract: (id, data) => api.put(`/maintenance/warranty/contracts/${id}`, data),
+  deleteContract: id => api.delete(`/maintenance/warranty/contracts/${id}`),
+  // 在保清单 / Dashboard 保修卡片
+  getInWarrantyList: params => api.get('/maintenance/warranty/in-warranty', { params }),
+  getStatistics: () => api.get('/maintenance/warranty/statistics'),
+  checkExpiringWarranties: () => api.get('/maintenance/warranty/reminders/check'),
 };
 
 export const qualityControlAPI = {

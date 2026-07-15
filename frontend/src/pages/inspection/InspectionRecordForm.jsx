@@ -420,8 +420,7 @@ const InspectionRecordForm = () => {
             </Button>
           }
         >
-          <Alert
-            message="规范填写说明：逐项检查并记录结果，异常项请详细描述问题并评定风险等级。异常项将自动生成整改问题单。"
+          <Alert title="规范填写说明：逐项检查并记录结果，异常项请详细描述问题并评定风险等级。异常项将自动生成整改问题单。"
             type="info"
             showIcon
             style={{ marginBottom: 12 }}

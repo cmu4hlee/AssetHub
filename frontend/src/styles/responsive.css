@@ -379,20 +379,40 @@
     display: block;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    /* 横向滚动条美化:更细、半透明 */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(15, 23, 42, 0.25) transparent;
   }
 
-  /* 移动端卡片样式 */
+  /* Webkit 滚动条样式(Chrome / Safari) */
+  .ant-table-wrapper:not(.hide-on-mobile)::-webkit-scrollbar {
+    height: 6px;
+  }
+  .ant-table-wrapper:not(.hide-on-mobile)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .ant-table-wrapper:not(.hide-on-mobile)::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.25);
+    border-radius: 3px;
+  }
+  .ant-table-wrapper:not(.hide-on-mobile)::-webkit-scrollbar-thumb:hover {
+    background: rgba(15, 23, 42, 0.4);
+  }
+
+  /* 移动端卡片样式 — 升级版(更精致、字号友好、触摸目标 ≥ 40px) */
   .mobile-card-item {
-    margin-bottom: 12px;
-    border: 1px solid #f0f0f0;
-    border-radius: 8px;
-    padding: 12px;
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    margin-bottom: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 12px;
+    padding: 14px;
+    background: linear-gradient(160deg, #ffffff, #f8fbff);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+    transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
   }
 
   .mobile-card-item:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.10);
+    border-color: rgba(22, 119, 255, 0.28);
   }
 
   .mobile-card-item:active {
@@ -401,71 +421,99 @@
 
   .mobile-card-header {
     display: flex;
+    flex-direction: row;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 10px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #f0f0f0;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed rgba(15, 23, 42, 0.08);
+    gap: 8px;
+    min-width: 0;
   }
 
   .mobile-card-title {
-    font-weight: 600;
-    font-size: 15px;
-    color: #d97757;
+    font-weight: 700;
+    font-size: 16px;
+    color: #1e3a66;
     flex: 1;
-    word-break: break-word;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
 
   .mobile-card-badge {
     margin-left: 8px;
+    flex-shrink: 0;
   }
 
   .mobile-card-body {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 8px;
-    font-size: 13px;
+    gap: 10px;
+    font-size: 14px;
   }
 
   .mobile-card-row {
     display: flex;
+    flex-direction: row;
     justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
   }
 
   .mobile-card-field {
     display: flex;
     flex-direction: column;
     flex: 1;
+    min-width: 0;
   }
 
   .mobile-card-label {
-    color: #8c8c8c;
-    font-size: 12px;
-    margin-bottom: 2px;
+    color: #64748b;
+    font-size: 11px;
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .mobile-card-value {
-    color: #262626;
-    font-size: 13px;
-    word-break: break-word;
+    color: #1e293b;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
 
   .mobile-card-actions {
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px dashed rgba(15, 23, 42, 0.08);
     display: flex;
+    flex-direction: row;
     gap: 8px;
     flex-wrap: wrap;
   }
 
   .mobile-card-actions .ant-btn {
-    flex: 1;
-    min-width: 80px;
-    height: 36px;
-    font-size: 13px;
+    flex: 1 1 calc(50% - 4px);
+    min-width: 100px;
+    height: 40px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+
+  .mobile-card-actions .ant-btn.ant-btn-icon-only {
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
   }
 
   /* 移动端表格替代方案：简单列表 */

@@ -194,8 +194,7 @@ const SelfInventory = () => {
         <Spin spinning={loading}>
           <Card title={<><ScanOutlined /> 可用的盘点</>}>
             {inventoryWindows.length === 0 ? (
-              <Alert
-                message="暂无可用盘点"
+              <Alert title="暂无可用盘点"
                 description="当前没有已启用自助盘点且在有效期内的盘点记录"
                 type="info"
                 showIcon
@@ -256,8 +255,7 @@ const SelfInventory = () => {
         <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>现场盘点</Title>
       </div>
 
-      <Alert
-        message={selectedInventory.inventory_no}
+      <Alert title={selectedInventory.inventory_no}
         description={`${selectedInventory.inventory_type} | ${selectedInventory.status}`}
         type="info"
         showIcon

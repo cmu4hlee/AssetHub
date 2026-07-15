@@ -322,8 +322,7 @@ const PreventiveMaintenanceDetail = ({ record, onCancel }) => {
     <div style={{ padding: '20px' }}>
       {/* 逾期警告 */}
       {isOverdue && (
-        <Alert
-          message="维护已逾期"
+        <Alert title="维护已逾期"
           description={`下次维护日期 ${formatDate(detail.next_maintenance_date)} 已过，请尽快安排维护！`}
           type="warning"
           showIcon

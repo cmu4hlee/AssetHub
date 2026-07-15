@@ -21,6 +21,8 @@ const emailService = require('./email.service');
 const tenantConfig = require('./tenant-config.service');
 const requestContext = require('../middleware/requestContext');
 const { ROLE_DISPLAY_NAMES } = require('../config/roles.config');
+const recipientStrategy = require('./recipient-strategy.service');
+const preferenceService = require('./notification-preference.service');
 
 // 全局开关：可通过环境变量 FEISHU_NOTIFICATION_ENABLED=false 关闭
 const NOTIFICATION_ENABLED = process.env.FEISHU_NOTIFICATION_ENABLED !== 'false';
@@ -297,34 +299,16 @@ async function getTenantApproverIds(tenantId) {
 }
 
 /**
- * 解析事件接收人，返回 open_id 列表
- * 优先级：feishu_bindings 表 > 手机号反查 > 租户审批/管理员兜底
+ * 通过已知的 userId 列表查 open_id
+ * 1. feishu_bindings 表 > 2. 手机号反查
+ * @returns {Promise<string[]>} - open_id 数组
  */
-async function resolveOpenIds(payload = {}) {
-  const userIds = new Set();
-  ['toUserIds', 'applicantId', 'approverId', 'assigneeId', 'createdBy'].forEach(k => {
-    const v = payload[k];
-    if (Array.isArray(v)) v.forEach(id => id && userIds.add(id));
-    else if (v) userIds.add(v);
-  });
-
-  // 兜底：当没有显式接收人时，查租户管理员/维修审批角色作为通知对象
-  let fallbackUsed = false;
-  if (!userIds.size && payload.tenantId) {
-    const approverIds = await getTenantApproverIds(payload.tenantId);
-    approverIds.forEach(id => userIds.add(id));
-    fallbackUsed = approverIds.length > 0;
-    if (fallbackUsed) {
-      logger.info(`[FeishuNotify] 使用租户${payload.tenantId}审批/管理员兜底接收人，共 ${approverIds.length} 人`);
-    }
-  }
-
-  if (!userIds.size) return [];
-
-  const idArr = [...userIds];
+async function lookupOpenIdsByUserIds(userIds, tenantId) {
+  if (!userIds || !userIds.length) return [];
+  const idArr = [...new Set(userIds.map(Number).filter(Boolean))];
   // 1. 已绑定
   const bound = await getOpenIdsByUserIds(idArr);
-  const found = new Set(bound.map(b => b.userId));
+  const found = new Set(bound.map(b => Number(b.userId)));
   // 2. 未绑定 → 查手机号反查
   const missing = idArr.filter(id => !found.has(id));
   let byPhone = [];
@@ -335,11 +319,104 @@ async function resolveOpenIds(payload = {}) {
       byPhone = openByPhone;
     }
   }
-  const result = [...bound.map(b => b.openId), ...byPhone.map(b => b.openId)];
-  if (!result.length && fallbackUsed) {
+  return [...bound.map(b => b.openId), ...byPhone.map(b => b.openId)];
+}
+
+/**
+ * 解析事件接收人 userId 列表（不考虑飞书绑定、不考虑勿扰）
+ * 解析优先级：
+ *   1. recipient_strategies 表中配置的策略（payload._eventCode 标识事件）
+ *   2. payload 中的 toUserIds / applicantId / approverId / assigneeId / createdBy
+ *   3. 兜底：租户审批/管理员
+ * @returns {Promise<{userIds: number[], source: string}>}
+ */
+async function resolveRecipients(payload = {}) {
+  const tenantId = payload.tenantId || payload.tenant_id || null;
+  const eventCode = payload._eventCode || null;
+
+  // 1. 优先查 recipient_strategies 配置
+  if (eventCode && tenantId) {
+    const userIdsFromStrategy = await recipientStrategy.resolveRecipients(tenantId, eventCode, payload);
+    if (userIdsFromStrategy !== null && userIdsFromStrategy.length > 0) {
+      return { userIds: userIdsFromStrategy, source: 'strategy' };
+    }
+    // null 表示无配置，继续原逻辑
+  }
+
+  // 2. 原逻辑：从 payload 字段收集
+  const userIds = new Set();
+  ['toUserIds', 'applicantId', 'approverId', 'assigneeId', 'createdBy'].forEach(k => {
+    const v = payload[k];
+    if (Array.isArray(v)) v.forEach(id => id && userIds.add(id));
+    else if (v) userIds.add(v);
+  });
+
+  // 3. 兜底：当没有显式接收人时，查租户管理员/维修审批角色
+  let fallbackUsed = false;
+  if (!userIds.size && payload.tenantId) {
+    const approverIds = await getTenantApproverIds(payload.tenantId);
+    approverIds.forEach(id => userIds.add(id));
+    fallbackUsed = approverIds.length > 0;
+    if (fallbackUsed) {
+      logger.info(`[FeishuNotify] 使用租户${payload.tenantId}审批/管理员兜底接收人，共 ${approverIds.length} 人`);
+    }
+  }
+
+  if (!userIds.size) return { userIds: [], source: fallbackUsed ? 'fallback' : 'empty' };
+
+  return { userIds: [...userIds], source: fallbackUsed ? 'fallback' : 'payload' };
+}
+
+/**
+ * 解析事件接收人，返回 open_id 列表
+ * 流程：解析 userId → 应用用户偏好过滤（DND / 紧急度阈值）→ 查 open_id
+ * @returns {Promise<string[]>}
+ */
+async function resolveOpenIds(payload = {}) {
+  const tenantId = payload.tenantId || payload.tenant_id || null;
+  const eventCode = payload._eventCode || null;
+  const urgency = payload._urgency || 'low';
+
+  const { userIds: candidateIds, source } = await resolveRecipients(payload);
+  if (!candidateIds.length) return [];
+
+  // 应用用户偏好过滤（DND / 紧急度阈值 / 启用开关）
+  const { allowed, filtered } = await preferenceService.filterUsersByPreferences(
+    candidateIds, eventCode, urgency,
+  );
+  if (filtered.length) {
+    logger.debug(
+      `[FeishuNotify] event=${eventCode} 过滤 ${filtered.length} 个用户（勿扰/紧急度/关闭）:`,
+      filtered.map(f => `${f.userId}(${f.reason})`).join(', '),
+    );
+  }
+
+  if (!allowed.length) {
+    if (source === 'fallback') {
+      logger.warn(`[FeishuNotify] 租户${payload.tenantId}所有兜底接收人都被偏好过滤`);
+    }
+    return [];
+  }
+
+  const openIds = await lookupOpenIdsByUserIds(allowed, tenantId);
+  if (eventCode && source === 'strategy') {
+    logger.debug(`[FeishuNotify] event=${eventCode} 使用配置策略解析出 ${openIds.length} 个飞书接收人`);
+  }
+  if (!openIds.length && source === 'fallback') {
     logger.warn(`[FeishuNotify] 租户${payload.tenantId}审批人均未绑定飞书，请先在「集成通道 → 飞书绑定」绑定账号`);
   }
-  return result;
+  return openIds;
+}
+
+/**
+ * 包装 handler：自动注入 _eventCode 到 payload
+ * 用于让 resolveOpenIds 知道当前处理的是哪个事件，从而查配置策略
+ * 现有 handler 代码无需修改
+ */
+function wrapHandler(eventCode, handler) {
+  return async function wrappedHandler(payload = {}) {
+    return handler({ ...payload, _eventCode: eventCode });
+  };
 }
 
 /**
@@ -1692,85 +1769,85 @@ function initFeishuNotification() {
   }
 
   // 资产报废
-  subscribe('scrapping:created', handleScrappingCreated);
-  subscribe('scrapping:approved', handleScrappingApproved);
-  subscribe('scrapping:rejected', handleScrappingRejected);
-  subscribe('scrapping:completed', handleScrappingCompleted);
+  subscribe('scrapping:created', wrapHandler('scrapping:created', handleScrappingCreated));
+  subscribe('scrapping:approved', wrapHandler('scrapping:approved', handleScrappingApproved));
+  subscribe('scrapping:rejected', wrapHandler('scrapping:rejected', handleScrappingRejected));
+  subscribe('scrapping:completed', wrapHandler('scrapping:completed', handleScrappingCompleted));
 
   // 资产调配
-  subscribe('transfer:created', handleTransferCreated);
-  subscribe('transfer:approved', handleTransferApproved);
-  subscribe('transfer:rejected', handleTransferRejected);
-  subscribe('transfer:completed', handleTransferCompleted);
+  subscribe('transfer:created', wrapHandler('transfer:created', handleTransferCreated));
+  subscribe('transfer:approved', wrapHandler('transfer:approved', handleTransferApproved));
+  subscribe('transfer:rejected', wrapHandler('transfer:rejected', handleTransferRejected));
+  subscribe('transfer:completed', wrapHandler('transfer:completed', handleTransferCompleted));
 
   // 维修审批通过（复用现有事件）
-  subscribe(SYSTEM_EVENTS.MAINTENANCE_APPROVED, handleMaintenanceApproved);
+  subscribe(SYSTEM_EVENTS.MAINTENANCE_APPROVED, wrapHandler('maintenance:approved', handleMaintenanceApproved));
 
   // 盘点
-  subscribe('inventory:created', handleInventoryCreated);
-  subscribe('inventory:completed', handleInventoryCompleted);
+  subscribe('inventory:created', wrapHandler('inventory:created', handleInventoryCreated));
+  subscribe('inventory:completed', wrapHandler('inventory:completed', handleInventoryCompleted));
 
   // 资产领用 / 归还
-  subscribe('asset_usage:checkout', handleAssetCheckout);
-  subscribe('asset_usage:return', handleAssetReturn);
+  subscribe('asset_usage:checkout', wrapHandler('asset_usage:checkout', handleAssetCheckout));
+  subscribe('asset_usage:return', wrapHandler('asset_usage:return', handleAssetReturn));
 
   // 工单派单 / 完成
-  subscribe('workorder:assigned', handleWorkOrderAssigned);
-  subscribe('workorder:completed', handleWorkOrderCompleted);
+  subscribe('workorder:assigned', wrapHandler('workorder:assigned', handleWorkOrderAssigned));
+  subscribe('workorder:completed', wrapHandler('workorder:completed', handleWorkOrderCompleted));
 
   // 资产状态工作流迁移
-  subscribe('asset_workflow:transition', handleAssetWorkflowTransition);
+  subscribe('asset_workflow:transition', wrapHandler('asset_workflow:transition', handleAssetWorkflowTransition));
 
   // 维修申请 创建 / 审批 / 完成 / 取消
-  subscribe('maintenance_request:created', handleMaintenanceRequestCreated);
-  subscribe('maintenance_request:approved', handleMaintenanceRequestApproved);
-  subscribe('maintenance_request:rejected', handleMaintenanceRequestRejected);
-  subscribe('maintenance_request:completed', handleMaintenanceRequestCompleted);
-  subscribe('maintenance_request:started', handleMaintenanceRequestStarted);
-  subscribe('maintenance_request:cancelled', handleMaintenanceRequestCancelled);
+  subscribe('maintenance_request:created', wrapHandler('maintenance_request:created', handleMaintenanceRequestCreated));
+  subscribe('maintenance_request:approved', wrapHandler('maintenance_request:approved', handleMaintenanceRequestApproved));
+  subscribe('maintenance_request:rejected', wrapHandler('maintenance_request:rejected', handleMaintenanceRequestRejected));
+  subscribe('maintenance_request:completed', wrapHandler('maintenance_request:completed', handleMaintenanceRequestCompleted));
+  subscribe('maintenance_request:started', wrapHandler('maintenance_request:started', handleMaintenanceRequestStarted));
+  subscribe('maintenance_request:cancelled', wrapHandler('maintenance_request:cancelled', handleMaintenanceRequestCancelled));
 
   // 新用户加入企业 - 通知管理员设置角色
-  subscribe('notification:role_request', handleUserJoinRequest);
+  subscribe('notification:role_request', wrapHandler('notification:role_request', handleUserJoinRequest));
 
   // 招标采购
-  subscribe('tender:created', handleTenderCreated);
-  subscribe('tender:published', handleTenderPublished);
-  subscribe('tender:awarded', handleTenderAwarded);
-  subscribe('tender:completed', handleTenderCompleted);
-  subscribe('tender:cancelled', handleTenderCancelled);
-  subscribe('bid:submitted', handleBidSubmitted);
-  subscribe('bid:awarded', handleBidAwarded);
-  subscribe('qualification:reviewed', handleQualificationReviewed);
+  subscribe('tender:created', wrapHandler('tender:created', handleTenderCreated));
+  subscribe('tender:published', wrapHandler('tender:published', handleTenderPublished));
+  subscribe('tender:awarded', wrapHandler('tender:awarded', handleTenderAwarded));
+  subscribe('tender:completed', wrapHandler('tender:completed', handleTenderCompleted));
+  subscribe('tender:cancelled', wrapHandler('tender:cancelled', handleTenderCancelled));
+  subscribe('bid:submitted', wrapHandler('bid:submitted', handleBidSubmitted));
+  subscribe('bid:awarded', wrapHandler('bid:awarded', handleBidAwarded));
+  subscribe('qualification:reviewed', wrapHandler('qualification:reviewed', handleQualificationReviewed));
   subscribe('tender:invitation-sent', handleTenderInvitationSent);
 
   // 发票
-  subscribe('tender:invoice:created', handleInvoiceCreated);
-  subscribe('tender:invoice:verified', handleInvoiceVerified);
-  subscribe('tender:invoice:claimed', handleInvoiceClaimed);
-  subscribe('tender:invoice:paid', handleInvoicePaid);
-  subscribe('tender:invoice:archived', handleInvoiceArchived);
-  subscribe('tender:invoice:cancelled', handleInvoiceCancelled);
-  subscribe('tender:invoice:approval_pending', handleInvoiceApprovalPending);
+  subscribe('tender:invoice:created', wrapHandler('tender:invoice:created', handleInvoiceCreated));
+  subscribe('tender:invoice:verified', wrapHandler('tender:invoice:verified', handleInvoiceVerified));
+  subscribe('tender:invoice:claimed', wrapHandler('tender:invoice:claimed', handleInvoiceClaimed));
+  subscribe('tender:invoice:paid', wrapHandler('tender:invoice:paid', handleInvoicePaid));
+  subscribe('tender:invoice:archived', wrapHandler('tender:invoice:archived', handleInvoiceArchived));
+  subscribe('tender:invoice:cancelled', wrapHandler('tender:invoice:cancelled', handleInvoiceCancelled));
+  subscribe('tender:invoice:approval_pending', wrapHandler('tender:invoice:approval_pending', handleInvoiceApprovalPending));
 
   // 付款
-  subscribe('tender:payment:created', handlePaymentCreated);
-  subscribe('tender:payment:submitted', handlePaymentSubmitted);
-  subscribe('tender:payment:paying', handlePaymentPaying);
-  subscribe('tender:payment:paid', handlePaymentPaid);
-  subscribe('tender:payment:failed', handlePaymentFailed);
-  subscribe('tender:payment:cancelled', handlePaymentCancelled);
-  subscribe('tender:payment:approval_pending', handlePaymentApprovalPending);
+  subscribe('tender:payment:created', wrapHandler('tender:payment:created', handlePaymentCreated));
+  subscribe('tender:payment:submitted', wrapHandler('tender:payment:submitted', handlePaymentSubmitted));
+  subscribe('tender:payment:paying', wrapHandler('tender:payment:paying', handlePaymentPaying));
+  subscribe('tender:payment:paid', wrapHandler('tender:payment:paid', handlePaymentPaid));
+  subscribe('tender:payment:failed', wrapHandler('tender:payment:failed', handlePaymentFailed));
+  subscribe('tender:payment:cancelled', wrapHandler('tender:payment:cancelled', handlePaymentCancelled));
+  subscribe('tender:payment:approval_pending', wrapHandler('tender:payment:approval_pending', handlePaymentApprovalPending));
 
   // 验收提醒（到期 / 超期 / 审批待办 / 整改通知）
-  subscribe('acceptance:reminder', handleAcceptanceReminder);
+  subscribe('acceptance:reminder', wrapHandler('acceptance:reminder', handleAcceptanceReminder));
 
   // 盘点任务
-  subscribe('inventory_task:created', handleInventoryTaskCreated);
-  subscribe('inventory_task:completed', handleInventoryTaskCompleted);
-  subscribe('inventory_task:cancelled', handleInventoryTaskCancelled);
+  subscribe('inventory_task:created', wrapHandler('inventory_task:created', handleInventoryTaskCreated));
+  subscribe('inventory_task:completed', wrapHandler('inventory_task:completed', handleInventoryTaskCompleted));
+  subscribe('inventory_task:cancelled', wrapHandler('inventory_task:cancelled', handleInventoryTaskCancelled));
 
   // 预防性维护提醒
-  subscribe(SYSTEM_EVENTS.MAINTENANCE_PLAN_REMINDER, handlePreventiveMaintenanceReminder);
+  subscribe(SYSTEM_EVENTS.MAINTENANCE_PLAN_REMINDER, wrapHandler('maintenance_plan:reminder', handlePreventiveMaintenanceReminder));
 
   logger.info('[FeishuNotify] 飞书业务通知订阅已注册');
 }

@@ -190,8 +190,7 @@ export const ExampleWithHook = () => {
   return (
     <Card title="示例2: 使用React Hook">
       {error && (
-        <Alert
-          message="错误"
+        <Alert title="错误"
           description={error}
           type="error"
           showIcon
@@ -232,8 +231,7 @@ export const ExampleWithHook = () => {
       </Form>
 
       {lastResult && (
-        <Alert
-          message="最近操作结果"
+        <Alert title="最近操作结果"
           description={JSON.stringify(lastResult, null, 2)}
           type={lastResult.success ? 'success' : 'error'}
           style={{ marginTop: 16 }}
@@ -409,8 +407,7 @@ export const ExampleWithWorkflow = () => {
         </Form>
       ) : (
         <Space orientation="vertical">
-          <Alert
-            message="申请已创建"
+          <Alert title="申请已创建"
             description={`申请ID: ${requestId}`}
             type="success"
             showIcon

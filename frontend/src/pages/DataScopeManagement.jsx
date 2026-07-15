@@ -249,8 +249,7 @@ const DataScopeManagement = () => {
                   </Space>
                 }
               >
-                <Alert
-                  message="数据权限说明"
+                <Alert title="数据权限说明"
                   description="数据权限范围决定了角色能够访问和操作的数据范围。配置后，符合权限条件的数据才会对用户可见。"
                   type="info"
                   showIcon
@@ -298,8 +297,7 @@ const DataScopeManagement = () => {
 
                   <Divider />
 
-                  <Alert
-                    message="当前配置预览"
+                  <Alert title="当前配置预览"
                     description={
                       <div>
                         <p>

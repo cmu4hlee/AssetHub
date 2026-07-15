@@ -135,8 +135,7 @@ export default function TenderShareQRModal({ visible, tenderId, tenderTitle, onC
       destroyOnHidden
     >
       <Spin spinning={loading}>
-        <Alert
-          message="项目共享二维码"
+        <Alert title="项目共享二维码"
           description={
             <span>
               为本招标项目生成一个公开的二维码，供应商扫码后可在有效期/权限范围内查看公告、下载招标文件、上传资质、提交投标。<br />
@@ -201,8 +200,7 @@ export default function TenderShareQRModal({ visible, tenderId, tenderTitle, onC
                     <Button danger icon={<StopOutlined />}>撤销二维码</Button>
                   </Popconfirm>
                 </Space>
-                <Alert
-                  message="使用说明"
+                <Alert title="使用说明"
                   description={
                     <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}>
                       <li>可截图后发送给供应商，或打印贴在公告中</li>
@@ -223,8 +221,7 @@ export default function TenderShareQRModal({ visible, tenderId, tenderTitle, onC
             </div>
           </div>
         ) : (
-          <Alert
-            message="尚无可用的二维码"
+          <Alert title="尚无可用的二维码"
             description="请填写上方表单并点击「生成 / 刷新二维码」创建项目二维码。"
             type="warning"
             showIcon

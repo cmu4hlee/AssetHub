@@ -179,8 +179,7 @@ const AcceptanceForm = ({ record: propRecord, onSuccess, onCancel, ...rest }) =>
   return (
     <Form form={form} onFinish={onFinish} layout="vertical" disabled={loading}>
       {assetInfo && (
-        <Alert
-          message="已从资产库自动填充信息"
+        <Alert title="已从资产库自动填充信息"
           description={`资产编号：${assetInfo.assetCode}，资产名称：${assetInfo.assetName}`}
           type="success"
           icon={<CheckCircleOutlined />}

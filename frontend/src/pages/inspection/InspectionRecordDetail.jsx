@@ -334,8 +334,7 @@ const InspectionRecordDetail = () => {
       {/* 异常问题 */}
       {record.issues && record.issues.length > 0 && (
         <Card title="四、异常问题清单" size="small" style={{ marginBottom: 16 }}>
-          <Alert
-            message={`本次巡检共发现 ${record.issues.length} 个异常问题，请及时跟踪整改`}
+          <Alert title={`本次巡检共发现 ${record.issues.length} 个异常问题，请及时跟踪整改`}
             type="warning"
             showIcon
             style={{ marginBottom: 12 }}

@@ -10,13 +10,14 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Tabs, Table, Tag, Drawer, Descriptions, Timeline, Empty, Spin,
+  Card, Tabs, Tag, Drawer, Descriptions, Timeline, Empty, Spin,
   Button, Space, message, Divider,
 } from 'antd';
 import { ToolOutlined, EyeOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { maintenanceAPI } from '../../api/domains/maintenance';
+import { ResponsiveTable } from '../../components';
 
 const priorityMap = {
   1: { color: 'red', label: '紧急' },
@@ -164,15 +165,50 @@ const AssetMaintenanceRecords = ({ assetId, asset }) => {
     },
   ];
 
+  const mobileFields = [
+    { label: '标题', key: 'title' },
+    {
+      label: '来源',
+      key: 'source_type',
+      render: v => {
+        const m = sourceTypeMap[v] || { color: 'default', label: v || '-' };
+        return <Tag color={m.color}>{m.label}</Tag>;
+      },
+    },
+    {
+      label: '优先级',
+      key: 'priority',
+      render: v => {
+        const m = priorityMap[v] || { color: 'default', label: v };
+        return <Tag color={m.color}>{m.label}</Tag>;
+      },
+    },
+    { label: '负责人', key: 'assigned_to' },
+    {
+      label: '完成时间',
+      key: 'completed_at',
+      render: v => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+    },
+  ];
+  const mobileActions = [
+    { key: 'view', text: '查看', icon: <EyeOutlined />, onClick: openDetail },
+  ];
+
   const renderTable = records => (
-    <Table
+    <ResponsiveTable
       rowKey="id"
       size="small"
       loading={loading}
       dataSource={records}
       columns={columns}
       pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
-      locale={{ emptyText: <Empty description="暂无记录" /> }}
+      mobileTitleKey="work_order_no"
+      mobileStatusRender={r => {
+        const m = statusMap[r.status] || { color: 'default', label: r.status };
+        return <Tag color={m.color}>{m.label}</Tag>;
+      }}
+      mobileFields={mobileFields}
+      mobileActions={mobileActions}
     />
   );
 
@@ -213,7 +249,7 @@ const AssetMaintenanceRecords = ({ assetId, asset }) => {
         width={580}
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        destroyOnClose
+        destroyOnHidden
       >
         {detailLoading ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>

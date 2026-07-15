@@ -1198,8 +1198,7 @@ const WarrantyReminderManagement = () => {
       >
         {checkResult && (
           <div>
-            <Alert
-              message={
+            <Alert title={
                 checkResult.count > 0
                   ? `发现 ${checkResult.count} 个到期/即将到期的保修`
                   : '暂无到期或即将到期的保修'

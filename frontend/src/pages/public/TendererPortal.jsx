@@ -238,8 +238,7 @@ export default function TendererPortal() {
       label: <span><SafetyCertificateOutlined /> 上传资质</span>,
       children: (
         <Card title="上传资质材料" extra={<Tag color="blue">无需登录，扫码直接上传</Tag>}>
-          <Alert
-            message="温馨提示"
+          <Alert title="温馨提示"
             description="上传的资质材料将进入待审核状态，审核通过后将显示在您的供应商资料中。"
             type="info"
             showIcon
@@ -357,8 +356,7 @@ export default function TendererPortal() {
             />
           ) : (
             <Form form={bidForm} layout="vertical">
-              <Alert
-                message="温馨提示"
+              <Alert title="温馨提示"
                 description={
                   tender.status === 'bidding' || tender.status === 'published'
                     ? `当前招标处于${tenderStatusInfo.text}状态，您可以提交或更新投标。`
@@ -498,8 +496,7 @@ export default function TendererPortal() {
         }
         style={{ marginBottom: 16 }}
       >
-        <Alert
-          message={tender.title}
+        <Alert title={tender.title}
           description={
             <Space size="large" wrap>
               <span>招标编号：<strong>{tender.tender_code}</strong></span>

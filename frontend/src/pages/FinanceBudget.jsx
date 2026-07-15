@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Button, Space, Modal, Form, Input, Select,
+  Card, Button, Space, Modal, Form, Input, Select,
   InputNumber, message, Tag, Popconfirm, Descriptions
 } from 'antd';
 import {
@@ -10,6 +10,7 @@ import {
 import { financeAPI } from '../utils/api';
 import { useDepartment } from '../contexts/DepartmentContext';
 import useIsMobile from '../hooks/useIsMobile';
+import { ResponsiveTable } from '../components';
 
 const BUDGET_TYPES = [
   { value: 'equipment_procurement', label: '设备采购', color: 'blue' },
@@ -243,7 +244,7 @@ const FinanceBudget = () => {
       >
         {searchContent}
 
-        <Table
+        <ResponsiveTable
           columns={columns}
           dataSource={data}
           rowKey="id"
@@ -266,6 +267,35 @@ const FinanceBudget = () => {
             showTotal: t => `共 ${t} 条`,
             onChange: (p, ps) => fetchData(p, ps),
           }}
+          mobileTitleKey="budget_name"
+          mobileFields={[
+            { label: '预算类型', key: 'budget_type_label' },
+            {
+              label: '总预算',
+              key: 'total_budget',
+              render: v => `¥${Number(v || 0).toLocaleString()}`,
+            },
+            {
+              label: '已执行',
+              key: 'total_actual',
+              render: v => `¥${Number(v || 0).toLocaleString()}`,
+            },
+            {
+              label: '年度',
+              key: 'budget_year',
+            },
+          ]}
+          mobileActions={[
+            { key: 'edit', text: '编辑', icon: <EditOutlined />, onClick: handleEdit },
+            {
+              key: 'delete',
+              text: '删除',
+              danger: true,
+              icon: <DeleteOutlined />,
+              confirm: '确定删除?',
+              onClick: r => handleDelete(r.id),
+            },
+          ]}
         />
       </Card>
 
@@ -275,7 +305,7 @@ const FinanceBudget = () => {
         onOk={handleSubmit}
         onCancel={() => setModalOpen(false)}
         width={isMobile ? '95%' : 500}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item name="year" label="年份" rules={[{ required: true, message: '请输入年份' }]}>

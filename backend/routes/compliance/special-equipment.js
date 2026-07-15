@@ -44,8 +44,46 @@ async function hasTenantEquipment(equipmentId, tenantId, executor = db) {
  */
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { equipment_type, use_status, inspection_status, page = 1, pageSize = 20 } = req.query;
+    const { equipment_type, use_status, safety_status, keyword, department, page = 1, pageSize = 20 } = req.query;
     const tenantId = getTenantId(req);
+
+    let whereClause = 'WHERE se.tenant_id = ?';
+    const params = [tenantId];
+
+    if (equipment_type) {
+      whereClause += ' AND se.equipment_type = ?';
+      params.push(equipment_type);
+    }
+    if (use_status) {
+      whereClause += ' AND se.status = ?';
+      params.push(use_status);
+    }
+    if (safety_status) {
+      whereClause += ' AND se.safety_status = ?';
+      params.push(safety_status);
+    }
+    if (department) {
+      whereClause += ' AND (a.department = ? OR a.department_new = ?)';
+      params.push(department, department);
+    }
+    if (keyword) {
+      whereClause += ' AND (se.equipment_code LIKE ? OR se.equipment_name LIKE ? OR a.asset_code LIKE ? OR a.asset_name LIKE ?)';
+      params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+    }
+
+    // 先查总数
+    const countSql = `
+      SELECT COUNT(*) as total
+      FROM special_equipment se
+      ${COMPLIANCE_SPECIAL_EQUIPMENT_ASSET_JOIN}
+      ${whereClause}
+    `;
+    const [countResult] = await db.execute(countSql, params);
+    const total = countResult[0]?.total || 0;
+
+    const normalizedPage = Math.max(1, parseInt(page) || 1);
+    const normalizedPageSize = Math.min(200, Math.max(1, parseInt(pageSize) || 20));
+    const offset = (normalizedPage - 1) * normalizedPageSize;
 
     let sql = `
       SELECT 
@@ -57,24 +95,11 @@ router.get('/', authenticate, async (req, res) => {
         DATEDIFF(se.next_inspection_date, CURDATE()) as days_until_inspection
       FROM special_equipment se
       ${COMPLIANCE_SPECIAL_EQUIPMENT_ASSET_JOIN}
-      WHERE se.tenant_id = ?
+      ${whereClause}
+      ORDER BY se.next_inspection_date ASC
+      LIMIT ? OFFSET ?
     `;
-    const params = [tenantId];
-
-    if (equipment_type) {
-      sql += ' AND se.equipment_type = ?';
-      params.push(equipment_type);
-    }
-    if (use_status) {
-      sql += ' AND se.status = ?';
-      params.push(use_status);
-    }
-
-    sql += ' ORDER BY se.next_inspection_date ASC';
-
-    const offset = (page - 1) * pageSize;
-    sql += ' LIMIT ? OFFSET ?';
-    params.push(parseInt(pageSize), parseInt(offset));
+    params.push(normalizedPageSize, offset);
 
     const [equipment] = await db.execute(sql, params);
 
@@ -82,9 +107,15 @@ router.get('/', authenticate, async (req, res) => {
       success: true,
       data: equipment.map(e => ({
         ...e,
-        safety_valve_info: e.safety_valve_info ? JSON.parse(e.safety_valve_info) : null,
-        pressure_gauge_info: e.pressure_gauge_info ? JSON.parse(e.pressure_gauge_info) : null,
+        safety_valve_info: e.safety_valve_info ? (typeof e.safety_valve_info === 'string' ? JSON.parse(e.safety_valve_info) : e.safety_valve_info) : null,
+        pressure_gauge_info: e.pressure_gauge_info ? (typeof e.pressure_gauge_info === 'string' ? JSON.parse(e.pressure_gauge_info) : e.pressure_gauge_info) : null,
       })),
+      pagination: {
+        page: normalizedPage,
+        pageSize: normalizedPageSize,
+        total,
+        totalPages: Math.ceil(total / normalizedPageSize),
+      },
     });
   } catch (error) {
     logger.error('获取特种设备列表失败:', error);
@@ -197,36 +228,60 @@ router.put('/:id', authenticate, async (req, res) => {
  */
 router.get('/inspections', authenticate, async (req, res) => {
   try {
-    const { equipment_id, inspection_type, page = 1, pageSize = 20 } = req.query;
+    const { equipment_id, inspection_type, keyword, inspection_result, page = 1, pageSize = 20 } = req.query;
     const tenantId = getTenantId(req);
+
+    let whereClause = 'WHERE sei.tenant_id = ?';
+    const params = [tenantId];
+
+    if (equipment_id) {
+      whereClause += ' AND sei.equipment_id = ?';
+      params.push(equipment_id);
+    }
+    if (inspection_type) {
+      whereClause += ' AND sei.inspection_type = ?';
+      params.push(inspection_type);
+    }
+    if (inspection_result) {
+      whereClause += ' AND sei.inspection_result = ?';
+      params.push(inspection_result);
+    }
+    if (keyword) {
+      whereClause += ' AND (sei.inspection_code LIKE ? OR sei.inspector LIKE ? OR se.equipment_name LIKE ? OR se.equipment_code LIKE ? OR a.asset_code LIKE ?)';
+      params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+    }
+
+    // 先查总数
+    const countSql = `
+      SELECT COUNT(*) as total
+      FROM special_equipment_inspections sei
+      ${COMPLIANCE_SPECIAL_EQUIPMENT_INSPECTION_JOIN}
+      ${COMPLIANCE_SPECIAL_EQUIPMENT_INSPECTION_ASSET_JOIN}
+      ${whereClause}
+    `;
+    const [countResult] = await db.execute(countSql, params);
+    const total = countResult[0]?.total || 0;
+
+    const normalizedPage = Math.max(1, parseInt(page) || 1);
+    const normalizedPageSize = Math.min(200, Math.max(1, parseInt(pageSize) || 20));
+    const offset = (normalizedPage - 1) * normalizedPageSize;
 
     let sql = `
       SELECT 
         sei.*,
         se.equipment_type,
+        se.equipment_name,
+        se.equipment_code,
         a.asset_code,
         a.asset_name
       FROM special_equipment_inspections sei
       ${COMPLIANCE_SPECIAL_EQUIPMENT_INSPECTION_JOIN}
       ${COMPLIANCE_SPECIAL_EQUIPMENT_INSPECTION_ASSET_JOIN}
-      WHERE sei.tenant_id = ?
+      ${whereClause}
+      ORDER BY sei.inspection_date DESC
+      LIMIT ? OFFSET ?
     `;
-    const params = [tenantId];
-
-    if (equipment_id) {
-      sql += ' AND sei.equipment_id = ?';
-      params.push(equipment_id);
-    }
-    if (inspection_type) {
-      sql += ' AND sei.inspection_type = ?';
-      params.push(inspection_type);
-    }
-
-    sql += ' ORDER BY sei.inspection_date DESC';
-
-    const offset = (page - 1) * pageSize;
-    sql += ' LIMIT ? OFFSET ?';
-    params.push(parseInt(pageSize), parseInt(offset));
+    params.push(normalizedPageSize, offset);
 
     const [inspections] = await db.execute(sql, params);
 
@@ -234,8 +289,14 @@ router.get('/inspections', authenticate, async (req, res) => {
       success: true,
       data: inspections.map(i => ({
         ...i,
-        inspection_items: i.inspection_items ? JSON.parse(i.inspection_items) : null,
+        inspection_items: i.inspection_items ? (typeof i.inspection_items === 'string' ? JSON.parse(i.inspection_items) : i.inspection_items) : null,
       })),
+      pagination: {
+        page: normalizedPage,
+        pageSize: normalizedPageSize,
+        total,
+        totalPages: Math.ceil(total / normalizedPageSize),
+      },
     });
   } catch (error) {
     logger.error('获取检验记录失败:', error);

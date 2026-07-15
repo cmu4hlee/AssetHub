@@ -323,8 +323,7 @@ const ReportPrint = () => {
           </Space>
         }
       >
-        <Alert
-          message="报表打印说明"
+        <Alert title="报表打印说明"
           description="选择报表类型和筛选条件后，点击「打印报表」按钮，系统将打开新窗口生成可打印的报表。可在打印窗口中另存为 PDF。"
           type="info"
           showIcon

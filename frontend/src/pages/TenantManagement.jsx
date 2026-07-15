@@ -296,7 +296,7 @@ const TenantManagement = () => {
       render: (max, record) => {
         const used = record.user_count || 0;
         return (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <span>
               {used} / {max}
             </span>

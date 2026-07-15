@@ -249,8 +249,7 @@ const SafetyInspectionManagement = () => {
       </Row>
 
       {stats.expiring > 0 && (
-        <Alert
-          message={`提醒：有 ${stats.expiring} 项检测即将到期，请提前安排复检！`}
+        <Alert title={`提醒：有 ${stats.expiring} 项检测即将到期，请提前安排复检！`}
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
@@ -258,8 +257,7 @@ const SafetyInspectionManagement = () => {
       )}
 
       {stats.fail > 0 && (
-        <Alert
-          message={`警告：有 ${stats.fail} 项检测不合格，请立即整改！`}
+        <Alert title={`警告：有 ${stats.fail} 项检测不合格，请立即整改！`}
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -392,7 +390,7 @@ const SafetyInspectionManagement = () => {
         width={700}
       >
         {viewingInspection && (
-          <Descriptions bordered column={2}>
+          <Descriptions variant="outlined" column={2}>
             <Descriptions.Item label="检测编号">{viewingInspection.inspection_code}</Descriptions.Item>
             <Descriptions.Item label="检测名称">{viewingInspection.inspection_name}</Descriptions.Item>
             <Descriptions.Item label="检测类型">

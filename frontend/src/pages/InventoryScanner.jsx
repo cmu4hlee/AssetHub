@@ -636,8 +636,7 @@ const InventoryScanner = () => {
         />
 
         {cameraError && (
-          <Alert
-            message="摄像头问题"
+          <Alert title="摄像头问题"
             description={cameraError}
             type="error"
             showIcon

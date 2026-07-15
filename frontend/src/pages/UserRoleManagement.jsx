@@ -456,8 +456,7 @@ const UserRoleManagement = () => {
         confirmLoading={roleLoading}
       >
         <Spin spinning={roleLoading}>
-          <Alert
-            message="角色分配说明"
+          <Alert title="角色分配说明"
             description="每个用户在当前企业下拥有一个角色。切换角色将覆盖之前的角色分配。"
             type="info"
             showIcon
@@ -491,8 +490,7 @@ const UserRoleManagement = () => {
         okText="确认分配"
         cancelText="取消"
       >
-        <Alert
-          message={`已选择 ${selectedUserIds.length} 个用户`}
+        <Alert title={`已选择 ${selectedUserIds.length} 个用户`}
           description="批量分配角色将覆盖这些用户当前的角色，请谨慎操作。"
           type="warning"
           showIcon

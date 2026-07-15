@@ -36,8 +36,8 @@ const requireModuleAccess = moduleId => {
         return res.status(401).json({ success: false, message: '需要先登录' });
       }
 
-      // 超级管理员拥有所有模块的访问权限
-      if (req.user.is_super_admin) {
+      // 超级管理员和系统管理员拥有所有模块的访问权限
+      if (req.user.is_super_admin || req.user.role === 'system_admin') {
         return next();
       }
 

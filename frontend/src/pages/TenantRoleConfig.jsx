@@ -314,7 +314,7 @@ const TenantRoleConfig = () => {
             style={{ marginBottom: 16 }}
             message="控制该角色在当前租户下能看到的数据边界（资产、工单、文档等）。"
           />
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             <Select
               value={dataScope}
               style={{ width: 280 }}
@@ -419,7 +419,7 @@ const TenantRoleConfig = () => {
       />
 
       <Card>
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
           <Space wrap>
             <Text strong>配置角色：</Text>
             <Select

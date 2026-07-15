@@ -238,8 +238,7 @@ const RiskAssessment = () => {
       </Row>
 
       {stats.high > 0 && (
-        <Alert
-          message={`警告：有 ${stats.high} 项资产被评估为高风险，请立即制定风险控制措施！`}
+        <Alert title={`警告：有 ${stats.high} 项资产被评估为高风险，请立即制定风险控制措施！`}
           type="error"
           showIcon
           style={{ marginBottom: 16 }}

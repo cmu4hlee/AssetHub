@@ -298,8 +298,7 @@ const EnhancedPermissionManagement = () => {
         }
         style={{ borderRadius: 8 }}
       >
-        <Alert
-          message="权限管理说明"
+        <Alert title="权限管理说明"
           description="此页面用于管理用户的增强权限，包括数据范围、额外权限、权限拒绝等。超级管理员和系统管理员可以管理所有用户的权限。"
           type="info"
           showIcon

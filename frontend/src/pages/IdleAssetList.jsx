@@ -372,14 +372,14 @@ const IdleAssetList = () => {
               title="发布中"
               value={statistics?.active || data.filter(d => d.status === '发布中').length}
               prefix={<GiftOutlined />}
-              valueStyle={{ color: '#1677ff' }}
+              styles={{ content: { color: '#1677ff' } }}
             />
           </Col>
           <Col xs={12} sm={6}>
             <Statistic
               title="已分配"
               value={statistics?.allocated || data.filter(d => d.status === '已分配').length}
-              valueStyle={{ color: '#52c41a' }}
+              styles={{ content: { color: '#52c41a' } }}
             />
           </Col>
           <Col xs={12} sm={6}>
@@ -392,7 +392,7 @@ const IdleAssetList = () => {
             <Statistic
               title="超30天闲置"
               value={statistics?.long_idle_count || 0}
-              valueStyle={statistics?.long_idle_count > 0 ? { color: '#ff4d4f' } : {}}
+              styles={{ content: statistics?.long_idle_count > 0 ? { color: '#ff4d4f' } : {} }}
               suffix={statistics?.avg_idle_days ? `/ 平均${statistics.avg_idle_days}天` : ''}
             />
           </Col>
@@ -552,7 +552,7 @@ const IdleAssetList = () => {
         open={assignModalVisible}
         onCancel={() => { setAssignModalVisible(false); setAssignData(null); }}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         <FormComponent
           onSubmit={handleAssignSubmit}

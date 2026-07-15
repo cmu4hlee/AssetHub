@@ -290,7 +290,7 @@ const InventoryList = () => {
               <Statistic
                 title="进行中"
                 value={statistics.in_progress || 0}
-                valueStyle={{ color: '#1890ff' }}
+                styles={{ content: { color: '#1890ff' } }}
               />
             </Card>
           </Col>
@@ -299,7 +299,7 @@ const InventoryList = () => {
               <Statistic
                 title="已完成"
                 value={statistics.completed || 0}
-                valueStyle={{ color: '#52c41a' }}
+                styles={{ content: { color: '#52c41a' } }}
               />
             </Card>
           </Col>
@@ -308,7 +308,7 @@ const InventoryList = () => {
               <Statistic
                 title="已取消"
                 value={statistics.cancelled || 0}
-                valueStyle={{ color: '#ff4d4f' }}
+                styles={{ content: { color: '#ff4d4f' } }}
               />
             </Card>
           </Col>

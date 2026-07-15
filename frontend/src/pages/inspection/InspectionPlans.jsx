@@ -194,8 +194,7 @@ const InspectionPlans = () => {
 
   return (
     <div style={{ padding: isMobile ? '8px' : '24px' }}>
-      <Alert
-        message="巡检计划按设定周期自动派发巡检任务。可配置自动转工单,异常问题时自动创建维修工单。"
+      <Alert title="巡检计划按设定周期自动派发巡检任务。可配置自动转工单,异常问题时自动创建维修工单。"
         type="info"
         showIcon
         style={{ marginBottom: 16 }}

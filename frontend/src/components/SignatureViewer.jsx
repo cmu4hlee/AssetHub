@@ -124,7 +124,7 @@ const SignatureViewer = ({
         title={label}
         width="auto"
         centered
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ textAlign: 'center', padding: '8px 0' }}>
           <img

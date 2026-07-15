@@ -18,7 +18,7 @@ class SpecialEquipmentController {
    */
   async getEquipments(req, res) {
     try {
-      const { page, pageSize, status, safety_status, keyword } = req.query;
+      const { page, pageSize, status, safety_status, keyword, equipment_type } = req.query;
       const tenantId = req.user?.tenant_id || req.headers['x-tenant-id'];
 
       if (!tenantId) {
@@ -45,6 +45,7 @@ class SpecialEquipmentController {
         status,
         safety_status,
         keyword,
+        equipment_type,
         tenantId,
       });
 
@@ -213,7 +214,7 @@ class SpecialEquipmentController {
    */
   async getInspections(req, res) {
     try {
-      const { page, pageSize, equipment_id, inspection_type } = req.query;
+      const { page, pageSize, equipment_id, inspection_type, keyword, inspection_result } = req.query;
       const tenantId = req.user.tenant_id || req.headers['x-tenant-id'];
 
       if (!tenantId) {
@@ -230,6 +231,8 @@ class SpecialEquipmentController {
         pageSize,
         equipment_id,
         inspection_type,
+        keyword,
+        inspection_result,
         tenantId,
       });
 

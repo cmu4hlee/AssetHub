@@ -167,8 +167,7 @@ const AcceptanceApplicationForm = () => {
       <Spin spinning={loading}>
         <Card>
           {readOnly && (
-            <Alert
-              message="当前申请状态不是草稿，不可编辑"
+            <Alert title="当前申请状态不是草稿，不可编辑"
               description={`申请状态：${record?.status || '-'}，仅草稿状态的申请可以编辑。`}
               type="warning"
               showIcon

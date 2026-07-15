@@ -300,7 +300,7 @@ const IdleAssetDetail = () => {
         open={assignModalVisible}
         onCancel={() => setAssignModalVisible(false)}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         <AssignForm onSubmit={handleAssign} onCancel={() => setAssignModalVisible(false)} />
       </Modal>

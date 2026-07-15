@@ -711,8 +711,7 @@ const MaintenanceEfficiencyDashboard = () => {
     const err = sectionErrors[section];
     if (!err) return null;
     return (
-      <Alert
-        message={err}
+      <Alert title={err}
         type="warning"
         showIcon
         style={{ marginBottom: 16 }}

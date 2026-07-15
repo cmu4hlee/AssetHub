@@ -81,7 +81,8 @@ const AssetDocuments = ({ assetId, asset }) => {
       setLinkDocumentLoading(true);
       const result = await technicalDocumentsAPI.getTechnicalDocuments({ pageSize: 100 });
       if (result.success) {
-        setAvailableDocuments(result.data?.list || []);
+        // technicalDocumentsAPI.getTechnicalDocuments 不走 normalize, 后端直接返 data: [...] (数组)
+        setAvailableDocuments(result.data || []);
       }
     } catch (error) {
       console.error('加载可选技术资料失败:', error);

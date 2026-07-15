@@ -281,8 +281,7 @@ const UptimeStatistics = () => {
       </Row>
 
       {stats.danger > 0 && (
-        <Alert
-          message={`警告：有 ${stats.danger} 台设备开机率低于90%，请关注设备运行状态！`}
+        <Alert title={`警告：有 ${stats.danger} 台设备开机率低于90%，请关注设备运行状态！`}
           type="error"
           showIcon
           style={{ marginBottom: 16 }}

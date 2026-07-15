@@ -186,7 +186,7 @@ const AcceptanceReminders = () => {
       title: '资产',
       key: 'asset',
       render: (_, r) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text>{r.asset_name || '-'}</Text>
           {r.asset_code && <Text type="secondary" style={{ fontSize: 12 }}>{r.asset_code}</Text>}
         </Space>

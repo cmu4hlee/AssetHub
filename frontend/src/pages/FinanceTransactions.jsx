@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Table, Button, Space, Modal, Form, Input, Select,
+  Card, Button, Space, Modal, Form, Input, Select,
   InputNumber, DatePicker, message, Tag, Popconfirm
 } from 'antd';
 import {
@@ -10,6 +10,7 @@ import {
 import dayjs from 'dayjs';
 import { financeAPI } from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
+import { ResponsiveTable } from '../components';
 
 const TRANSACTION_CATEGORIES = {
   income: [
@@ -221,7 +222,7 @@ const FinanceTransactions = () => {
           </Form.Item>
         </Form>
 
-        <Table
+        <ResponsiveTable
           columns={columns}
           dataSource={data}
           rowKey="id"
@@ -244,6 +245,45 @@ const FinanceTransactions = () => {
             showTotal: t => `共 ${t} 条`,
             onChange: (p, ps) => fetchData(p, ps),
           }}
+          mobileTitleKey="category"
+          mobileStatusRender={r => (
+            <Tag color={r.transaction_type === 'income' ? 'green' : 'red'}>
+              {r.transaction_type === 'income' ? '收入' : '支出'}
+            </Tag>
+          )}
+          mobileFields={[
+            {
+              label: '日期',
+              key: 'transaction_date',
+              render: v => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+            },
+            {
+              label: '金额',
+              key: 'amount',
+              render: (v, r) => (
+                <span style={{
+                  color: r.transaction_type === 'income' ? '#52c41a' : '#ff4d4f',
+                  fontWeight: 600,
+                }}>
+                  {r.transaction_type === 'income' ? '+' : '-'}¥{Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                </span>
+              ),
+            },
+            { label: '资产编码', key: 'asset_code' },
+            { label: '凭证号', key: 'voucher_no' },
+            { label: '创建人', key: 'created_by' },
+          ]}
+          mobileActions={[
+            { key: 'edit', text: '编辑', icon: <EditOutlined />, onClick: handleEdit },
+            {
+              key: 'delete',
+              text: '删除',
+              danger: true,
+              icon: <DeleteOutlined />,
+              confirm: '确定删除?',
+              onClick: r => handleDelete(r.id),
+            },
+          ]}
         />
       </Card>
 
@@ -253,7 +293,7 @@ const FinanceTransactions = () => {
         onOk={handleSubmit}
         onCancel={() => setModalOpen(false)}
         width={isMobile ? '95%' : 500}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item name="transaction_type" label="收支类型" rules={[{ required: true, message: '请选择收支类型' }]}>

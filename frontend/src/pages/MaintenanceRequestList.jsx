@@ -909,7 +909,7 @@ const MaintenanceRequestList = () => {
               bordered
               hoverable
               actions={getCardActions(item)}
-              bodyStyle={{ padding: 12 }}
+              styles={{ body: { padding: 12 } }}
             >
               <Card.Meta
                 title={

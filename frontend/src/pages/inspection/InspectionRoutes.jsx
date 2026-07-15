@@ -5,13 +5,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useCan } from '../../hooks';
 import {
-  Card, Table, Button, Tag, Space, Modal, Form, Input, Select, message,
+  Card, Button, Tag, Space, Modal, Form, Input, Select, message,
   Popconfirm, InputNumber, Empty,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { inspectionAPI, assetAPI } from '../../utils/api';
 import dayjs from 'dayjs';
 import useIsMobile from '../../hooks/useIsMobile';
+import { ResponsiveTable } from '../../components';
 
 const { Option } = Select;
 
@@ -132,7 +133,7 @@ const InspectionRoutes = () => {
         title={<span><EnvironmentOutlined /> 巡检路线</span>}
         extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新建路线</Button>}
       >
-        <Table
+        <ResponsiveTable
           rowKey="id"
           loading={loading}
           columns={columns}
@@ -144,6 +145,30 @@ const InspectionRoutes = () => {
             showTotal: t => `共 ${t} 条`,
             onChange: (p, ps) => { setPage(p); setPageSize(ps); },
           }}
+          mobileTitleKey="route_name"
+          mobileStatusRender={r => r.status === 'active'
+            ? <Tag color="success">启用</Tag>
+            : <Tag>停用</Tag>}
+          mobileFields={[
+            { label: '路线编号', key: 'route_code' },
+            { label: '点位数量', key: 'point_count', render: v => v || 0 },
+            { label: '预计耗时(分钟)', key: 'estimated_minutes' },
+          ]}
+          mobileActions={[
+            { key: 'edit', text: '编辑', icon: <EditOutlined />, onClick: handleEdit },
+            {
+              key: 'delete',
+              text: '删除',
+              danger: true,
+              icon: <DeleteOutlined />,
+              hidden: !canDelete,
+              confirm: '删除该路线?',
+              onClick: async (r) => {
+                try { await inspectionAPI.deleteRoute(r.id); message.success('删除成功'); load(); }
+                catch (_e) { message.error('删除失败'); }
+              },
+            },
+          ]}
         />
       </Card>
 

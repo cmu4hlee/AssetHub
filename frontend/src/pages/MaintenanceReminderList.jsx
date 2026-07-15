@@ -644,8 +644,7 @@ const MaintenanceReminderList = () => {
                 </div>
                 {reminderConfig && (
                   <div style={{ marginTop: 12 }}>
-                    <Alert
-                      message={`当前配置：提前 ${reminderConfig.reminder_days_before ?? reminderConfig.reminder_days ?? '-'} 天提醒，提醒方式：${(reminderConfig.reminder_types || []).map(t => {
+                    <Alert title={`当前配置：提前 ${reminderConfig.reminder_days_before ?? reminderConfig.reminder_days ?? '-'} 天提醒，提醒方式：${(reminderConfig.reminder_types || []).map(t => {
                         const map = { system: '系统通知', email: '邮件', sms: '短信' };
                         return map[t] || t;
                       }).join('、') || '未设置'}，${reminderConfig.enabled !== false ? '已启用' : '已禁用'}`}
@@ -787,8 +786,7 @@ const MaintenanceReminderList = () => {
       >
         {checkResult && (
           <div>
-            <Alert
-              message={checkResult.count > 0
+            <Alert title={checkResult.count > 0
                 ? `发现 ${checkResult.count} 个需要提醒的维护计划`
                 : '暂无需要提醒的维护计划'
               }
@@ -837,8 +835,7 @@ const MaintenanceReminderList = () => {
         okText="确认发送"
         cancelText="取消"
       >
-        <Alert
-          message={`即将发送 ${selectedRowKeys.length} 条提醒`}
+        <Alert title={`即将发送 ${selectedRowKeys.length} 条提醒`}
           description="请确认以下选中的提醒均已核实，发送后不可撤回。"
           type="warning"
           showIcon
@@ -859,8 +856,7 @@ const MaintenanceReminderList = () => {
         styles={{ wrapper: { width: 600 } }}
         destroyOnHidden
       >
-        <Alert
-          message="选择一个启用的维护计划，手动发送提醒通知给指定人员"
+        <Alert title="选择一个启用的维护计划，手动发送提醒通知给指定人员"
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
@@ -908,8 +904,7 @@ const MaintenanceReminderList = () => {
         styles={{ wrapper: { width: 600 } }}
         destroyOnHidden
       >
-        <Alert
-          message="配置提醒规则后，系统将在维护计划到期前自动发送提醒"
+        <Alert title="配置提醒规则后，系统将在维护计划到期前自动发送提醒"
           type="info"
           showIcon
           style={{ marginBottom: 16 }}

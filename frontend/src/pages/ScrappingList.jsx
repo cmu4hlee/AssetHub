@@ -54,11 +54,12 @@ const ScrappingList = () => {
       }
       const result = await scrappingAPI.getScrappingRecords(params);
       if (result.success) {
-        setDataSource(result.data.records || []);
+        // scrappingAPI 走 getNormalizedList, records 已被抽到 result.data (数组), pagination 提升到顶层
+        setDataSource(result.data || []);
         setPagination({
-          current: result.data.pagination?.page || 1,
-          pageSize: result.data.pagination?.pageSize || 10,
-          total: result.data.pagination?.total || 0,
+          current: result.pagination?.page || 1,
+          pageSize: result.pagination?.pageSize || 10,
+          total: result.pagination?.total || 0,
         });
       }
     } catch (error) {

@@ -36,8 +36,10 @@ function safeJsonStringify(value) {
 /* ===================== 通知模板 ===================== */
 
 async function listTemplates({ tenantId, channel, keyword, page = 1, pageSize = DEFAULT_PAGE_SIZE } = {}) {
-  const conditions = ['tenant_id = ?'];
-  const params = [tenantId || 0];
+  // 系统模板（tenant_id=0）对所有租户可见，租户自定义模板仅自己可见
+  const tid = tenantId || 0;
+  const conditions = ['tenant_id IN (0, ?)'];
+  const params = [tid];
 
   if (channel) {
     conditions.push('channel = ?');
@@ -81,11 +83,12 @@ async function listTemplates({ tenantId, channel, keyword, page = 1, pageSize = 
 }
 
 async function getTemplateById(id, tenantId) {
+  const tid = tenantId || 0;
   const [rows] = await db.execute(
     `SELECT id, tenant_id, code, name, channel, title_template, content_template, variables_json, enabled, created_at, updated_at
      FROM notification_templates
-     WHERE id = ? AND tenant_id = ?`,
-    [id, tenantId || 0],
+     WHERE id = ? AND tenant_id IN (0, ?)`,
+    [id, tid],
   );
   if (!rows.length) return null;
   return {
@@ -95,11 +98,12 @@ async function getTemplateById(id, tenantId) {
 }
 
 async function getTemplateByCode(code, tenantId) {
+  const tid = tenantId || 0;
   const [rows] = await db.execute(
     `SELECT id, tenant_id, code, name, channel, title_template, content_template, variables_json, enabled, created_at, updated_at
      FROM notification_templates
-     WHERE code = ? AND tenant_id = ? AND enabled = 1`,
-    [code, tenantId || 0],
+     WHERE code = ? AND tenant_id IN (0, ?) AND enabled = 1`,
+    [code, tid],
   );
   if (!rows.length) return null;
   return {
@@ -150,8 +154,9 @@ async function deleteTemplate(id, tenantId) {
 /* ===================== 通知规则 ===================== */
 
 async function listRules({ tenantId, processType, eventCode, nodeCode, enabled, keyword, page = 1, pageSize = DEFAULT_PAGE_SIZE } = {}) {
-  const conditions = ['r.tenant_id = ?'];
-  const params = [tenantId || 0];
+  const tid = tenantId || 0;
+  const conditions = ['r.tenant_id IN (0, ?)'];
+  const params = [tid];
 
   if (processType) {
     conditions.push('r.process_type = ?');
@@ -236,7 +241,7 @@ async function getRuleById(id, tenantId) {
     `SELECT r.*, t.code AS template_code, t.name AS template_name, t.channel
      FROM notification_rules r
      LEFT JOIN notification_templates t ON r.template_id = t.id
-     WHERE r.id = ? AND r.tenant_id = ?`,
+     WHERE r.id = ? AND r.tenant_id IN (0, ?)`,
     [id, tenantId || 0],
   );
   if (!rows.length) return null;
@@ -370,7 +375,7 @@ async function listRecipients(ruleId, tenantId) {
   const [rows] = await db.execute(
     `SELECT nr.* FROM notification_recipients nr
      INNER JOIN notification_rules r ON nr.rule_id = r.id
-     WHERE nr.rule_id = ? AND r.tenant_id = ?`,
+     WHERE nr.rule_id = ? AND r.tenant_id IN (0, ?)`,
     [ruleId, tenantId || 0],
   );
   return rows.map(r => ({
@@ -382,7 +387,7 @@ async function listRecipients(ruleId, tenantId) {
 async function addRecipient(ruleId, tenantId, data) {
   const [result] = await db.execute(
     `INSERT INTO notification_recipients (rule_id, recipient_type, recipient_value, created_at)
-     SELECT ?, ?, ?, NOW() FROM notification_rules r WHERE r.id = ? AND r.tenant_id = ?
+     SELECT ?, ?, ?, NOW() FROM notification_rules r WHERE r.id = ? AND r.tenant_id IN (0, ?)
      LIMIT 1`,
     [ruleId, data.recipient_type, safeJsonStringify(data.recipient_value), ruleId, tenantId || 0],
   );
@@ -394,7 +399,7 @@ async function deleteRecipient(id, tenantId) {
   await db.execute(
     `DELETE nr FROM notification_recipients nr
      INNER JOIN notification_rules r ON nr.rule_id = r.id
-     WHERE nr.id = ? AND r.tenant_id = ?`,
+     WHERE nr.id = ? AND r.tenant_id IN (0, ?)`,
     [id, tenantId || 0],
   );
   return true;
@@ -418,8 +423,8 @@ const PROCESS_TYPES = [
 
 const EVENTS_BY_PROCESS = {
   maintenance: [
-    'maintenance_request:created', 'maintenance_request:approved', 'maintenance_request:rejected',
-    'maintenance_request:started', 'maintenance_request:completed', 'maintenance_request:cancelled',
+    'maintenance.request.created', 'maintenance.request.approved', 'maintenance.request.rejected',
+    'maintenance.request.started', 'maintenance.request.completed', 'maintenance.request.cancelled',
     'workorder:assigned', 'workorder:completed', 'maintenance:approved',
   ],
   approval: [

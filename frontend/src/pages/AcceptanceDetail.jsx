@@ -393,7 +393,7 @@ const AcceptanceDetail = () => {
                           </Space>
                         }
                         description={
-                          <Space direction="vertical" size={0}>
+                          <Space orientation="vertical" size={0}>
                             {item.item_description && <Text type="secondary">{item.item_description}</Text>}
                             {item.remark && <Text type="warning">备注：{item.remark}</Text>}
                             {item.checked_by && (

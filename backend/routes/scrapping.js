@@ -5,9 +5,15 @@ const logger = require('../config/logger');
 const { authenticate, requireSystemAdmin } = require('../middleware/auth');
 const { auditLogger } = require('../middleware/auditLogger');
 const { addTenantFilter, getTenantId, requireTenantId } = require('../middleware/tenant-filter');
+const eventBus = require('../core/EventBus').getEventBus();
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+
+// 安全发布事件
+function safeEmit(eventName, payload) {
+  try { eventBus.emit(eventName, payload || {}); } catch (e) { /* 静默 */ }
+}
 const crypto = require('crypto');
 const { fileSecurity } = require('../middleware/fileSecurity');
 
@@ -128,6 +134,10 @@ router.post('/', authenticate, requireTenantId, auditLogger('create', 'scrapping
       success: true,
       message: '报废申请创建成功',
       data: { id: insertId },
+    });
+    safeEmit('scrapping:created', {
+      tenantId, scrapId: insertId, assetCode: asset_code,
+      actorUserId: req.user?.id, source: 'scrapping.create',
     });
   } catch (error) {
     console.error('创建报废申请失败:', error);
@@ -528,6 +538,10 @@ router.post('/:id/approve', authenticate, auditLogger('approve', 'scrapping'), a
       success: true,
       message: '审批结果提交成功',
     });
+    safeEmit(approval_status === 'approved' ? 'scrapping:approved' : 'scrapping:rejected', {
+      tenantId, scrapId: parseInt(id), approvalStatus: approval_status,
+      actorUserId: req.user?.id, source: 'scrapping.approve',
+    });
   } catch (error) {
     console.error('提交审批结果失败:', error);
     res.status(500).json({
@@ -689,6 +703,10 @@ router.post('/:id/complete', authenticate, auditLogger('update', 'scrapping'), a
     res.json({
       success: true,
       message: '处置完成成功',
+    });
+    safeEmit('scrapping:completed', {
+      tenantId, scrapId: parseInt(id),
+      actorUserId: req.user?.id, source: 'scrapping.dispose',
     });
   } catch (error) {
     console.error('完成处置失败:', error);
@@ -873,6 +891,10 @@ router.post('/:id/reject', authenticate, auditLogger('approve', 'scrapping'), as
     });
 
     res.json({ success: true, message: '报废申请已驳回' });
+    safeEmit('scrapping:rejected', {
+      tenantId, scrapId: parseInt(id),
+      actorUserId: req.user?.id, source: 'scrapping.reject',
+    });
   } catch (error) {
     console.error('驳回报废申请失败:', error);
     res.status(500).json({ success: false, message: '驳回报废申请失败', error: error.message });

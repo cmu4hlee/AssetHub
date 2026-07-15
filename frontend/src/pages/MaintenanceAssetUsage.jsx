@@ -814,22 +814,19 @@ const MaintenanceAssetUsage = () => {
                 </Col>
                 <Col xs={24} lg={8}>
                   <Space orientation="vertical" style={{ width: '100%' }} size="middle">
-                    <Alert
-                      message="使用量正常"
+                    <Alert title="使用量正常"
                       description="使用率 &lt; 80%"
                       type="success"
                       showIcon
                       icon={<CheckCircleOutlined />}
                     />
-                    <Alert
-                      message="即将触发"
+                    <Alert title="即将触发"
                       description="80% ≤ 使用率 &lt; 100%"
                       type="warning"
                       showIcon
                       icon={<WarningOutlined />}
                     />
-                    <Alert
-                      message="已超限"
+                    <Alert title="已超限"
                       description="使用率 ≥ 100%"
                       type="error"
                       showIcon

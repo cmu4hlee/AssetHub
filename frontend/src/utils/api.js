@@ -64,4 +64,40 @@ export const intelligentAlertAPI = {
   updateSettings: data => api.post('/intelligent-alerts/settings', data),
 };
 
+// 站内消息 API（WebSocket 落库的历史消息）
+export const inAppNotificationAPI = {
+  list: params => api.get('/in-app-notifications', { params }),
+  unreadCount: params => api.get('/in-app-notifications/unread-count', { params }),
+  markAsRead: id => api.post(`/in-app-notifications/${id}/read`),
+  markAllAsRead: data => api.post('/in-app-notifications/read-all', data || {}),
+  batchRead: ids => api.post('/in-app-notifications/batch-read', { ids }),
+  remove: id => api.delete(`/in-app-notifications/${id}`),
+  batchRemove: ids => api.delete('/in-app-notifications/batch', { data: { ids } }),
+  clearRead: () => api.post('/in-app-notifications/clear-read'),
+};
+
+// 接收人策略 API
+export const recipientStrategyAPI = {
+  getMeta: () => api.get('/recipient-strategies/meta'),
+  list: params => api.get('/recipient-strategies', { params }),
+  getForEvent: eventCode => api.get(`/recipient-strategies/event/${eventCode}`),
+  create: data => api.post('/recipient-strategies', data),
+  update: (id, data) => api.put(`/recipient-strategies/${id}`, data),
+  remove: id => api.delete(`/recipient-strategies/${id}`),
+  batchDelete: ids => api.post('/recipient-strategies/batch-delete', { ids }),
+  preview: (eventCode, payload) =>
+    api.post('/recipient-strategies/preview', { eventCode, payload }),
+};
+
+// 通知偏好 API（DND / 紧急度阈值）
+export const notificationPreferenceAPI = {
+  getMeta: () => api.get('/notification-preferences/meta'),
+  getMine: () => api.get('/notification-preferences/me'),
+  getEffective: eventCode => api.get('/notification-preferences/me/effective', { params: eventCode ? { eventCode } : {} }),
+  upsert: data => api.post('/notification-preferences', data),
+  remove: id => api.delete(`/notification-preferences/${id}`),
+  preview: (urgency, now, eventCode) => api.post('/notification-preferences/preview', { urgency, now, eventCode }),
+  getForUser: userId => api.get(`/notification-preferences/user/${userId}`),
+};
+
 export default api;

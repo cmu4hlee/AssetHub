@@ -116,7 +116,7 @@ const FinanceReports = () => {
                   value={totalAssetValue}
                   precision={2}
                   prefix="¥"
-                  valueStyle={{ color: '#1677ff' }}
+                  styles={{ content: { color: '#1677ff' } }}
                   suffix={<BankOutlined />}
                 />
               </Card>
@@ -128,7 +128,7 @@ const FinanceReports = () => {
                   value={totalBudget}
                   precision={2}
                   prefix="¥"
-                  valueStyle={{ color: '#722ed1' }}
+                  styles={{ content: { color: '#722ed1' } }}
                 />
               </Card>
             </Col>
@@ -139,7 +139,7 @@ const FinanceReports = () => {
                   value={totalIncome}
                   precision={2}
                   prefix="¥"
-                  valueStyle={{ color: '#52c41a' }}
+                  styles={{ content: { color: '#52c41a' } }}
                   suffix={<ArrowUpOutlined />}
                 />
               </Card>
@@ -151,7 +151,7 @@ const FinanceReports = () => {
                   value={totalExpense}
                   precision={2}
                   prefix="¥"
-                  valueStyle={{ color: '#ff4d4f' }}
+                  styles={{ content: { color: '#ff4d4f' } }}
                   suffix={<ArrowDownOutlined />}
                 />
               </Card>
@@ -167,7 +167,7 @@ const FinanceReports = () => {
                   value={netAmount}
                   precision={2}
                   prefix="¥"
-                  valueStyle={{ color: netAmount >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 28 }}
+                  styles={{ content: { color: netAmount >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 28 } }}
                   suffix={<Tag color={netAmount >= 0 ? 'green' : 'red'}>{netAmount >= 0 ? '盈余' : '赤字'}</Tag>}
                 />
               </Card>

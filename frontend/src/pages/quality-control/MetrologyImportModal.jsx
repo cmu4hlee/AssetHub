@@ -136,7 +136,7 @@ const MetrologyImportModal = ({ open, onClose, onSuccess }) => {
   const renderBody = () => {
     if (importResult) {
       return (
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
           <Alert
             type={importResult.failedCount > 0 ? 'warning' : 'success'}
             showIcon
@@ -165,7 +165,7 @@ const MetrologyImportModal = ({ open, onClose, onSuccess }) => {
 
     if (validateResult) {
       return (
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
           <Alert
             type="info"
             showIcon

@@ -6,10 +6,14 @@
 const express = require('express');
 const router = express.Router();
 const complianceRouter = require('./compliance');
+const specialEquipmentRoutes = require('../../special-equipment-management/routes/special-equipment');
 const { authenticate } = require('../../../middleware/auth');
 
 // 挂载合规管理路由
 router.use('/', complianceRouter);
+
+// 向后兼容：/api/compliance/special-equipment/* → 特种设备模块
+router.use('/special-equipment', specialEquipmentRoutes);
 
 // 根路由 - 返回API信息
 router.get('/', authenticate, (req, res) => {

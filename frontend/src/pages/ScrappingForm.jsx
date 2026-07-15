@@ -41,7 +41,8 @@ const ScrappingForm = () => {
       setAssetLoading(true);
       const result = await assetAPI.getAssetsNoCache({ search: keyword, page: 1, pageSize: 20 });
       if (result.success) {
-        setAssets(result.data?.records || []);
+        // assetAPI.getAssetsNoCache 走 getNormalizedList, records 已被抽到 result.data (数组)
+        setAssets(result.data || []);
       }
     } catch (error) {
       console.error('加载资产列表失败:', error);

@@ -757,6 +757,7 @@ const ALL_MENUS = [
       { menu_key: '/feishu-config', label: '飞书配置', order_index: 15, is_active: 1 },
       { menu_key: '/tenant-access-url', label: '访问域名配置', order_index: 16, is_active: 1 },
       { menu_key: '/email-config', label: '邮件配置', order_index: 17, is_active: 1 },
+      { menu_key: '/notification-config', label: '通知配置', order_index: 17.5, is_active: 1 },
       {
         menu_key: '/api-docs',
         label: 'Swagger API 文档',

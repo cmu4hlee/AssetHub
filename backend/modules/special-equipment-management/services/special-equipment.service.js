@@ -120,7 +120,7 @@ class SpecialEquipmentService {
    * @returns {Promise<Object>} 设备列表和分页信息
    */
   async getEquipments(params) {
-    const { page = 1, pageSize = 20, status, safety_status, keyword, tenantId } = params;
+    const { page = 1, pageSize = 20, status, safety_status, keyword, equipment_type, tenantId } = params;
 
     let sql = `
       SELECT se.*, a.asset_name, a.asset_code
@@ -138,9 +138,13 @@ class SpecialEquipmentService {
       sql += ' AND se.safety_status = ?';
       paramsArray.push(safety_status);
     }
+    if (equipment_type) {
+      sql += ' AND se.equipment_type = ?';
+      paramsArray.push(equipment_type);
+    }
     if (keyword) {
-      sql += ' AND (se.equipment_name LIKE ? OR se.equipment_code LIKE ?)';
-      paramsArray.push(`%${keyword}%`, `%${keyword}%`);
+      sql += ' AND (se.equipment_name LIKE ? OR se.equipment_code LIKE ? OR a.asset_code LIKE ?)';
+      paramsArray.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
     sql += ' ORDER BY se.next_inspection_date ASC';
@@ -151,12 +155,28 @@ class SpecialEquipmentService {
 
     const [equipment] = await db.execute(sql, paramsArray);
 
-    // 获取总数
-    let countSql = 'SELECT COUNT(*) as total FROM special_equipment WHERE tenant_id = ?';
+    // 获取总数（与主查询筛选条件保持一致）
+    let countSql = keyword
+      ? 'SELECT COUNT(*) as total FROM special_equipment se LEFT JOIN assets a ON se.asset_id = a.id AND a.tenant_id = se.tenant_id WHERE se.tenant_id = ?'
+      : 'SELECT COUNT(*) as total FROM special_equipment WHERE tenant_id = ?';
     const countParams = [tenantId];
     if (status) {
       countSql += ' AND status = ?';
       countParams.push(status);
+    }
+    if (safety_status) {
+      countSql += ' AND safety_status = ?';
+      countParams.push(safety_status);
+    }
+    if (equipment_type) {
+      countSql += keyword
+        ? ' AND se.equipment_type = ?'
+        : ' AND equipment_type = ?';
+      countParams.push(equipment_type);
+    }
+    if (keyword) {
+      countSql += ' AND (se.equipment_name LIKE ? OR se.equipment_code LIKE ? OR a.asset_code LIKE ?)';
+      countParams.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
     const [countResult] = await db.execute(countSql, countParams);
 
@@ -208,8 +228,10 @@ class SpecialEquipmentService {
       throw new Error('special_equipment 表不存在');
     }
 
-    if (!(await this.hasTenantAsset(equipmentData.asset_id, tenantId))) {
-      throw new Error('资产不存在');
+    // 只有明确指定了 asset_id 时才校验资产归属
+    if (equipmentData.asset_id !== undefined && equipmentData.asset_id !== null &&
+        !(await this.hasTenantAsset(equipmentData.asset_id, tenantId))) {
+      throw new Error('资产不存在或不属于当前租户');
     }
 
     const fields = [];
@@ -258,6 +280,22 @@ class SpecialEquipmentService {
       addField('remark', equipmentData.remark || equipmentData.remarks);
     }
 
+    // 新增扩展字段（前端表单完整字段，列存在才写入）
+    addField('manufacturer', equipmentData.manufacturer);
+    addField('model_spec', equipmentData.model_spec);
+    addField('serial_number', equipmentData.serial_number);
+    addField('manufacturing_date', equipmentData.manufacturing_date);
+    addField('department', equipmentData.department);
+    addField('use_certificate_no', equipmentData.use_certificate_no);
+    addField('registration_date', equipmentData.registration_date);
+    addField('safety_manager', equipmentData.safety_manager);
+    addField('first_inspection_date', equipmentData.first_inspection_date);
+    addField('inspection_cycle_months', equipmentData.inspection_cycle_months);
+    addField('location', equipmentData.location);
+    addField('registrant', equipmentData.registrant);
+    addField('safety_notes', equipmentData.safety_notes);
+    addField('use_status', equipmentData.use_status);
+
     addField('tenant_id', tenantId);
     addField('created_by', userId);
 
@@ -290,7 +328,7 @@ class SpecialEquipmentService {
     }
 
     if (updates.asset_id !== undefined && !(await this.hasTenantAsset(updates.asset_id, tenantId))) {
-      throw new Error('资产不存在');
+      throw new Error('资产不存在或不属于当前租户');
     }
 
     const keyMap = new Map([
@@ -399,7 +437,7 @@ class SpecialEquipmentService {
    * @returns {Promise<Object>} 检验记录列表和分页信息
    */
   async getInspections(params) {
-    const { page = 1, pageSize = 20, equipment_id, inspection_type, tenantId } = params;
+    const { page = 1, pageSize = 20, equipment_id, inspection_type, keyword, inspection_result, tenantId } = params;
 
     const inspectionsMeta = await this.getTableMeta('special_equipment_inspections');
     if (!inspectionsMeta.exists) {
@@ -478,6 +516,40 @@ class SpecialEquipmentService {
       queryParams.push(inspection_type);
     }
 
+    // 关键词搜索（检验编号、设备名称/编码、检验人员）
+    if (keyword) {
+      const likeKeyword = `%${keyword}%`;
+      const conditions = [];
+      if (inspectionCodeColumn) {
+        conditions.push(`sei.${inspectionCodeColumn} LIKE ?`);
+        queryParams.push(likeKeyword);
+      }
+      if (inspectionsMeta.columns.has('inspector')) {
+        conditions.push('sei.inspector LIKE ?');
+        queryParams.push(likeKeyword);
+      }
+      if (hasEquipmentId && equipmentMeta.exists) {
+        conditions.push('(se.equipment_name LIKE ? OR se.equipment_code LIKE ?)');
+        queryParams.push(likeKeyword, likeKeyword);
+      }
+      if (conditions.length > 0) {
+        sql += ` AND (${conditions.join(' OR ')})`;
+      }
+    }
+
+    // 检验结果筛选（前端用 pass/fail，数据库存 qualified/unqualified）
+    if (inspection_result && inspectionsMeta.columns.has('inspection_result')) {
+      // 支持前端的枚举值，也支持数据库中的值
+      const dbResult = normalizeInspectionResultForStorage(inspection_result);
+      if (dbResult) {
+        sql += ' AND sei.inspection_result = ?';
+        queryParams.push(dbResult);
+      } else {
+        sql += ' AND sei.inspection_result = ?';
+        queryParams.push(inspection_result);
+      }
+    }
+
     sql += ` ORDER BY ${hasInspectionDate ? 'sei.inspection_date' : 'sei.id'} DESC`;
     sql += ' LIMIT ? OFFSET ?';
     queryParams.push(normalizedPageSize, (normalizedPage - 1) * normalizedPageSize);
@@ -485,9 +557,16 @@ class SpecialEquipmentService {
     const [inspections] = await db.execute(sql, queryParams);
 
     let total = inspections.length;
-    if (hasTenantId || (equipment_id && hasEquipmentId) || (inspection_type && hasInspectionType)) {
-      let countSql = 'SELECT COUNT(*) AS total FROM special_equipment_inspections sei WHERE 1 = 1';
+    if (hasTenantId || (equipment_id && hasEquipmentId) || (inspection_type && hasInspectionType) || keyword || inspection_result) {
+      let countSql = 'SELECT COUNT(*) AS total FROM special_equipment_inspections sei';
       const countParams = [];
+
+      // 如果有关键词搜索或设备筛选，需要 JOIN
+      if (keyword && hasEquipmentId && equipmentMeta.exists) {
+        countSql += ' LEFT JOIN special_equipment se ON sei.equipment_id = se.id';
+      }
+
+      countSql += ' WHERE 1 = 1';
 
       if (hasTenantId) {
         countSql += ' AND sei.tenant_id = ?';
@@ -500,6 +579,30 @@ class SpecialEquipmentService {
       if (inspection_type && hasInspectionType) {
         countSql += ' AND sei.inspection_type = ?';
         countParams.push(inspection_type);
+      }
+      if (keyword) {
+        const likeKeyword = `%${keyword}%`;
+        const conditions = [];
+        if (inspectionCodeColumn) {
+          conditions.push(`sei.${inspectionCodeColumn} LIKE ?`);
+          countParams.push(likeKeyword);
+        }
+        if (inspectionsMeta.columns.has('inspector')) {
+          conditions.push('sei.inspector LIKE ?');
+          countParams.push(likeKeyword);
+        }
+        if (hasEquipmentId && equipmentMeta.exists) {
+          conditions.push('(se.equipment_name LIKE ? OR se.equipment_code LIKE ?)');
+          countParams.push(likeKeyword, likeKeyword);
+        }
+        if (conditions.length > 0) {
+          countSql += ` AND (${conditions.join(' OR ')})`;
+        }
+      }
+      if (inspection_result && inspectionsMeta.columns.has('inspection_result')) {
+        const dbResult = normalizeInspectionResultForStorage(inspection_result);
+        countSql += ' AND sei.inspection_result = ?';
+        countParams.push(dbResult || inspection_result);
       }
 
       const [countRows] = await db.execute(countSql, countParams);
@@ -745,6 +848,7 @@ class SpecialEquipmentService {
 
     if (!equipmentMeta.exists) {
       return {
+        total: 0,
         type_statistics: [],
         inspection_status: { normal_count: 0, expiring_count: 0, expired_count: 0 },
         expiring_count: 0,
@@ -754,6 +858,15 @@ class SpecialEquipmentService {
     const tenantFilter = equipmentMeta.columns.has('tenant_id') ? 'WHERE tenant_id = ?' : '';
     const tenantParams = equipmentMeta.columns.has('tenant_id') ? [tenantId] : [];
 
+    // 总数
+    let total = 0;
+    const [totalRows] = await db.execute(
+      `SELECT COUNT(*) AS total FROM special_equipment ${tenantFilter}`,
+      tenantParams,
+    );
+    total = totalRows[0]?.total || 0;
+
+    // 按设备类型统计
     let typeStats = [];
     if (equipmentMeta.columns.has('equipment_type')) {
       const [rows] = await db.execute(
@@ -763,14 +876,30 @@ class SpecialEquipmentService {
          GROUP BY equipment_type`,
         tenantParams,
       );
-      typeStats = rows;
+      // 映射为人类可读标签
+      const TYPE_LABELS = {
+        elevator: '电梯',
+        pressure_vessel: '压力容器',
+        boiler: '锅炉',
+        crane: '起重机械',
+        forklift: '厂内机动车辆',
+        pressure_pipeline: '压力管道',
+        passenger_ropeway: '客运索道',
+        large_amusement: '大型游乐设施',
+      };
+      typeStats = rows.map(row => ({
+        equipment_type: row.equipment_type,
+        label: TYPE_LABELS[row.equipment_type] || row.equipment_type,
+        count: row.total_count,
+      }));
     }
 
+    // 检验状态统计
     let inspectionStatus = { normal_count: 0, expiring_count: 0, expired_count: 0 };
     if (equipmentMeta.columns.has('next_inspection_date')) {
       const [rows] = await db.execute(
         `SELECT
-           SUM(CASE WHEN next_inspection_date > DATE_ADD(CURDATE(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) AS normal_count,
+           SUM(CASE WHEN next_inspection_date > DATE_ADD(CURDATE(), INTERVAL 90 DAY) OR next_inspection_date IS NULL THEN 1 ELSE 0 END) AS normal_count,
            SUM(CASE WHEN next_inspection_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) AS expiring_count,
            SUM(CASE WHEN next_inspection_date < CURDATE() THEN 1 ELSE 0 END) AS expired_count
          FROM special_equipment
@@ -778,13 +907,14 @@ class SpecialEquipmentService {
         tenantParams,
       );
       inspectionStatus = {
-        normal_count: rows[0]?.normal_count || 0,
-        expiring_count: rows[0]?.expiring_count || 0,
-        expired_count: rows[0]?.expired_count || 0,
+        normal_count: Number(rows[0]?.normal_count) || 0,
+        expiring_count: Number(rows[0]?.expiring_count) || 0,
+        expired_count: Number(rows[0]?.expired_count) || 0,
       };
     }
 
     return {
+      total,
       type_statistics: typeStats,
       inspection_status: inspectionStatus,
       expiring_count: inspectionStatus.expiring_count,

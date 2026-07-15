@@ -318,7 +318,7 @@ async function initDatabase() {
     try {
       const conn = await db.getConnection();
       const [notificationTables] = await conn.execute(
-        `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('notification_templates', 'notification_rules', 'notification_recipients', 'notification_logs')`,
+        `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('notification_templates', 'notification_rules', 'notification_recipients', 'notification_logs', 'in_app_notifications', 'recipient_strategies', 'notification_preferences')`,
       );
       const existingTables = new Set(notificationTables.map(t => t.TABLE_NAME));
       if (!existingTables.has('notification_templates')) {
@@ -392,6 +392,72 @@ async function initDatabase() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知发送记录表'`);
         logger.info('notification_logs 表创建成功');
       }
+      if (!existingTables.has('in_app_notifications')) {
+        await conn.execute(`CREATE TABLE in_app_notifications (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          tenant_id INT NOT NULL DEFAULT 0 COMMENT '租户ID',
+          user_id INT NOT NULL COMMENT '接收用户ID',
+          event_code VARCHAR(100) NOT NULL COMMENT '事件编码',
+          category VARCHAR(50) DEFAULT 'system' COMMENT '分类: maintenance/scrapping/transfer/...',
+          title VARCHAR(500) NOT NULL COMMENT '通知标题',
+          content TEXT COMMENT '通知内容',
+          urgency VARCHAR(20) DEFAULT 'medium' COMMENT '紧急度: high/medium/low',
+          source_payload TEXT COMMENT '事件原始数据 JSON',
+          action_url VARCHAR(500) DEFAULT NULL COMMENT '跳转链接',
+          action_text VARCHAR(100) DEFAULT '查看详情' COMMENT '按钮文案',
+          is_read TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读',
+          read_at TIMESTAMP NULL DEFAULT NULL COMMENT '读取时间',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP NULL DEFAULT NULL COMMENT '过期时间（可选）',
+          KEY idx_user_read (user_id, is_read, created_at),
+          KEY idx_tenant (tenant_id),
+          KEY idx_event (event_code),
+          KEY idx_category (category)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='站内消息表'`);
+        logger.info('in_app_notifications 表创建成功');
+      }
+      if (!existingTables.has('recipient_strategies')) {
+        await conn.execute(`CREATE TABLE recipient_strategies (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          tenant_id INT NOT NULL DEFAULT 0 COMMENT '租户ID（0=全局默认）',
+          event_code VARCHAR(100) NOT NULL COMMENT '事件编码',
+          strategy_type VARCHAR(50) NOT NULL COMMENT '策略类型: user/role/applicant/approver/assignee/requester/operator/tenant_admin/engineer/department',
+          strategy_value TEXT COMMENT '策略值 JSON（user 列表 / role 名称 / department_code 等）',
+          priority INT NOT NULL DEFAULT 0 COMMENT '优先级（数字越大越靠前）',
+          enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+          remark VARCHAR(200) DEFAULT NULL COMMENT '备注',
+          created_by INT DEFAULT NULL COMMENT '创建人',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT NULL,
+          KEY idx_tenant_event (tenant_id, event_code, enabled),
+          KEY idx_event (event_code),
+          KEY idx_enabled (enabled)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知接收人策略表'`);
+        logger.info('recipient_strategies 表创建成功');
+      }
+      if (!existingTables.has('notification_preferences')) {
+        await conn.execute(`CREATE TABLE notification_preferences (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          user_id INT NOT NULL COMMENT '用户ID',
+          tenant_id INT NOT NULL DEFAULT 0 COMMENT '租户ID',
+          event_code VARCHAR(100) DEFAULT NULL COMMENT 'NULL=全局偏好，specific=仅该事件',
+          enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用通知（0=彻底关闭）',
+          urgency_threshold VARCHAR(20) NOT NULL DEFAULT 'low' COMMENT '紧急度阈值 low/medium/high（低于此值不通知）',
+          dnd_enabled TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否启用勿扰模式',
+          dnd_start_time TIME DEFAULT NULL COMMENT '勿扰开始时间（HH:MM）',
+          dnd_end_time TIME DEFAULT NULL COMMENT '勿扰结束时间（HH:MM，可跨午夜）',
+          dnd_days VARCHAR(50) DEFAULT '1,2,3,4,5,6,7' COMMENT '勿扰生效日（1=周一，7=周日）',
+          dnd_override_urgency VARCHAR(20) NOT NULL DEFAULT 'high' COMMENT '紧急度达到此值时突破勿扰',
+          desktop_enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用桌面通知（仅站内）',
+          toast_enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用顶部气泡（仅站内）',
+          remark VARCHAR(200) DEFAULT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT NULL,
+          UNIQUE KEY uk_user_event (user_id, event_code),
+          KEY idx_tenant (tenant_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户通知偏好表'`);
+        logger.info('notification_preferences 表创建成功');
+      }
       conn.release();
     } catch (notificationTableErr) {
       logger.warn('通知表检查/创建跳过:', notificationTableErr.message);
@@ -453,6 +519,51 @@ async function initDatabase() {
       conn.release();
     } catch (scTableErr) {
       logger.warn('system_configs 表检查/创建跳过:', scTableErr.message);
+    }
+
+    // ========== 特种设备表补全列迁移 ==========
+    try {
+      const conn = await db.getConnection();
+      const [seCols] = await conn.execute(
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'special_equipment'",
+      );
+      const existing = new Set(seCols.map(r => r.COLUMN_NAME));
+
+      const newColumns = [
+        { name: 'manufacturer', type: "VARCHAR(200) DEFAULT NULL COMMENT '制造商'", after: 'equipment_type' },
+        { name: 'model_spec', type: "VARCHAR(100) DEFAULT NULL COMMENT '型号规格'", after: 'manufacturer' },
+        { name: 'serial_number', type: "VARCHAR(100) DEFAULT NULL COMMENT '出厂编号'", after: 'model_spec' },
+        { name: 'manufacturing_date', type: "DATE DEFAULT NULL COMMENT '制造日期'", after: 'serial_number' },
+        { name: 'department', type: "VARCHAR(100) DEFAULT NULL COMMENT '所属部门'", after: 'manufacturing_date' },
+        { name: 'use_certificate_no', type: "VARCHAR(100) DEFAULT NULL COMMENT '使用登记证编号'", after: 'department' },
+        { name: 'registration_date', type: "DATE DEFAULT NULL COMMENT '注册登记日期'", after: 'use_certificate_no' },
+        { name: 'safety_manager', type: "VARCHAR(50) DEFAULT NULL COMMENT '安全管理员'", after: 'registration_date' },
+        { name: 'first_inspection_date', type: "DATE DEFAULT NULL COMMENT '首次检验日期'", after: 'safety_manager' },
+        { name: 'inspection_cycle_months', type: "INT DEFAULT NULL COMMENT '检验周期(月)'", after: 'first_inspection_date' },
+        { name: 'location', type: "VARCHAR(200) DEFAULT NULL COMMENT '安装位置'", after: 'inspection_cycle_months' },
+        { name: 'registrant', type: "VARCHAR(50) DEFAULT NULL COMMENT '登记人'", after: 'location' },
+        { name: 'safety_notes', type: "TEXT DEFAULT NULL COMMENT '安全注意事项'", after: 'registrant' },
+        { name: 'use_status', type: "VARCHAR(30) DEFAULT 'in_use' COMMENT '使用状态：in_use/out_of_service/scrapped/suspended/transferred'", after: 'safety_notes' },
+        { name: 'remark', type: "TEXT DEFAULT NULL COMMENT '备注'", after: 'use_status' },
+        { name: 'updated_at', type: "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'", after: 'remark' },
+      ];
+
+      let addedCount = 0;
+      for (const col of newColumns) {
+        if (!existing.has(col.name)) {
+          logger.warn(`special_equipment 表缺少 ${col.name} 列，正在自动添加...`);
+          await conn.execute(`ALTER TABLE special_equipment ADD COLUMN ${col.name} ${col.type}`);
+          addedCount++;
+        }
+      }
+      if (addedCount > 0) {
+        logger.info(`special_equipment 表迁移完成：新增 ${addedCount} 列`);
+      } else {
+        logger.info('special_equipment 表列完整性检查通过');
+      }
+      conn.release();
+    } catch (seMigrateErr) {
+      logger.warn('special_equipment 表迁移跳过:', seMigrateErr.message);
     }
 
     logger.info('数据库表结构初始化完成');
@@ -890,6 +1001,9 @@ app.use('/api/page-views', require('./routes/page-views'));
 app.use('/api/analysis', require('./routes/analysis'));
 // 通知配置与发送记录
 app.use('/api/notifications', require('./routes/notification'));
+app.use('/api/in-app-notifications', require('./routes/in-app-notifications'));
+app.use('/api/recipient-strategies', require('./routes/recipient-strategies'));
+app.use('/api/notification-preferences', require('./routes/notification-preferences'));
 // 微信小程序云数据库
 app.use('/api/wx-cloud', require('./routes/wx-cloud'));
 
@@ -1219,6 +1333,14 @@ const onServerStart = () => {
     logger.error('飞书业务通知订阅初始化失败:', feishuErr.message);
   }
 
+  // 初始化站内消息订阅（与飞书并列，事件同步推 Socket + 落库 in_app_notifications）
+  try {
+    const { initInAppNotification } = require('./services/in-app-notification.service');
+    initInAppNotification();
+  } catch (inAppErr) {
+    logger.error('站内通知订阅初始化失败:', inAppErr.message);
+  }
+
   // 初始化可配置通知引擎（基于 notification_rules 动态匹配规则并发送）
   try {
     const { initNotificationEngine } = require('./services/notification-send.service');
@@ -1241,6 +1363,16 @@ const onServerStart = () => {
     startScheduler();
   } catch (schedulerErr) {
     logger.error('飞书定时推送调度器启动失败:', schedulerErr.message);
+  }
+
+  // 启动站内消息清理调度器（每日清理过期消息 + 每周清理 N 天前已读）
+  try {
+    const inAppScheduler = require('./services/in-app-notification.scheduler');
+    if (process.env.IN_APP_NOTIFICATION_SCHEDULER_DISABLED !== 'true') {
+      inAppScheduler.start();
+    }
+  } catch (schedErr) {
+    logger.error('站内消息清理调度器启动失败:', schedErr.message);
   }
 
   if (defaultQueue) {
@@ -1307,6 +1439,14 @@ const gracefulShutdown = signal => {
   try {
     const acceptanceScheduler = require('./modules/acceptance-management/scheduler/acceptance.scheduler');
     acceptanceScheduler.stop();
+  } catch (e) {
+    // 调度器可能未启动，忽略错误
+  }
+
+  // 停止站内消息清理调度器
+  try {
+    const inAppScheduler = require('./services/in-app-notification.scheduler');
+    inAppScheduler.stop();
   } catch (e) {
     // 调度器可能未启动，忽略错误
   }

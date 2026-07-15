@@ -272,8 +272,7 @@ const QualificationManagement = () => {
       </Row>
 
       {stats.expired > 0 && (
-        <Alert
-          message={`警告：有 ${stats.expired} 项资质已过期，请立即安排重新认证！`}
+        <Alert title={`警告：有 ${stats.expired} 项资质已过期，请立即安排重新认证！`}
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -281,8 +280,7 @@ const QualificationManagement = () => {
       )}
 
       {stats.expiring > 0 && (
-        <Alert
-          message={`提醒：有 ${stats.expiring} 项资质即将过期，请提前安排续期！`}
+        <Alert title={`提醒：有 ${stats.expiring} 项资质即将过期，请提前安排续期！`}
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
