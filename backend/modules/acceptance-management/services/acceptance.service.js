@@ -46,7 +46,7 @@ async function findAcceptanceRecord(recordId, tenantFilter) {
  */
 async function listTeamMembers(recordId, tenantFilter) {
   const [rows] = await db.execute(
-    `SELECT * FROM acceptance_teams WHERE acceptance_record_id = ?${tenantFilter.whereClause} ORDER BY FIELD(role,'组长','成员','观察员'), id ASC`,
+    `SELECT * FROM acceptance_teams WHERE acceptance_record_id = ?${tenantFilter.whereClause} AND is_deleted = 0 ORDER BY FIELD(role,'组长','成员','观察员'), id ASC`,
     [recordId, ...tenantFilter.params],
   );
   return rows;
@@ -95,12 +95,13 @@ async function updateTeamMember(memberId, recordId, tenantFilter, data) {
 }
 
 /**
- * 删除小组成员
+ * 删除小组成员（软删除）
  */
-async function deleteTeamMember(memberId, recordId, tenantFilter) {
+async function deleteTeamMember(memberId, recordId, tenantFilter, deletedBy = null) {
   const [result] = await db.execute(
-    `DELETE FROM acceptance_teams WHERE id = ? AND acceptance_record_id = ?${tenantFilter.whereClause}`,
-    [memberId, recordId, ...tenantFilter.params],
+    `UPDATE acceptance_teams SET is_deleted = 1, deleted_at = NOW(), deleted_by = ?
+     WHERE id = ? AND acceptance_record_id = ?${tenantFilter.whereClause} AND is_deleted = 0`,
+    [deletedBy, memberId, recordId, ...tenantFilter.params],
   );
   return result.affectedRows > 0;
 }
@@ -196,12 +197,13 @@ async function updateReminderStatus(reminderId, tenantFilter, status) {
 }
 
 /**
- * 删除提醒
+ * 删除提醒（软删除）
  */
-async function deleteReminder(reminderId, tenantFilter) {
+async function deleteReminder(reminderId, tenantFilter, deletedBy = null) {
   const [result] = await db.execute(
-    `DELETE FROM acceptance_reminders WHERE id = ?${tenantFilter.whereClause}`,
-    [reminderId, ...tenantFilter.params],
+    `UPDATE acceptance_reminders SET is_deleted = 1, deleted_at = NOW(), deleted_by = ?
+     WHERE id = ?${tenantFilter.whereClause} AND is_deleted = 0`,
+    [deletedBy, reminderId, ...tenantFilter.params],
   );
   return result.affectedRows > 0;
 }
@@ -211,15 +213,15 @@ async function deleteReminder(reminderId, tenantFilter) {
  */
 async function getReminderStats(tenantFilter) {
   const [byStatus] = await db.execute(
-    `SELECT status, COUNT(*) AS count FROM acceptance_reminders WHERE 1=1${tenantFilter.whereClause} GROUP BY status`,
+    `SELECT status, COUNT(*) AS count FROM acceptance_reminders WHERE 1=1${tenantFilter.whereClause} AND is_deleted = 0 GROUP BY status`,
     [...tenantFilter.params],
   );
   const [byType] = await db.execute(
-    `SELECT reminder_type, COUNT(*) AS count FROM acceptance_reminders WHERE 1=1${tenantFilter.whereClause} GROUP BY reminder_type`,
+    `SELECT reminder_type, COUNT(*) AS count FROM acceptance_reminders WHERE 1=1${tenantFilter.whereClause} AND is_deleted = 0 GROUP BY reminder_type`,
     [...tenantFilter.params],
   );
   const [pending] = await db.execute(
-    `SELECT COUNT(*) AS count FROM acceptance_reminders WHERE status IN ('待发送','已发送')${tenantFilter.whereClause}`,
+    `SELECT COUNT(*) AS count FROM acceptance_reminders WHERE status IN ('待发送','已发送')${tenantFilter.whereClause} AND is_deleted = 0`,
     [...tenantFilter.params],
   );
   return {
@@ -247,7 +249,7 @@ async function reminderExistsToday({ tenantId, reminderType, recordId = null, ap
     args.push(recordId);
   }
   const [rows] = await db.execute(
-    `SELECT id FROM acceptance_reminders WHERE ${conds.join(' AND ')} LIMIT 1`,
+    `SELECT id FROM acceptance_reminders WHERE ${conds.join(' AND ')} AND is_deleted = 0 LIMIT 1`,
     args,
   );
   return rows.length > 0;

@@ -81,9 +81,9 @@ const getApplication = async (req, res) => {
 
     const application = records[0];
 
-    // 获取审批记录
+    // 获取审批记录（仅显示未删除的）
     const [approvals] = await db.execute(
-      'SELECT * FROM acceptance_approvals WHERE application_id = ? ORDER BY created_at ASC',
+      'SELECT * FROM acceptance_approvals WHERE application_id = ? AND is_deleted = 0 ORDER BY created_at ASC',
       [id]
     );
 
@@ -256,6 +256,65 @@ const completeApplication = async (req, res) => {
   }
 };
 
+// 删除申请（仅草稿/已撤回/已拒绝可删，软删 + 级联软删审批记录）
+const deleteApplication = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    const { id } = req.params;
+    const tenantFilter = resolveTenantFilter(req, res);
+    if (!tenantFilter) return;
+
+    await connection.beginTransaction();
+
+    const [existing] = await connection.execute(
+      `SELECT id, status, tenant_id FROM acceptance_applications WHERE id = ? AND is_deleted = 0${tenantFilter.whereClause}`,
+      [id, ...tenantFilter.params],
+    );
+    if (existing.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ success: false, message: '验收申请不存在' });
+    }
+    const status = existing[0].status;
+    if (status !== '草稿' && status !== '已撤回' && status !== '已拒绝') {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `仅【草稿/已撤回/已拒绝】状态可删除，当前状态：${status}`,
+      });
+    }
+
+    const deletedBy = req.user?.username || null;
+    const now = new Date();
+
+    // 1) 软删申请主表
+    const [result] = await connection.execute(
+      `UPDATE acceptance_applications SET is_deleted = 1, deleted_at = ?, deleted_by = ?
+       WHERE id = ? AND is_deleted = 0${tenantFilter.whereClause}`,
+      [now, deletedBy, id, ...tenantFilter.params],
+    );
+    if (result.affectedRows === 0) {
+      await connection.rollback();
+      return res.status(404).json({ success: false, message: '验收申请不存在' });
+    }
+
+    // 2) 级联软删审批记录
+    await connection.execute(
+      `UPDATE acceptance_approvals SET is_deleted = 1, deleted_at = ?, deleted_by = ?
+       WHERE application_id = ? AND is_deleted = 0`,
+      [now, deletedBy, id],
+    );
+
+    await connection.commit();
+    res.json({ success: true, message: '验收申请已删除' });
+  } catch (error) {
+    await connection.rollback();
+    logger.error('删除验收申请失败:', error);
+    res.status(500).json({ success: false, message: '服务器内部错误' });
+  } finally {
+    connection.release();
+  }
+};
+
 // 通用状态转换函数
 async function transitionApplicationStatus(req, res, action, toStatus, defaultComment, requireApprover = false) {
   const { id } = req.params;
@@ -308,7 +367,7 @@ const getTemplates = async (req, res) => {
     if (!tenantFilter) return;
     const { grouped = 'true', category } = req.query;
 
-    let query = `SELECT * FROM asset_acceptance_templates WHERE (tenant_id = ? OR tenant_id IS NULL)`;
+    let query = `SELECT * FROM asset_acceptance_templates WHERE (tenant_id = ? OR tenant_id IS NULL) AND is_deleted = 0`;
     const params = [getTenantId(req)];
     if (category) { query += ' AND category = ?'; params.push(category); }
     query += ' ORDER BY category, sort_order, id';
@@ -336,7 +395,7 @@ const getTemplateCategories = async (req, res) => {
     if (!tenantFilter) return;
 
     const [categories] = await db.execute(
-      `SELECT DISTINCT category FROM asset_acceptance_templates WHERE (tenant_id = ? OR tenant_id IS NULL) ORDER BY category`,
+      `SELECT DISTINCT category FROM asset_acceptance_templates WHERE (tenant_id = ? OR tenant_id IS NULL) AND is_deleted = 0 ORDER BY category`,
       [getTenantId(req)]
     );
     res.json({ success: true, data: categories.map(r => r.category) });
@@ -407,8 +466,8 @@ const deleteTemplate = async (req, res) => {
     if (!tenantFilter) return;
 
     const [result] = await db.execute(
-      `DELETE FROM asset_acceptance_templates WHERE id = ? AND tenant_id = ?`,
-      [id, getTenantId(req)]
+      `UPDATE asset_acceptance_templates SET is_deleted = 1, deleted_at = NOW(), deleted_by = ? WHERE id = ? AND tenant_id = ? AND is_deleted = 0`,
+      [req.user?.username || null, id, getTenantId(req)]
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: '模板不存在或为系统内置模板，无法删除' });
@@ -474,7 +533,7 @@ const getStatisticsOverview = async (req, res) => {
 
     // 模板数量
     const [templateCount] = await db.execute(
-      `SELECT COUNT(*) as total FROM asset_acceptance_templates WHERE (tenant_id = ? OR tenant_id IS NULL)`, [getTenantId(req)]
+      `SELECT COUNT(*) as total FROM asset_acceptance_templates WHERE (tenant_id = ? OR tenant_id IS NULL) AND is_deleted = 0`, [getTenantId(req)]
     );
 
     res.json({
@@ -558,13 +617,13 @@ const getReport = async (req, res) => {
     const record = records[0];
 
     const [checklist] = await db.execute(
-      `SELECT * FROM asset_acceptance_checklist WHERE acceptance_id = ? ORDER BY category, sort_order, id`, [id]
+      `SELECT * FROM asset_acceptance_checklist WHERE acceptance_id = ? AND is_deleted = 0 ORDER BY category, sort_order, id`, [id]
     );
     const [files] = await db.execute(
-      `SELECT * FROM asset_acceptance_files WHERE acceptance_id = ?`, [id]
+      `SELECT * FROM asset_acceptance_files WHERE acceptance_id = ? AND is_deleted = 0`, [id]
     );
     const [team] = await db.execute(
-      `SELECT * FROM acceptance_teams WHERE acceptance_record_id = ?`, [id]
+      `SELECT * FROM acceptance_teams WHERE acceptance_record_id = ? AND is_deleted = 0`, [id]
     );
 
     // 计算统计
@@ -620,7 +679,7 @@ const generateReport = async (req, res) => {
     }
 
     const [checklist] = await db.execute(
-      `SELECT * FROM asset_acceptance_checklist WHERE acceptance_id = ?`, [id]
+      `SELECT * FROM asset_acceptance_checklist WHERE acceptance_id = ? AND is_deleted = 0`, [id]
     );
     const passed = checklist.filter(c => c.is_passed === 1).length;
     const failed = checklist.filter(c => c.is_passed === 0).length;
@@ -664,7 +723,7 @@ const getReminders = async (req, res) => {
     if (status) { filterClause += ' AND status = ?'; filterParams.push(status); }
     if (reminder_type) { filterClause += ' AND reminder_type = ?'; filterParams.push(reminder_type); }
 
-    const baseWhere = `WHERE 1=1${tenantFilter.whereClause}${filterClause}`;
+    const baseWhere = `WHERE 1=1${tenantFilter.whereClause} AND is_deleted = 0${filterClause}`;
     const [records] = await db.execute(
       `SELECT * FROM acceptance_reminders ${baseWhere} ORDER BY remind_date DESC, created_at DESC LIMIT ? OFFSET ?`,
       [...tenantFilter.params, ...filterParams, pageSizeNum, offset]
@@ -775,7 +834,7 @@ const deleteTeamMember = async (req, res) => {
     if (!tenantFilter) return;
 
     const ok = await acceptanceService.deleteTeamMember(
-      parseInt(memberId, 10), parseInt(recordId, 10), tenantFilter,
+      parseInt(memberId, 10), parseInt(recordId, 10), tenantFilter, req.user?.username,
     );
     if (!ok) {
       return res.status(404).json({ success: false, message: '成员不存在或无权限' });
@@ -839,7 +898,7 @@ const deleteReminder = async (req, res) => {
     const tenantFilter = resolveTenantFilter(req, res);
     if (!tenantFilter) return;
 
-    const ok = await acceptanceService.deleteReminder(parseInt(id, 10), tenantFilter);
+    const ok = await acceptanceService.deleteReminder(parseInt(id, 10), tenantFilter, req.user?.username);
     if (!ok) {
       return res.status(404).json({ success: false, message: '提醒不存在或无权限' });
     }
@@ -889,6 +948,7 @@ module.exports = {
   rejectApplication,
   withdrawApplication,
   completeApplication,
+  deleteApplication,
   getTemplates,
   getTemplateCategories,
   createTemplate,

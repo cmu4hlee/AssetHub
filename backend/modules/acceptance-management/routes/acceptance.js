@@ -39,6 +39,7 @@ router.get('/applications', controller.getApplications);
 router.get('/applications/:id', controller.getApplication);
 router.post('/applications', controller.createApplication);
 router.put('/applications/:id', controller.updateApplication);
+router.delete('/applications/:id', controller.deleteApplication);
 router.post('/applications/:id/submit', controller.submitApplication);
 router.post('/applications/:id/approve', controller.approveApplication);
 router.post('/applications/:id/reject', controller.rejectApplication);
