@@ -631,24 +631,34 @@ const ALL_MENUS = [
     ],
   },
   {
+    menu_key: '/special-equipment-parent',
+    icon: 'AlertOutlined',
+    label: '特种设备管理',
+    order_index: 15,
+    is_active: 1,
+    module_id: 'special-equipment-management',
+    children: [
+      { menu_key: '/special-equipment', label: '特种设备', order_index: 1, is_active: 1 },
+    ],
+  },
+  {
     menu_key: '/compliance-parent',
     icon: 'SafetyOutlined',
     label: '合规模块',
-    order_index: 15,
+    order_index: 16,
     is_active: 1,
     module_id: 'compliance-management',
     children: [
       { menu_key: '/compliance', label: '合规仪表盘', order_index: 1, is_active: 1 },
       { menu_key: '/compliance/maintenance-level', label: '维护等级', order_index: 2, is_active: 1 },
-      { menu_key: '/special-equipment', label: '特种设备', order_index: 3, is_active: 1 },
-      { menu_key: '/safety-inspection', label: '安全巡检', order_index: 4, is_active: 1 },
+      { menu_key: '/safety-inspection', label: '安全巡检', order_index: 3, is_active: 1 },
     ],
   },
   {
     menu_key: '/inspection-parent',
     icon: 'ReconciliationOutlined',
     label: '巡检管理',
-    order_index: 16,
+    order_index: 17,
     is_active: 1,
     children: [
       { menu_key: '/inspection', label: '巡检任务', order_index: 1, is_active: 1 },
@@ -662,7 +672,7 @@ const ALL_MENUS = [
     menu_key: '/risk-parent',
     icon: 'WarningOutlined',
     label: '风险管理',
-    order_index: 17,
+    order_index: 18,
     is_active: 1,
     module_id: 'asset-risk-management',
     children: [
@@ -676,7 +686,7 @@ const ALL_MENUS = [
     menu_key: '/staff-parent',
     icon: 'UserOutlined',
     label: '人员资质',
-    order_index: 18,
+    order_index: 19,
     is_active: 1,
     module_id: 'staff-qualification',
     children: [
@@ -690,7 +700,7 @@ const ALL_MENUS = [
     menu_key: '/uptime-parent',
     icon: 'DashboardOutlined',
     label: '开机率管理',
-    order_index: 19,
+    order_index: 20,
     is_active: 1,
     module_id: 'uptime-management',
     children: [
@@ -704,7 +714,7 @@ const ALL_MENUS = [
     menu_key: '/ai-assistant-parent',
     icon: 'RobotOutlined',
     label: 'AI模块',
-    order_index: 20,
+    order_index: 21,
     is_active: 1,
     module_id: 'asset-ai-assistant',
     children: [
@@ -715,7 +725,7 @@ const ALL_MENUS = [
     menu_key: '/system-parent',
     icon: 'SettingOutlined',
     label: '系统管理',
-    order_index: 21,
+    order_index: 22,
     is_active: 1,
     roles: ['super_admin', 'system_admin'],
     module_id: null,

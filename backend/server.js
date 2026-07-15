@@ -1593,6 +1593,14 @@ const gracefulShutdown = signal => {
     // 调度器可能未启动，忽略错误
   }
 
+  // 停止站内消息清理调度器
+  try {
+    const inAppScheduler = require('./services/in-app-notification.scheduler');
+    inAppScheduler.stop();
+  } catch (e) {
+    // 调度器可能未启动，忽略错误
+  }
+
   server.close(() => {
     logger.info('HTTP 服务器已关闭');
 

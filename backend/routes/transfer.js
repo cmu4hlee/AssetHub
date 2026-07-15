@@ -530,6 +530,10 @@ router.delete('/:id', authenticate, authorize(TR_WRITE_ROLES), async (req, res) 
     }
 
     await connection.commit();
+    safeEmit('transfer:approved', {
+      tenantId, transferId: parseInt(id), approver,
+      actorUserId: req.user?.id, source: 'transfer.approve',
+    });
     res.json({ success: true, message: result.message });
   } catch (error) {
     await connection.rollback();

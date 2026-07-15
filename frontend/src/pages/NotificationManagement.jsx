@@ -336,6 +336,96 @@ function ProcessDashboard({ rules, metadata, onProcessClick, activeProcess }) {
   );
 }
 
+/* ===================== 流程类型概览面板 ===================== */
+
+function ProcessDashboard({ rules, metadata, onProcessClick, activeProcess }) {
+  if (!metadata.process_types.length || !rules.length) return null;
+
+  // 计算每个流程类型的规则统计
+  const stats = {};
+  metadata.process_types.forEach(pt => {
+    const processRules = rules.filter(r => r.process_type === pt.code);
+    stats[pt.code] = {
+      name: pt.name,
+      icon: PROCESS_ICONS[pt.code],
+      total: processRules.length,
+      enabled: processRules.filter(r => r.enabled === 1).length,
+      events: new Set(processRules.map(r => r.event_code)).size,
+    };
+  });
+
+  // 只显示有规则或有事件的流程类型
+  const visibleTypes = metadata.process_types.filter(pt => {
+    const events = metadata.events_by_process[pt.code];
+    return events?.length > 0 || stats[pt.code]?.total > 0;
+  });
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <Text type="secondary" style={{ marginBottom: 10, display: 'block', fontSize: 13 }}>
+        📊 流程类型概览 — 点击卡片快速筛选
+      </Text>
+      <Row gutter={[12, 12]}>
+        {visibleTypes.map(pt => {
+          const st = stats[pt.code] || { total: 0, enabled: 0, events: 0, icon: PROCESS_ICONS[pt.code] || null, name: pt.name };
+          const isActive = activeProcess === pt.code;
+          const hasEnabled = st.enabled > 0;
+          const hasRules = st.total > 0;
+          return (
+            <Col xs={12} sm={8} md={6} lg={4} key={pt.code}>
+              <Card
+                size="small"
+                hoverable
+                onClick={() => onProcessClick(pt.code === activeProcess ? null : pt.code)}
+                style={{
+                  cursor: 'pointer',
+                  borderColor: isActive ? '#1677ff' : (hasEnabled ? '#52c41a' : (hasRules ? '#d9d9d9' : '#faad14')),
+                  borderWidth: isActive ? 2 : 1,
+                  background: isActive ? '#e6f4ff' : undefined,
+                  transition: 'all 0.2s',
+                  height: '100%',
+                }}
+                styles={{ body: { padding: '12px 10px' } }}
+              >
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 22, marginBottom: 4, opacity: hasRules ? 1 : 0.5 }}>
+                    {st.icon}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {st.name}
+                  </div>
+                  {hasRules ? (
+                    <Space size={4}>
+                      <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                        {st.total}条
+                      </Tag>
+                      {st.enabled > 0 && (
+                        <Tag color="green" style={{ margin: 0, fontSize: 11 }}>
+                          {st.enabled}启用
+                        </Tag>
+                      )}
+                    </Space>
+                  ) : (
+                    <Tag color="orange" style={{ margin: 0, fontSize: 11 }}>未配置</Tag>
+                  )}
+                </div>
+              </Card>
+            </Col>
+          );
+        })}
+      </Row>
+      {activeProcess && (
+        <div style={{ marginTop: 8 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            当前筛选：{metadata.process_types.find(p => p.code === activeProcess)?.name || activeProcess}
+            <Button type="link" size="small" onClick={() => onProcessClick(null)}>清除筛选</Button>
+          </Text>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ===================== 通知规则 ===================== */
 
 function NotificationRules() {
