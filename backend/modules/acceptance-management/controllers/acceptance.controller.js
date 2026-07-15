@@ -237,6 +237,71 @@ const deleteApplication = async (req, res) => {
 };
 
 // ============================================
+// 申请-资产多对多关联
+// ============================================
+
+const listApplicationAssets = async (req, res) => {
+  try {
+    const tenantFilter = getTenantFilter(req, res);
+    if (!tenantFilter) return;
+    const items = await applicationService.listApplicationAssets({
+      applicationId: parseInt(req.params.id, 10),
+      tenantFilter,
+    });
+    ok(res, items);
+  } catch (error) {
+    handleError(res, error, '获取申请资产列表失败');
+  }
+};
+
+const addApplicationAssets = async (req, res) => {
+  try {
+    const tenantFilter = getTenantFilter(req, res);
+    if (!tenantFilter) return;
+    const data = await applicationService.addApplicationAssets({
+      applicationId: parseInt(req.params.id, 10),
+      tenantFilter,
+      items: req.body?.items,
+      user: req.user,
+    });
+    ok(res, data, '资产添加成功');
+  } catch (error) {
+    handleError(res, error, '添加申请资产失败');
+  }
+};
+
+const removeApplicationAsset = async (req, res) => {
+  try {
+    const tenantFilter = getTenantFilter(req, res);
+    if (!tenantFilter) return;
+    await applicationService.removeApplicationAsset({
+      applicationId: parseInt(req.params.id, 10),
+      assetLinkId: parseInt(req.params.assetId, 10),
+      tenantFilter,
+      user: req.user,
+    });
+    ok(res, null, '资产已移除');
+  } catch (error) {
+    handleError(res, error, '移除申请资产失败');
+  }
+};
+
+const clearApplicationAssets = async (req, res) => {
+  try {
+    const tenantFilter = getTenantFilter(req, res);
+    if (!tenantFilter) return;
+    await applicationService.clearApplicationAssets({
+      applicationId: parseInt(req.params.id, 10),
+      tenantFilter,
+      user: req.user,
+    });
+    ok(res, null, '已清空申请资产');
+  } catch (error) {
+    handleError(res, error, '清空申请资产失败');
+  }
+};
+
+// ============================================
 // 验收模板管理（CRUD）
 // ============================================
 
@@ -589,6 +654,10 @@ module.exports = {
   withdrawApplication,
   completeApplication,
   deleteApplication,
+  listApplicationAssets,
+  addApplicationAssets,
+  removeApplicationAsset,
+  clearApplicationAssets,
   // 模板
   getTemplates,
   getTemplateCategories,

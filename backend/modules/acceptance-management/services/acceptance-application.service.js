@@ -307,6 +307,141 @@ async function softDeleteApplication({ id, tenantFilter, user }) {
   }
 }
 
+// ============================================
+// 申请-资产多对多关联（acceptance_application_assets）
+// 仅 草稿/已撤回/已拒绝 状态可编辑
+// ============================================
+
+/**
+ * 校验申请状态可编辑
+ */
+async function assertApplicationEditable({ applicationId, tenantFilter }) {
+  const [rows] = await db.execute(
+    `SELECT status FROM acceptance_applications WHERE id = ? AND is_deleted = 0${tenantFilter.whereClause}`,
+    [applicationId, ...tenantFilter.params],
+  );
+  if (rows.length === 0) {
+    const err = new Error('验收申请不存在');
+    err.statusCode = 404;
+    throw err;
+  }
+  const status = rows[0].status;
+  if (status !== '草稿' && status !== '已撤回' && status !== '已拒绝') {
+    const err = new Error(`仅【草稿/已撤回/已拒绝】状态可编辑资产列表，当前状态：${status}`);
+    err.statusCode = 400;
+    throw err;
+  }
+}
+
+/**
+ * 列出申请关联的资产
+ */
+async function listApplicationAssets({ applicationId, tenantFilter }) {
+  const [rows] = await db.execute(
+    `SELECT * FROM acceptance_application_assets
+     WHERE application_id = ? AND tenant_id = ? AND is_deleted = 0
+     ORDER BY order_index ASC, id ASC`,
+    [applicationId, tenantFilter.params[0]],
+  );
+  return rows;
+}
+
+/**
+ * 批量添加资产（事务）
+ * @param items 数组，每项包含 asset_name（必填）/ asset_code / asset_brand / asset_model /
+ *              asset_specification / purchase_date / purchase_amount / order_index
+ */
+async function addApplicationAssets({ applicationId, tenantFilter, items, user }) {
+  if (!Array.isArray(items) || items.length === 0) {
+    const err = new Error('items 必须是非空数组');
+    err.statusCode = 400;
+    throw err;
+  }
+  for (const it of items) {
+    if (!it.asset_name) {
+      const err = new Error('每个资产必须包含 asset_name');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+  await assertApplicationEditable({ applicationId, tenantFilter });
+
+  const tenantId = tenantFilter.params[0];
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 取当前最大 order_index，新条目从 max+1 开始
+    const [maxRows] = await connection.execute(
+      `SELECT COALESCE(MAX(order_index), 0) AS max_idx
+       FROM acceptance_application_assets
+       WHERE application_id = ? AND tenant_id = ? AND is_deleted = 0`,
+      [applicationId, tenantId],
+    );
+    let nextIdx = (maxRows[0]?.max_idx || 0) + 1;
+
+    const insertedIds = [];
+    for (const it of items) {
+      const orderIndex = it.order_index || nextIdx;
+      const [result] = await connection.execute(
+        `INSERT INTO acceptance_application_assets
+           (tenant_id, application_id, asset_name, asset_code, asset_brand, asset_model,
+            asset_specification, purchase_date, purchase_amount, order_index, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          tenantId, applicationId, it.asset_name,
+          it.asset_code || null, it.asset_brand || null, it.asset_model || null,
+          it.asset_specification || null, it.purchase_date || null, it.purchase_amount || null,
+          orderIndex,
+        ],
+      );
+      insertedIds.push(result.insertId);
+      nextIdx = orderIndex + 1;
+    }
+
+    await connection.commit();
+    return { ids: insertedIds, count: insertedIds.length };
+  } catch (err) {
+    try { await connection.rollback(); } catch (_) { /* ignore */ }
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * 软删单个资产关联
+ */
+async function removeApplicationAsset({ applicationId, assetLinkId, tenantFilter, user }) {
+  await assertApplicationEditable({ applicationId, tenantFilter });
+
+  const [result] = await db.execute(
+    `UPDATE acceptance_application_assets
+     SET is_deleted = 1, deleted_at = NOW(), deleted_by = ?
+     WHERE id = ? AND application_id = ? AND tenant_id = ? AND is_deleted = 0`,
+    [user?.username || null, assetLinkId, applicationId, tenantFilter.params[0]],
+  );
+  if (result.affectedRows === 0) {
+    const err = new Error('资产关联不存在或已被删除');
+    err.statusCode = 404;
+    throw err;
+  }
+}
+
+/**
+ * 软删申请下所有资产关联
+ */
+async function clearApplicationAssets({ applicationId, tenantFilter, user }) {
+  await assertApplicationEditable({ applicationId, tenantFilter });
+
+  await db.execute(
+    `UPDATE acceptance_application_assets
+     SET is_deleted = 1, deleted_at = NOW(), deleted_by = ?
+     WHERE application_id = ? AND tenant_id = ? AND is_deleted = 0`,
+    [user?.username || null, applicationId, tenantFilter.params[0]],
+  );
+}
+
 module.exports = {
   listApplications,
   getApplicationWithApprovals,
@@ -315,4 +450,9 @@ module.exports = {
   transitionStatus,
   completeApplication,
   softDeleteApplication,
+  // 申请-资产关联
+  listApplicationAssets,
+  addApplicationAssets,
+  removeApplicationAsset,
+  clearApplicationAssets,
 };

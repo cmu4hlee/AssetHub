@@ -46,6 +46,12 @@ router.post('/applications/:id/reject', controller.rejectApplication);
 router.post('/applications/:id/withdraw', controller.withdrawApplication);
 router.post('/applications/:id/complete', controller.completeApplication);
 
+// 申请-资产多对多关联
+router.get('/applications/:id/assets', controller.listApplicationAssets);
+router.post('/applications/:id/assets', controller.addApplicationAssets);
+router.delete('/applications/:id/assets/:assetId', controller.removeApplicationAsset);
+router.delete('/applications/:id/assets', controller.clearApplicationAssets);
+
 // 验收模板管理
 router.get('/templates', controller.getTemplates);
 router.get('/templates/categories', controller.getTemplateCategories);
