@@ -376,6 +376,29 @@ const generateReport = async (req, res) => {
   }
 };
 
+/**
+ * 导出 PDF（GET /reports/:id/pdf）
+ * 流式返回 application/pdf，文件名形如 acceptance_report_<id>.pdf
+ */
+const getReportPdf = async (req, res) => {
+  try {
+    const tenantFilter = getTenantFilter(req, res);
+    if (!tenantFilter) return;
+    const id = parseInt(req.params.id, 10);
+    const pdf = await statisticsService.generateReportPdf({
+      id,
+      tenantFilter,
+      user: req.user,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="acceptance_report_${id}.pdf"`);
+    res.setHeader('Content-Length', pdf.length);
+    res.end(pdf);
+  } catch (error) {
+    handleError(res, error, '导出验收报告 PDF 失败');
+  }
+};
+
 // ============================================
 // 提醒管理
 // ============================================
@@ -578,6 +601,7 @@ module.exports = {
   // 报告
   getReport,
   generateReport,
+  getReportPdf,
   // 提醒
   getReminders,
   getReminderStats,

@@ -193,9 +193,169 @@ async function generateReport({ id, tenantFilter, user }) {
   return { report_summary: reportSummary, pass_rate: parseFloat(passRate) };
 }
 
+/**
+ * HTML 转义（防 XSS）
+ */
+function esc(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/**
+ * 把验收报告渲染为 HTML（用于 puppeteer 渲染 PDF）
+ */
+function renderReportHtml({ record, checklist, files, team, summary, generatedBy }) {
+  const groupedChecklist = {};
+  for (const c of checklist) {
+    if (!groupedChecklist[c.category]) groupedChecklist[c.category] = [];
+    groupedChecklist[c.category].push(c);
+  }
+
+  const checklistHtml = Object.keys(groupedChecklist).sort().map(category => {
+    const items = groupedChecklist[category].map(c => {
+      const status = c.is_passed === 1 ? '<span style="color:#389e0d">通过</span>'
+        : c.is_passed === 0 ? '<span style="color:#cf1322">不通过</span>'
+        : '<span style="color:#999">未检查</span>';
+      return `<tr>
+        <td>${esc(c.item_name)}</td>
+        <td>${esc(c.item_description || '')}</td>
+        <td>${status}</td>
+        <td>${esc(c.remark || '')}</td>
+        <td>${esc(c.checked_by || '')}</td>
+      </tr>`;
+    }).join('');
+    return `<tr style="background:#fafafa"><td colspan="5" style="font-weight:bold">${esc(category)}</td></tr>${items}`;
+  }).join('');
+
+  const teamHtml = team.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#999">无</td></tr>'
+    : team.map(t => `<tr>
+        <td>${esc(t.member_name)}</td>
+        <td>${esc(t.role || '')}</td>
+        <td>${esc(t.department || '')}</td>
+        <td>${t.assigned_at ? esc(t.assigned_at.toString().substring(0, 10)) : ''}</td>
+      </tr>`).join('');
+
+  const filesHtml = files.length === 0 ? '<tr><td colspan="3" style="text-align:center;color:#999">无</td></tr>'
+    : files.map(f => `<tr>
+        <td>${esc(f.file_type)}</td>
+        <td>${esc(f.file_name)}</td>
+        <td>${esc(f.uploaded_by || '')}</td>
+      </tr>`).join('');
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>验收报告</title>
+<style>
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; padding: 20px; color: #333; font-size: 12px; }
+  h1 { text-align: center; font-size: 20px; margin: 0 0 8px; }
+  .meta { text-align: center; color: #999; margin-bottom: 24px; font-size: 12px; }
+  .section { margin-bottom: 24px; }
+  .section-title { font-size: 14px; font-weight: bold; border-bottom: 2px solid #1890ff; padding-bottom: 4px; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #d9d9d9; padding: 6px 10px; text-align: left; }
+  th { background: #f5f5f5; font-weight: bold; }
+  .summary-grid { display: flex; gap: 16px; margin-bottom: 16px; }
+  .summary-card { flex: 1; border: 1px solid #d9d9d9; padding: 12px; text-align: center; border-radius: 4px; }
+  .summary-card .num { font-size: 22px; font-weight: bold; color: #1890ff; }
+  .summary-card .label { color: #999; font-size: 12px; margin-top: 4px; }
+  .info { display: grid; grid-template-columns: 120px 1fr 120px 1fr; gap: 6px 16px; }
+  .info-label { color: #999; }
+  .footer { margin-top: 30px; text-align: right; color: #999; font-size: 11px; }
+</style></head>
+<body>
+  <h1>资产验收报告</h1>
+  <div class="meta">报告编号：${esc(record.id)} | 生成时间：${esc(new Date().toLocaleString('zh-CN'))}</div>
+
+  <div class="section">
+    <div class="section-title">基本信息</div>
+    <div class="info">
+      <div class="info-label">资产编号：</div><div>${esc(record.asset_code || '')}</div>
+      <div class="info-label">资产名称：</div><div>${esc(record.asset_name || '')}</div>
+      <div class="info-label">供应商：</div><div>${esc(record.supplier || '')}</div>
+      <div class="info-label">验收日期：</div><div>${esc(record.acceptance_date || '')}</div>
+      <div class="info-label">使用科室：</div><div>${esc(record.department || '')}</div>
+      <div class="info-label">职能部门：</div><div>${esc(record.functional_department || '')}</div>
+      <div class="info-label">验收人：</div><div>${esc(record.acceptance_person || '')}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">验收汇总</div>
+    <div class="summary-grid">
+      <div class="summary-card"><div class="num">${summary.total}</div><div class="label">检查项总数</div></div>
+      <div class="summary-card"><div class="num" style="color:#389e0d">${summary.passed}</div><div class="label">通过</div></div>
+      <div class="summary-card"><div class="num" style="color:#cf1322">${summary.failed}</div><div class="label">不通过</div></div>
+      <div class="summary-card"><div class="num">${summary.unchecked}</div><div class="label">未检查</div></div>
+      <div class="summary-card"><div class="num" style="color:#1890ff">${summary.passRate}%</div><div class="label">合格率</div></div>
+    </div>
+    <div style="margin-top:8px"><strong>当前状态：</strong>${esc(record.status || '')}</div>
+    ${record.report_summary ? `<div style="margin-top:8px"><strong>报告摘要：</strong>${esc(record.report_summary)}</div>` : ''}
+  </div>
+
+  <div class="section">
+    <div class="section-title">验收小组成员</div>
+    <table><thead><tr><th>姓名</th><th>角色</th><th>科室</th><th>分配日期</th></tr></thead><tbody>${teamHtml}</tbody></table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">检查清单</div>
+    <table><thead><tr><th style="width:25%">项目</th><th>说明</th><th style="width:10%">结果</th><th>备注</th><th style="width:10%">检查人</th></tr></thead>
+    <tbody>${checklistHtml || '<tr><td colspan="5" style="text-align:center;color:#999">暂无检查项</td></tr>'}</tbody></table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">附件资料</div>
+    <table><thead><tr><th style="width:20%">类型</th><th>文件名</th><th>上传人</th></tr></thead><tbody>${filesHtml}</tbody></table>
+  </div>
+
+  <div class="footer">由 ${esc(generatedBy || '系统')} 导出 · AssetHub</div>
+</body></html>`;
+}
+
+/**
+ * 用 puppeteer 把 HTML 渲染为 PDF（Buffer）
+ */
+async function renderPdfFromHtml(html) {
+  const puppeteer = require('puppeteer');
+  const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    return await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '20mm', bottom: '20mm', left: '15mm', right: '15mm' },
+    });
+  } finally {
+    await browser.close();
+  }
+}
+
+/**
+ * 生成验收报告 PDF：先查数据 → 渲染 HTML → 渲染 PDF
+ * @returns {Promise<Buffer>}
+ */
+async function generateReportPdf({ id, tenantFilter, user }) {
+  const data = await getReport({ id, tenantFilter });
+  if (!data) {
+    const err = new Error('验收记录不存在');
+    err.statusCode = 404;
+    throw err;
+  }
+  const html = renderReportHtml({
+    record: data.record,
+    checklist: data.checklist,
+    files: data.files,
+    team: data.team,
+    summary: data.summary,
+    generatedBy: user?.real_name || user?.username,
+  });
+  return await renderPdfFromHtml(html);
+}
+
 module.exports = {
   getStatisticsOverview,
   getStatisticsTrend,
   getReport,
   generateReport,
+  generateReportPdf,
 };

@@ -304,6 +304,21 @@ export const acceptanceManagementAPI = {
   getReport: id => apiWithBatching.get(`/acceptance-management/reports/${id}`),
   generateReport: id =>
     apiWithBatching.post(`/acceptance-management/reports/${id}/generate`),
+  exportReportPdf: async (id) => {
+    const response = await apiWithBatching.get(
+      `/acceptance-management/reports/${id}/pdf`,
+      { responseType: 'blob' },
+    );
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `acceptance_report_${id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
 };
 
 // warranty 模块后端 API 已实现 (路径 /api/maintenance/warranty/*)

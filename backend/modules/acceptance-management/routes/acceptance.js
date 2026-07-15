@@ -59,6 +59,7 @@ router.get('/statistics/trend', controller.getStatisticsTrend);
 
 // 验收报告
 router.get('/reports/:id', controller.getReport);
+router.get('/reports/:id/pdf', controller.getReportPdf);
 router.post('/reports/:id/generate', controller.generateReport);
 
 // 提醒管理

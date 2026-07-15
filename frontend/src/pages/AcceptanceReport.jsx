@@ -6,7 +6,7 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined, PrinterOutlined, FileTextOutlined, TeamOutlined,
-  ReloadOutlined, EditOutlined,
+  ReloadOutlined, EditOutlined, FilePdfOutlined,
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -84,6 +84,24 @@ const AcceptanceReport = () => {
     printAcceptanceReport(data, { generatedBy: '系统' });
   };
 
+  const [exporting, setExporting] = useState(false);
+  const handleExportPdf = async () => {
+    if (!data) {
+      message.warning('暂无数据可导出');
+      return;
+    }
+    setExporting(true);
+    try {
+      await acceptanceManagementAPI.exportReportPdf(recordId);
+      message.success('PDF 已下载');
+    } catch (error) {
+      console.error('导出 PDF 失败:', error);
+      message.error(error?.response?.data?.message || error?.message || '导出 PDF 失败');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
@@ -140,6 +158,7 @@ const AcceptanceReport = () => {
             <Button icon={<EditOutlined />} loading={generating} onClick={handleGenerate}>生成报告</Button>
           )}
           <Button type="primary" icon={<PrinterOutlined />} onClick={handlePrint}>打印报告</Button>
+          <Button icon={<FilePdfOutlined />} loading={exporting} onClick={handleExportPdf}>导出 PDF</Button>
         </Space>
       </div>
 
