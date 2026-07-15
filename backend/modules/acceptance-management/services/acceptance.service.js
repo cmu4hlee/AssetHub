@@ -209,6 +209,40 @@ async function deleteReminder(reminderId, tenantFilter, deletedBy = null) {
 }
 
 /**
+ * 提醒列表（分页 + 状态/类型过滤）
+ */
+async function listReminders({ tenantFilter, page = 1, pageSize = 20, status, reminder_type }) {
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const pageSizeNum = Math.min(200, parseInt(pageSize, 10) || 20);
+  const offset = (pageNum - 1) * pageSizeNum;
+
+  let filterClause = '';
+  const filterParams = [];
+  if (status) { filterClause += ' AND status = ?'; filterParams.push(status); }
+  if (reminder_type) { filterClause += ' AND reminder_type = ?'; filterParams.push(reminder_type); }
+
+  const baseWhere = `WHERE 1=1${tenantFilter.whereClause} AND is_deleted = 0${filterClause}`;
+  const [records] = await db.execute(
+    `SELECT * FROM acceptance_reminders ${baseWhere} ORDER BY remind_date DESC, created_at DESC LIMIT ? OFFSET ?`,
+    [...tenantFilter.params, ...filterParams, pageSizeNum, offset],
+  );
+  const [totalResult] = await db.execute(
+    `SELECT COUNT(*) AS total FROM acceptance_reminders ${baseWhere}`,
+    [...tenantFilter.params, ...filterParams],
+  );
+  const total = totalResult[0]?.total || 0;
+  return {
+    records,
+    pagination: {
+      total,
+      page: pageNum,
+      pageSize: pageSizeNum,
+      totalPages: Math.ceil(total / pageSizeNum),
+    },
+  };
+}
+
+/**
  * 提醒统计（按状态、按类型）
  */
 async function getReminderStats(tenantFilter) {
@@ -471,6 +505,7 @@ module.exports = {
   deleteTeamMember,
   // 提醒
   validateReminderInput,
+  listReminders,
   createReminder,
   updateReminderStatus,
   deleteReminder,
