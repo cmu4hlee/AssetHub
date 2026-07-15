@@ -1,4 +1,5 @@
 const specialEquipmentService = require('../services/special-equipment.service');
+const specialEquipmentImportService = require('../services/special-equipment-import.service');
 const logger = require('../../../config/logger');
 
 // 定义错误类型
@@ -18,7 +19,7 @@ class SpecialEquipmentController {
    */
   async getEquipments(req, res) {
     try {
-      const { page, pageSize, status, safety_status, keyword, equipment_type } = req.query;
+      const { page, pageSize, status, safety_status, keyword, equipment_type, use_status, department } = req.query;
       const tenantId = req.user?.tenant_id || req.headers['x-tenant-id'];
 
       if (!tenantId) {
@@ -36,6 +37,8 @@ class SpecialEquipmentController {
         pageSize,
         status,
         safety_status,
+        use_status,
+        department,
         keyword,
       });
 
@@ -46,6 +49,8 @@ class SpecialEquipmentController {
         safety_status,
         keyword,
         equipment_type,
+        use_status,
+        department,
         tenantId,
       });
 
@@ -431,5 +436,163 @@ class SpecialEquipmentController {
     }
   }
 }
+
+// ==================== 导入 / 导出 ====================
+
+SpecialEquipmentController.prototype.getImportTemplate = async function getImportTemplate(req, res) {
+  try {
+    const buffer = await specialEquipmentImportService.buildImportTemplateBuffer();
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="special_equipment_import_template.xlsx"',
+    );
+    res.send(buffer);
+  } catch (error) {
+    logger.error('生成特种设备导入模板失败', { error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, message: '生成模板失败' });
+  }
+};
+
+SpecialEquipmentController.prototype.validateImport = async function validateImport(req, res) {
+  try {
+    const uploadedFile = req.file;
+    if (!uploadedFile) {
+      return res.status(400).json({ success: false, message: '请选择要上传的 Excel 文件' });
+    }
+    const fileBuffer = uploadedFile.buffer;
+    const tenantId = req.user.tenant_id || req.headers['x-tenant-id'];
+    if (!tenantId) {
+      return res.status(400).json({ success: false, message: '缺少租户ID' });
+    }
+
+    const { rows } = await specialEquipmentImportService.parseSpecialEquipmentImportBuffer(fileBuffer);
+    const { validRows, failedRows, associatedCount, unassociatedCount } =
+      await specialEquipmentImportService.validateSpecialEquipmentImportRows(rows, tenantId);
+
+    return res.json({
+      success: true,
+      message: `预校验完成：可导入 ${validRows.length} 条（已关联资产 ${associatedCount} / 未关联 ${unassociatedCount}），异常 ${failedRows.length} 条`,
+      totalRows: rows.length,
+      validCount: validRows.length,
+      invalidCount: failedRows.length,
+      associatedCount,
+      unassociatedCount,
+      failedRows,
+      preview: validRows.map(item => ({
+        rowNumber: item.rowNumber,
+        rowData: item.rowData,
+        association: item.association,
+      })),
+    });
+  } catch (error) {
+    logger.error('特种设备导入预校验失败', { error: error.message, stack: error.stack });
+    return res.status(400).json({ success: false, message: error.message || '预校验失败' });
+  }
+};
+
+SpecialEquipmentController.prototype.importEquipments = async function importEquipments(req, res) {
+  try {
+    const uploadedFile = req.file;
+    if (!uploadedFile) {
+      return res.status(400).json({ success: false, message: '请选择要上传的 Excel 文件' });
+    }
+    const fileBuffer = uploadedFile.buffer;
+    const tenantId = req.user.tenant_id || req.headers['x-tenant-id'];
+    if (!tenantId) {
+      return res.status(400).json({ success: false, message: '缺少租户ID' });
+    }
+
+    const { rows } = await specialEquipmentImportService.parseSpecialEquipmentImportBuffer(fileBuffer);
+    const { validRows, failedRows } = await specialEquipmentImportService.validateSpecialEquipmentImportRows(rows, tenantId);
+    const { successCount, failedRows: persistedFailedRows, associatedCount, unassociatedCount } =
+      await specialEquipmentImportService.importSpecialEquipments(validRows, tenantId, req.user.id);
+
+    const allFailed = [...failedRows, ...persistedFailedRows];
+    return res.json({
+      success: true,
+      message: `导入完成：成功 ${successCount} 条（已关联资产 ${associatedCount} / 未关联 ${unassociatedCount}），失败 ${allFailed.length} 条`,
+      totalRows: rows.length,
+      successCount,
+      failedCount: allFailed.length,
+      associatedCount,
+      unassociatedCount,
+      failedRows: allFailed,
+    });
+  } catch (error) {
+    logger.error('特种设备导入失败', { error: error.message, stack: error.stack });
+    return res.status(400).json({ success: false, message: error.message || '导入失败' });
+  }
+};
+
+SpecialEquipmentController.prototype.exportEquipments = async function exportEquipments(req, res) {
+  try {
+    const { status, safety_status, equipment_type, keyword } = req.query;
+    const tenantId = req.user.tenant_id || req.headers['x-tenant-id'];
+    if (!tenantId) {
+      return res.status(400).json({ success: false, message: '缺少租户ID' });
+    }
+    const buffer = await specialEquipmentImportService.buildExportBuffer(tenantId, {
+      status, safety_status, equipment_type, keyword,
+    });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="special_equipment_export_${Date.now()}.xlsx"`);
+    res.send(buffer);
+  } catch (error) {
+    logger.error('导出特种设备失败', { error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, message: '导出失败' });
+  }
+};
+
+// ==================== 批量操作 ====================
+
+SpecialEquipmentController.prototype.batchDelete = async function batchDelete(req, res) {
+  try {
+    const { ids } = req.body;
+    const tenantId = req.user.tenant_id || req.headers['x-tenant-id'];
+    if (!tenantId) return res.status(400).json({ success: false, message: '缺少租户ID' });
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: '请选择要删除的设备' });
+    }
+    const result = await specialEquipmentService.batchDelete(ids, tenantId);
+    res.json({
+      success: true,
+      message: `批量删除完成：成功 ${result.successCount} 条，失败 ${result.failedCount} 条`,
+      data: result,
+    });
+  } catch (error) {
+    logger.error('批量删除失败', { error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, message: '批量删除失败', error: error.message });
+  }
+};
+
+SpecialEquipmentController.prototype.batchUpdateStatus = async function batchUpdateStatus(req, res) {
+  try {
+    const { ids, safety_status, use_status } = req.body;
+    const tenantId = req.user.tenant_id || req.headers['x-tenant-id'];
+    if (!tenantId) return res.status(400).json({ success: false, message: '缺少租户ID' });
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: '请选择要更新的设备' });
+    }
+    if (!safety_status && !use_status) {
+      return res.status(400).json({ success: false, message: '请选择要更新的状态字段' });
+    }
+    const result = await specialEquipmentService.batchUpdateStatus(ids, { safety_status, use_status }, tenantId);
+    res.json({
+      success: true,
+      message: `批量更新完成：成功 ${result.successCount} 条，失败 ${result.failedCount} 条`,
+      data: result,
+    });
+  } catch (error) {
+    logger.error('批量更新状态失败', { error: error.message, stack: error.stack });
+    if (error.message.includes('没有可更新')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    res.status(500).json({ success: false, message: '批量更新状态失败', error: error.message });
+  }
+};
 
 module.exports = new SpecialEquipmentController();

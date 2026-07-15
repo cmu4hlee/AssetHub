@@ -120,7 +120,7 @@ class SpecialEquipmentService {
    * @returns {Promise<Object>} 设备列表和分页信息
    */
   async getEquipments(params) {
-    const { page = 1, pageSize = 20, status, safety_status, keyword, equipment_type, tenantId } = params;
+    const { page = 1, pageSize = 20, status, safety_status, keyword, equipment_type, use_status, department, tenantId } = params;
 
     let sql = `
       SELECT se.*, a.asset_name, a.asset_code
@@ -145,6 +145,14 @@ class SpecialEquipmentService {
     if (keyword) {
       sql += ' AND (se.equipment_name LIKE ? OR se.equipment_code LIKE ? OR a.asset_code LIKE ?)';
       paramsArray.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+    }
+    if (use_status) {
+      sql += ' AND se.use_status = ?';
+      paramsArray.push(use_status);
+    }
+    if (department) {
+      sql += ' AND se.department LIKE ?';
+      paramsArray.push(`%${department}%`);
     }
 
     sql += ' ORDER BY se.next_inspection_date ASC';
@@ -177,6 +185,18 @@ class SpecialEquipmentService {
     if (keyword) {
       countSql += ' AND (se.equipment_name LIKE ? OR se.equipment_code LIKE ? OR a.asset_code LIKE ?)';
       countParams.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+    }
+    if (use_status) {
+      countSql += keyword
+        ? ' AND se.use_status = ?'
+        : ' AND use_status = ?';
+      countParams.push(use_status);
+    }
+    if (department) {
+      countSql += keyword
+        ? ' AND se.department LIKE ?'
+        : ' AND department LIKE ?';
+      countParams.push(`%${department}%`);
     }
     const [countResult] = await db.execute(countSql, countParams);
 
@@ -918,6 +938,84 @@ class SpecialEquipmentService {
       type_statistics: typeStats,
       inspection_status: inspectionStatus,
       expiring_count: inspectionStatus.expiring_count,
+    };
+  }
+  /**
+   * 批量删除特种设备
+   * @param {number[]} ids - 设备 ID 数组
+   * @param {string} tenantId - 租户 ID
+   * @returns {Promise<{successCount:number, failedCount:number}>}
+   */
+  async batchDelete(ids, tenantId) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return { successCount: 0, failedCount: 0 };
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    const [result] = await db.execute(
+      `DELETE FROM special_equipment WHERE id IN (${placeholders}) AND tenant_id = ?`,
+      [...ids, tenantId],
+    );
+
+    return {
+      successCount: result.affectedRows,
+      failedCount: ids.length - result.affectedRows,
+    };
+  }
+
+  /**
+   * 批量更新特种设备状态
+   * @param {number[]} ids - 设备 ID 数组
+   * @param {Object} updates - { safety_status?, use_status? }
+   * @param {string} tenantId - 租户 ID
+   * @returns {Promise<{successCount:number, failedCount:number}>}
+   */
+  async batchUpdateStatus(ids, updates, tenantId) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return { successCount: 0, failedCount: 0 };
+    }
+
+    const equipmentMeta = await this.getTableMeta('special_equipment');
+    const { columns } = equipmentMeta;
+
+    const setClauses = [];
+    const setValues = [];
+
+    if (updates.safety_status !== undefined && columns.has('safety_status')) {
+      const normalized = normalizeSafetyStatus(updates.safety_status);
+      if (normalized) {
+        setClauses.push('safety_status = ?');
+        setValues.push(normalized);
+      }
+    }
+
+    if (updates.use_status !== undefined) {
+      const normalized = normalizeUseStatus(updates.use_status);
+      if (normalized) {
+        const targetCol = columns.has('use_status') ? 'use_status' : (columns.has('status') ? 'status' : null);
+        if (targetCol) {
+          setClauses.push(`${targetCol} = ?`);
+          setValues.push(normalized);
+        }
+      }
+    }
+
+    if (setClauses.length === 0) {
+      throw new Error('没有可更新的状态字段');
+    }
+
+    if (columns.has('updated_at')) {
+      setClauses.push('updated_at = NOW()');
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    const sql = `UPDATE special_equipment SET ${setClauses.join(', ')} WHERE id IN (${placeholders}) AND tenant_id = ?`;
+
+    const [result] = await db.execute(sql, [...setValues, ...ids, tenantId]);
+
+    return {
+      successCount: result.affectedRows,
+      failedCount: ids.length - result.affectedRows,
     };
   }
 }

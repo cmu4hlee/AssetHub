@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  Card, Input, Button, Select, Space, Tag, Empty, message, Spin, Avatar, List, Tooltip, Switch, Row, Col, Drawer, Tabs, Typography,
+  Card, Input, Button, Select, Space, Tag, Empty, message, Spin, Avatar, Tooltip, Switch, Row, Col, Drawer, Tabs, Typography,
 } from 'antd';
 import {
   SendOutlined, ClearOutlined, RobotOutlined, UserOutlined, BookOutlined, HistoryOutlined,
@@ -321,7 +321,7 @@ const KnowledgeBaseQA = () => {
           >
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             {sessions.map(s => (
-                <List.Item
+                <div
                   key={s.id}
                   onClick={() => setActiveSessionId(s.id)}
                   style={{
@@ -329,26 +329,25 @@ const KnowledgeBaseQA = () => {
                     padding: '8px 12px',
                     background: s.id === activeSessionId ? '#e6f4ff' : 'transparent',
                     borderLeft: s.id === activeSessionId ? '3px solid #1890ff' : '3px solid transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
                   }}
-                  actions={[
-                    <Button
-                      key="del" type="text" size="small" danger icon={<DeleteOutlined />}
-                      onClick={e => { e.stopPropagation(); handleDeleteSession(s.id); }}
-                    />,
-                  ]}
                 >
-                  <List.Item.Meta
-                    avatar={<Avatar size="small" icon={<RobotOutlined />} style={{ backgroundColor: '#1890ff' }} />}
-                    title={
-                      <Text ellipsis style={{ fontSize: 13 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: 1, minWidth: 0 }}>
+                    <Avatar size="small" icon={<RobotOutlined />} style={{ backgroundColor: '#1890ff', marginTop: 2 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Text ellipsis style={{ fontSize: 13, display: 'block' }}>
                         {s.title || '新会话'}
                       </Text>
-                    }
-                    description={
                       <Text type="secondary" style={{ fontSize: 11 }}>
                         {s.messages.length > 0 ? `${s.messages.length} 条消息` : '空会话'}
                       </Text>
-                    }
+                    </div>
+                  </div>
+                  <Button
+                    type="text" size="small" danger icon={<DeleteOutlined />}
+                    onClick={e => { e.stopPropagation(); handleDeleteSession(s.id); }}
                   />
                 </div>
               )}
@@ -436,7 +435,7 @@ const KnowledgeBaseQA = () => {
                     }}
                   />
                 ))
-              )}
+              ))}
             </div>
 
             {/* 输入区 */}

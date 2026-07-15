@@ -61,6 +61,12 @@ export const complianceAPI = {
   exportSpecialEquipment: params =>
     api.get('/compliance/special-equipment/export', { params, responseType: 'blob' }),
 
+  // 特种设备批量操作
+  batchDeleteSpecialEquipment: ids =>
+    api.post('/compliance/special-equipment/batch-delete', { ids }),
+  batchUpdateSpecialEquipmentStatus: data =>
+    api.post('/compliance/special-equipment/batch-update-status', data),
+
   getSafetyInspections: params =>
     getNormalizedList(api.get('/compliance/safety-inspections', { params })),
   createSafetyInspection: data => api.post('/compliance/safety-inspections', data),

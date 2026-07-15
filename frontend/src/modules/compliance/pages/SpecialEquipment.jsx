@@ -50,7 +50,7 @@ const SpecialEquipmentManagement = () => {
   const [inspectionLoading, setInspectionLoading] = useState(false);
   
   // 筛选状态
-  const [equipmentFilters, setEquipmentFilters] = useState({ keyword: '', equipment_type: undefined, safety_status: undefined });
+  const [equipmentFilters, setEquipmentFilters] = useState({ keyword: '', equipment_type: undefined, safety_status: undefined, use_status: undefined, department: '' });
   const [inspectionFilters, setInspectionFilters] = useState({ keyword: '', inspection_type: undefined, inspection_result: undefined });
   const searchTimerRef = useRef(null);
   
@@ -112,6 +112,14 @@ const SpecialEquipmentManagement = () => {
   const [importImporting, setImportImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // 批量操作状态
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+  const [batchStatusModalVisible, setBatchStatusModalVisible] = useState(false);
+  const [batchUpdating, setBatchUpdating] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [batchSafetyStatus, setBatchSafetyStatus] = useState(null);
+  const [batchUseStatus, setBatchUseStatus] = useState(null);
+
   const equipmentTypes = [
     { value: 'elevator', label: '电梯', icon: '🛗' },
     { value: 'pressure_vessel', label: '压力容器', icon: '⚙️' },
@@ -128,6 +136,14 @@ const SpecialEquipmentManagement = () => {
     { value: 'expiring', label: '即将过期', color: 'orange' },
     { value: 'expired', label: '已过期', color: 'red' },
     { value: 'stopped', label: '停用', color: 'default' }
+  ];
+
+  const useStatusOptions = [
+    { value: 'in_use', label: '在用' },
+    { value: 'out_of_service', label: '停用' },
+    { value: 'scrapped', label: '报废' },
+    { value: 'suspended', label: '停用待修' },
+    { value: 'transferred', label: '移装' },
   ];
 
   const inspectionTypeOptions = [
@@ -200,7 +216,8 @@ const SpecialEquipmentManagement = () => {
       if (currentFilters.keyword) params.keyword = currentFilters.keyword;
       if (currentFilters.equipment_type) params.equipment_type = currentFilters.equipment_type;
       if (currentFilters.safety_status) params.safety_status = currentFilters.safety_status;
-
+      if (currentFilters.use_status) params.use_status = currentFilters.use_status;
+      if (currentFilters.department) params.department = currentFilters.department;
       const response = await complianceAPI.getSpecialEquipment(params);
       if (response?.success) {
         const data = Array.isArray(response.data) ? response.data : [];
@@ -288,7 +305,7 @@ const SpecialEquipmentManagement = () => {
   };
 
   const clearEquipmentFilters = () => {
-    const cleared = { keyword: '', equipment_type: undefined, safety_status: undefined };
+    const cleared = { keyword: '', equipment_type: undefined, safety_status: undefined, use_status: undefined, department: '' };
     setEquipmentFilters(cleared);
     fetchEquipment({ current: 1, pageSize: equipmentPageSize }, cleared);
   };
@@ -808,7 +825,30 @@ const SpecialEquipmentManagement = () => {
                 </Select>
               </Col>
               <Col>
-                <Button icon={<ClearOutlined />} onClick={clearEquipmentFilters} disabled={!equipmentFilters.keyword && !equipmentFilters.equipment_type && !equipmentFilters.safety_status}>
+                <Select
+                  placeholder="使用状态"
+                  value={equipmentFilters.use_status}
+                  onChange={v => handleEquipmentFilterChange('use_status', v)}
+                  allowClear
+                  style={{ width: 120 }}
+                >
+                  {useStatusOptions.map(s => (
+                    <Option key={s.value} value={s.value}>{s.label}</Option>
+                  ))}
+                </Select>
+              </Col>
+              <Col>
+                <Input
+                  placeholder="所属部门"
+                  value={equipmentFilters.department}
+                  onChange={e => handleEquipmentFilterChange('department', e.target.value)}
+                  allowClear
+                  prefix={<SearchOutlined />}
+                  style={{ width: 140 }}
+                />
+              </Col>
+              <Col>
+                <Button icon={<ClearOutlined />} onClick={clearEquipmentFilters} disabled={!equipmentFilters.keyword && !equipmentFilters.equipment_type && !equipmentFilters.safety_status && !equipmentFilters.use_status && !equipmentFilters.department}>
                   重置
                 </Button>
               </Col>
@@ -840,6 +880,42 @@ const SpecialEquipmentManagement = () => {
             </Row>
           </Card>
 
+          {selectedRowKeys.length > 0 && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={
+                <span>
+                  已选择 <strong>{selectedRowKeys.length}</strong> 条记录
+                  <Button type="link" size="small" onClick={() => setSelectedRowKeys([])}>取消选择</Button>
+                  <Button type="link" size="small" danger loading={batchDeleting}
+                    onClick={async () => {
+                      setBatchDeleting(true);
+                      try {
+                        await complianceAPI.batchDeleteSpecialEquipment(selectedRowKeys);
+                        message.success(`已删除 ${selectedRowKeys.length} 条`);
+                        setSelectedRowKeys([]);
+                        await fetchEquipment({ current: 1, pageSize: equipmentPagination.pageSize });
+                        await fetchEquipmentOptions();
+                        await fetchSpecialEquipmentStats();
+                      } catch (_e) {
+                        message.error('批量删除失败');
+                      } finally {
+                        setBatchDeleting(false);
+                      }
+                    }}
+                  >批量删除</Button>
+                  <Button type="link" size="small" onClick={() => {
+                    setBatchSafetyStatus(null);
+                    setBatchUseStatus(null);
+                    setBatchStatusModalVisible(true);
+                  }}>修改状态</Button>
+                </span>
+              }
+            />
+          )}
+
           <Card>
             <Table 
               columns={equipmentColumns} 
@@ -847,6 +923,10 @@ const SpecialEquipmentManagement = () => {
               rowKey="id"
               loading={equipmentLoading}
               scroll={{ x: 1200 }}
+              rowSelection={{
+                selectedRowKeys,
+                onChange: keys => setSelectedRowKeys(keys),
+              }}
               pagination={{
                 current: equipmentPagination.current,
                 pageSize: equipmentPagination.pageSize,
@@ -855,7 +935,10 @@ const SpecialEquipmentManagement = () => {
                 showQuickJumper: true,
                 showTotal: total => `共 ${total} 条`
               }}
-              onChange={handleEquipmentTableChange}
+              onChange={(pagination) => {
+                setSelectedRowKeys([]);
+                handleEquipmentTableChange(pagination);
+              }}
             />
           </Card>
         </>
@@ -1169,6 +1252,62 @@ const SpecialEquipmentManagement = () => {
             <TextArea rows={3} placeholder="请输入安全注意事项" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 批量修改状态弹窗 */}
+      <Modal
+        title="批量修改状态"
+        open={batchStatusModalVisible}
+        onCancel={() => setBatchStatusModalVisible(false)}
+        width={500}
+        destroyOnHidden
+        onOk={async () => {
+          setBatchUpdating(true);
+          try {
+            await complianceAPI.batchUpdateSpecialEquipmentStatus({
+              ids: selectedRowKeys,
+              safety_status: batchSafetyStatus || undefined,
+              use_status: batchUseStatus || undefined,
+            });
+            message.success(`已更新 ${selectedRowKeys.length} 条记录`);
+            setBatchStatusModalVisible(false);
+            setSelectedRowKeys([]);
+            await fetchEquipment({ current: 1, pageSize: equipmentPagination.pageSize });
+            await fetchEquipmentOptions();
+            await fetchSpecialEquipmentStats();
+          } catch (_e) {
+            message.error('批量更新失败');
+          } finally {
+            setBatchUpdating(false);
+          }
+        }}
+        confirmLoading={batchUpdating}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <div>即将更新 <strong>{selectedRowKeys.length}</strong> 条记录的状态</div>
+          <Select
+            placeholder="安全状态（留空不修改）"
+            value={batchSafetyStatus}
+            onChange={setBatchSafetyStatus}
+            allowClear
+            style={{ width: '100%' }}
+          >
+            {safetyStatusOptions.map(s => (
+              <Option key={s.value} value={s.value}>{s.label}</Option>
+            ))}
+          </Select>
+          <Select
+            placeholder="使用状态（留空不修改）"
+            value={batchUseStatus}
+            onChange={setBatchUseStatus}
+            allowClear
+            style={{ width: '100%' }}
+          >
+            {useStatusOptions.map(s => (
+              <Option key={s.value} value={s.value}>{s.label}</Option>
+            ))}
+          </Select>
+        </Space>
       </Modal>
 
       {/* 批量导入弹窗 */}
