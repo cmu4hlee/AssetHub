@@ -218,7 +218,7 @@ const buildManagedDepartmentDocumentScope = (req, documentAlias = 'td') => {
   return {
     clause: ` AND EXISTS (
       SELECT 1 FROM technical_document_asset_relations tdar
-      INNER JOIN assets a ON tdar.asset_code = a.asset_code AND a.tenant_id = ?
+      INNER JOIN assets a ON tdar.asset_code = a.asset_code AND a.tenant_id = ? AND a.is_deleted = 0
       WHERE tdar.document_id = ${documentAlias}.id AND (
         a.department IN (
           SELECT department_name FROM departments WHERE tenant_id = ? AND department_code IN (${placeholders})

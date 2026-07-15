@@ -31,14 +31,14 @@ function logInventoryError(message, error, req, context = {}) {
 }
 
 const INVENTORY_DETAIL_ASSET_JOIN =
-  'LEFT JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = id.tenant_id';
+  'LEFT JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = id.tenant_id AND a.is_deleted = 0';
 
 function buildManagedDepartmentInventoryScope(departmentIdsToFilter) {
   const placeholders = departmentIdsToFilter.map(() => '?').join(',');
   return {
     clause: ` AND EXISTS (
       SELECT 1 FROM inventory_details id
-      INNER JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = ir.tenant_id
+      INNER JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = ir.tenant_id AND a.is_deleted = 0
       WHERE id.inventory_id = ir.id AND (
         a.department IN (
           SELECT department_name FROM departments WHERE tenant_id = ir.tenant_id AND department_code IN (${placeholders})
@@ -1302,7 +1302,7 @@ router.post('/:id/scan', authenticate, authorize(INV_WRITE_ROLES), async (req, r
       `SELECT id.*, a.asset_name, a.department as expected_department,
               a.department_new as actual_department, a.status as asset_status
        FROM inventory_details id
-       LEFT JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = ?
+       LEFT JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = ? AND a.is_deleted = 0
        WHERE id.inventory_id = ? AND id.asset_code = ?`,
       [tenantId, id, asset_code],
     );

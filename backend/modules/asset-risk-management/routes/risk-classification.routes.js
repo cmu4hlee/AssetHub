@@ -90,7 +90,7 @@ const parseJsonField = value => {
 };
 
 const buildRiskAssetJoin = alias =>
-  `LEFT JOIN assets a ON a.id = ${alias}.asset_id AND a.tenant_id = ${alias}.tenant_id`;
+  `LEFT JOIN assets a ON a.id = ${alias}.asset_id AND a.tenant_id = ${alias}.tenant_id AND a.is_deleted = 0`;
 
 async function hasTenantAsset(assetId, tenantId) {
   if (!assetId) {

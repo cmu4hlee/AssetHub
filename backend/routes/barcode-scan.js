@@ -269,7 +269,7 @@ const QRCode = require('qrcode');
 const BARCODE_SCAN_DEPARTMENT_JOIN =
   'LEFT JOIN departments d ON a.department_new = d.department_code AND d.tenant_id = a.tenant_id';
 const BARCODE_SCAN_LOG_ASSET_JOIN =
-  'LEFT JOIN assets a ON sl.asset_code = a.asset_code AND a.tenant_id = sl.tenant_id';
+  'LEFT JOIN assets a ON sl.asset_code = a.asset_code AND a.tenant_id = sl.tenant_id AND a.is_deleted = 0';
 const path = require('path');
 const fs = require('fs');
 

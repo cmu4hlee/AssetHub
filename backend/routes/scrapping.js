@@ -2,7 +2,12 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { authenticate, requireSystemAdmin } = require('../middleware/auth');
+const { authenticate, requireSystemAdmin, authorize } = require('../middleware/auth');
+
+// 报废管理权限集合
+const SCRAP_VIEW_ROLES = ['scrapping.view', 'asset.view_all', 'asset.view_own_department'];
+const SCRAP_WRITE_ROLES = ['scrapping.apply', 'asset.edit_all', 'asset.edit_own_department'];
+const SCRAP_APPROVE_ROLES = ['scrapping.approve', 'asset.edit_all'];
 const { auditLogger } = require('../middleware/auditLogger');
 const { addTenantFilter, getTenantId, requireTenantId } = require('../middleware/tenant-filter');
 const eventBus = require('../core/EventBus').getEventBus();
@@ -44,7 +49,7 @@ const upload = multer({
 });
 
 // 创建报废申请
-router.post('/', authenticate, requireTenantId, auditLogger('create', 'scrapping'), async (req, res) => {
+router.post('/', authenticate, requireTenantId, authorize(SCRAP_WRITE_ROLES), auditLogger('create', 'scrapping'), async (req, res) => {
   try {
     const {
       asset_code,
@@ -286,7 +291,7 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // 更新报废记录
-router.put('/:id', authenticate, auditLogger('update', 'scrapping'), async (req, res) => {
+router.put('/:id', authenticate, authorize(SCRAP_WRITE_ROLES), auditLogger('update', 'scrapping'), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -459,7 +464,7 @@ router.post(
 );
 
 // 提交审批结果
-router.post('/:id/approve', authenticate, auditLogger('approve', 'scrapping'), async (req, res) => {
+router.post('/:id/approve', authenticate, authorize(SCRAP_APPROVE_ROLES), auditLogger('approve', 'scrapping'), async (req, res) => {
   try {
     const { id } = req.params;
     const { approver, approver_id, approval_status, approval_comment, approval_level } = req.body;
@@ -553,7 +558,7 @@ router.post('/:id/approve', authenticate, auditLogger('approve', 'scrapping'), a
 });
 
 // 提交处置结果
-router.post('/:id/dispose', authenticate, auditLogger('update', 'scrapping'), async (req, res) => {
+router.post('/:id/dispose', authenticate, authorize(SCRAP_WRITE_ROLES), auditLogger('update', 'scrapping'), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -649,7 +654,7 @@ router.post('/:id/dispose', authenticate, auditLogger('update', 'scrapping'), as
 });
 
 // 完成处置
-router.post('/:id/complete', authenticate, auditLogger('update', 'scrapping'), async (req, res) => {
+router.post('/:id/complete', authenticate, authorize(SCRAP_WRITE_ROLES), auditLogger('update', 'scrapping'), async (req, res) => {
   try {
     const { id } = req.params;
     const tenantId = getTenantId(req);
@@ -851,7 +856,7 @@ router.get('/statistics/summary', authenticate, getStatisticsHandler);
 router.get('/stats', authenticate, getStatisticsHandler);
 
 // 驳回报废申请（独立接口，便于前端直接调用）
-router.post('/:id/reject', authenticate, auditLogger('approve', 'scrapping'), async (req, res) => {
+router.post('/:id/reject', authenticate, authorize(SCRAP_APPROVE_ROLES), auditLogger('approve', 'scrapping'), async (req, res) => {
   try {
     const { id } = req.params;
     const { approver, approver_id, approval_comment } = req.body;
@@ -902,7 +907,7 @@ router.post('/:id/reject', authenticate, auditLogger('approve', 'scrapping'), as
 });
 
 // 归档报废记录
-router.post('/:id/archive', authenticate, auditLogger('update', 'scrapping'), async (req, res) => {
+router.post('/:id/archive', authenticate, authorize(SCRAP_WRITE_ROLES), auditLogger('update', 'scrapping'), async (req, res) => {
   try {
     const { id } = req.params;
     const { archived_by, archived_by_id, archive_location, archive_remark } = req.body;
@@ -971,7 +976,7 @@ router.post('/:id/archive', authenticate, auditLogger('update', 'scrapping'), as
 });
 
 // 删除报废记录
-router.delete('/:id', authenticate, auditLogger('delete', 'scrapping'), async (req, res) => {
+router.delete('/:id', authenticate, authorize(SCRAP_WRITE_ROLES), auditLogger('delete', 'scrapping'), async (req, res) => {
   try {
     const { id } = req.params;
     const tenantId = getTenantId(req);

@@ -104,7 +104,6 @@ export const MODULE_PATH_RULES = [
 ];
 
 export const MODULE_ACCESS_FALLBACKS = {
-  'special-equipment-management': ['compliance-management'],
   'safety-inspection-management': ['compliance-management'],
   'asset-risk-management': ['compliance-management'],
   'staff-qualification': ['compliance-management'],

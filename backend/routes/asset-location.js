@@ -39,7 +39,7 @@ const buildTenantScopedLocationClause = (tenantId, alias = '') => {
 };
 
 const ASSET_LOCATION_ASSET_JOIN =
-  'LEFT JOIN assets a ON al.asset_code = a.asset_code AND al.tenant_id = a.tenant_id';
+  'LEFT JOIN assets a ON al.asset_code = a.asset_code AND al.tenant_id = a.tenant_id AND a.is_deleted = 0';
 const ASSET_LOCATION_DEVICE_JOIN =
   'LEFT JOIN iot_devices d ON al.device_id = d.device_id AND d.tenant_id = al.tenant_id';
 const ASSET_LOCATION_DEVICE_LIST_JOIN =

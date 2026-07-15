@@ -525,7 +525,7 @@ async function getAssetUsage(query, req) {
   const [countResult] = await db.execute(
     `SELECT COUNT(*) as total
      FROM preventive_maintenance_plans pmp
-     LEFT JOIN assets a ON pmp.asset_code = a.asset_code AND a.tenant_id = pmp.tenant_id
+     LEFT JOIN assets a ON pmp.asset_code = a.asset_code AND a.tenant_id = pmp.tenant_id AND a.is_deleted = 0
      ${whereClause}`,
     params,
   );
@@ -543,7 +543,7 @@ async function getAssetUsage(query, req) {
        pmp.trigger_type,
        pmp.status as plan_status
      FROM preventive_maintenance_plans pmp
-     LEFT JOIN assets a ON pmp.asset_code = a.asset_code AND a.tenant_id = pmp.tenant_id
+     LEFT JOIN assets a ON pmp.asset_code = a.asset_code AND a.tenant_id = pmp.tenant_id AND a.is_deleted = 0
      ${whereClause}
      ORDER BY (pmp.current_usage / pmp.usage_threshold) DESC
      LIMIT ? OFFSET ?`,
@@ -610,7 +610,7 @@ async function getUsageRecords(query, req) {
   const [rows] = await db.execute(
     `SELECT mur.*, a.asset_name
      FROM maintenance_usage_records mur
-     LEFT JOIN assets a ON mur.asset_code = a.asset_code AND a.tenant_id = mur.tenant_id
+     LEFT JOIN assets a ON mur.asset_code = a.asset_code AND a.tenant_id = mur.tenant_id AND a.is_deleted = 0
      ${whereClause}
      ORDER BY mur.usage_date DESC, mur.id DESC
      LIMIT ? OFFSET ?`,
@@ -754,7 +754,7 @@ async function getTriggeredRecords(query, req) {
     `SELECT mut.*, pmp.plan_name, a.asset_name
      FROM maintenance_usage_triggered mut
      LEFT JOIN preventive_maintenance_plans pmp ON mut.plan_id = pmp.id
-     LEFT JOIN assets a ON mut.asset_code = a.asset_code AND a.tenant_id = mut.tenant_id
+     LEFT JOIN assets a ON mut.asset_code = a.asset_code AND a.tenant_id = mut.tenant_id AND a.is_deleted = 0
      ${whereClause}
      ORDER BY mut.triggered_at DESC
      LIMIT ? OFFSET ?`,

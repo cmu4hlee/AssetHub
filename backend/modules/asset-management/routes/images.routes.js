@@ -11,7 +11,7 @@ const logger = require('../../../config/logger');
 const router = express.Router();
 
 const ASSET_IMAGE_ASSET_JOIN =
-  'INNER JOIN assets a ON ai.asset_code = a.asset_code AND ai.tenant_id = a.tenant_id';
+  'INNER JOIN assets a ON ai.asset_code = a.asset_code AND ai.tenant_id = a.tenant_id AND a.is_deleted = 0';
 
 const uploadDir = path.join(__dirname, '../../../uploads');
 if (!fs.existsSync(uploadDir)) {

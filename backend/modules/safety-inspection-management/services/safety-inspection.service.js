@@ -6,7 +6,7 @@ const db = require('../../../config/database');
 const logger = require('../../../config/logger');
 
 const SAFETY_INSPECTION_ASSET_JOIN =
-  'LEFT JOIN assets a ON si.asset_id = a.id AND a.tenant_id = si.tenant_id';
+  'LEFT JOIN assets a ON si.asset_id = a.id AND a.tenant_id = si.tenant_id AND a.is_deleted = 0';
 
 class SafetyInspectionService {
   // ============ 资产租户校验 ============
@@ -216,7 +216,7 @@ class SafetyInspectionService {
       SELECT i.*, si.inspection_name, si.inspection_code, a.asset_code
       FROM safety_inspection_issues i
       LEFT JOIN safety_inspections si ON i.inspection_id = si.id AND si.tenant_id = i.tenant_id
-      LEFT JOIN assets a ON i.asset_id = a.id AND a.tenant_id = i.tenant_id
+      LEFT JOIN assets a ON i.asset_id = a.id AND a.tenant_id = i.tenant_id AND a.is_deleted = 0
       WHERE i.tenant_id = ?
     `;
     const args = [tenantId];

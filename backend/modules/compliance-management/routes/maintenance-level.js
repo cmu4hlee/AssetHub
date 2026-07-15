@@ -11,7 +11,7 @@ const logger = require('../../../config/logger');
 const MAINTENANCE_TEMPLATE_USER_JOIN =
   'LEFT JOIN users u ON mlt.created_by = u.id AND u.tenant_id = mlt.tenant_id';
 const MAINTENANCE_PLAN_ASSET_JOIN =
-  'LEFT JOIN assets a ON mlp.asset_id = a.id AND a.tenant_id = mlp.tenant_id';
+  'LEFT JOIN assets a ON mlp.asset_id = a.id AND a.tenant_id = mlp.tenant_id AND a.is_deleted = 0';
 const MAINTENANCE_PLAN_TEMPLATE_JOIN =
   'LEFT JOIN maintenance_level_templates mlt ON mlp.template_id = mlt.id AND mlt.tenant_id = mlp.tenant_id';
 
@@ -223,13 +223,13 @@ router.post('/plans/generate', authenticate, async (req, res) => {
             `SELECT a.*, arl.risk_level
              FROM assets a
              LEFT JOIN asset_risk_levels arl ON a.id = arl.asset_id AND arl.tenant_id = ?
-             WHERE a.id = ? AND a.tenant_id = ?`,
+             WHERE a.id = ? AND a.tenant_id = ? AND a.is_deleted = 0`,
             [tenantId, assetId, tenantId],
           )
         : await connection.execute(
             `SELECT a.*, NULL AS risk_level
              FROM assets a
-             WHERE a.id = ? AND a.tenant_id = ?`,
+             WHERE a.id = ? AND a.tenant_id = ? AND a.is_deleted = 0`,
             [assetId, tenantId],
           );
 

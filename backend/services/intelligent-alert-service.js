@@ -420,7 +420,7 @@ class IntelligentAlertService {
           se.registration_code AS registration_no,
           DATEDIFF(se.next_inspection_date, ?) as days_remaining
         FROM special_equipment se
-        LEFT JOIN assets a ON a.id = se.asset_id
+        LEFT JOIN assets a ON a.id = se.asset_id AND a.is_deleted = 0
         WHERE se.tenant_id = ?
           AND se.next_inspection_date IS NOT NULL
           AND se.next_inspection_date BETWEEN ? AND ?
@@ -470,7 +470,7 @@ class IntelligentAlertService {
           si.next_inspection_date,
           DATEDIFF(si.next_inspection_date, ?) as days_remaining
         FROM safety_inspections si
-        LEFT JOIN assets a ON a.id = si.asset_id
+        LEFT JOIN assets a ON a.id = si.asset_id AND a.is_deleted = 0
         WHERE si.tenant_id = ?
           AND si.status != 'expired'
           AND si.next_inspection_date IS NOT NULL
@@ -521,7 +521,7 @@ class IntelligentAlertService {
           us.planned_hours AS total_planned_hours,
           us.actual_hours AS total_actual_hours
         FROM uptime_statistics us
-        LEFT JOIN assets a ON a.id = us.asset_id
+        LEFT JOIN assets a ON a.id = us.asset_id AND a.is_deleted = 0
         WHERE us.tenant_id = ?
           AND DATE_FORMAT(us.statistics_date, '%Y-%m') = ?
           AND us.uptime_rate < ?

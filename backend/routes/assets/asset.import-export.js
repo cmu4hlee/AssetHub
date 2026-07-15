@@ -7,7 +7,10 @@ const express = require('express');
 const router = express.Router();
 const ExcelJS = require('exceljs');
 const db = require('../../config/database');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, authorize } = require('../../middleware/auth');
+
+// 资产变更权限集合（与 asset.mutation.js / 前端 useCan('asset', ...) 对齐）
+const ASSET_WRITE_ROLES = ['asset.add', 'asset.edit_all', 'asset.edit_own_department'];
 const { requireTenantId, getTenantId } = require('../../middleware/tenant-filter');
 const { fileSecurity } = require('../../middleware/fileSecurity');
 const logger = require('../../config/logger');
@@ -606,13 +609,14 @@ router.post(
   validateImportHandler,
 );
 
-router.post('/import', authenticate, requireTenantId, upload.single('file'), fileSecurity(), importHandler);
+router.post('/import', authenticate, requireTenantId, authorize(ASSET_WRITE_ROLES), upload.single('file'), fileSecurity(), importHandler);
 
 // 历史兼容接口
 router.post(
   '/legacy/import',
   authenticate,
   requireTenantId,
+  authorize(ASSET_WRITE_ROLES),
   upload.single('file'),
   fileSecurity(),
   importHandler,

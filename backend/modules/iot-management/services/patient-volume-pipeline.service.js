@@ -227,7 +227,7 @@ class PatientVolumePipelineService {
     const [rows] = await db.execute(
       `SELECT ts.*, a.asset_name
        FROM iot_patient_volume_ts ts
-       LEFT JOIN assets a ON ${PATIENT_VOLUME_ASSET_JOIN}
+       LEFT JOIN assets a ON ${PATIENT_VOLUME_ASSET_JOIN} AND a.is_deleted = 0
        WHERE ts.tenant_id = ? AND ts.asset_code = ?
        ORDER BY ts.event_time DESC
        LIMIT 1`,
@@ -309,7 +309,7 @@ class PatientVolumePipelineService {
 
     // Use index-covered JOIN: use STRAIGHT_JOIN to avoid optimizer mis-ordering, drop COLLATE for speed
     const joinClause =
-      'STRAIGHT_JOIN assets a ON a.asset_code = ts.asset_code AND a.tenant_id = ts.tenant_id';
+      'STRAIGHT_JOIN assets a ON a.asset_code = ts.asset_code AND a.tenant_id = ts.tenant_id AND a.is_deleted = 0';
 
     // Single query: get summary + paginated data in one round-trip
     // Force MySQL to use index for the GROUP BY / ORDER
@@ -418,7 +418,7 @@ class PatientVolumePipelineService {
       params.push(query.end_time);
     }
 
-    const joinClause = `LEFT JOIN assets a ON ${PATIENT_VOLUME_ASSET_JOIN}`;
+    const joinClause = `LEFT JOIN assets a ON ${PATIENT_VOLUME_ASSET_JOIN} AND a.is_deleted = 0`;
 
     const [summaryRows] = await db.execute(
       `SELECT COUNT(*) AS total_records,
@@ -493,7 +493,7 @@ class PatientVolumePipelineService {
       params.push(query.end_time);
     }
 
-    const joinClause = `LEFT JOIN assets a ON ${PATIENT_VOLUME_ASSET_JOIN}`;
+    const joinClause = `LEFT JOIN assets a ON ${PATIENT_VOLUME_ASSET_JOIN} AND a.is_deleted = 0`;
 
     const [summaryRows] = await db.execute(
       `SELECT COUNT(*) AS total_records,
@@ -578,7 +578,7 @@ class PatientVolumePipelineService {
       params.push(query.end_time);
     }
 
-    const joinClause = `LEFT JOIN assets a ON ${PATIENT_VOLUME_ASSET_JOIN}`;
+    const joinClause = `LEFT JOIN assets a ON ${PATIENT_VOLUME_ASSET_JOIN} AND a.is_deleted = 0`;
 
     const [countRows] = await db.execute(
       `SELECT COUNT(*) AS total
@@ -661,7 +661,7 @@ class PatientVolumePipelineService {
       params.push(query.end_time);
     }
 
-    const joinClause = `LEFT JOIN assets a ON ${PATIENT_VOLUME_ASSET_JOIN}`;
+    const joinClause = `LEFT JOIN assets a ON ${PATIENT_VOLUME_ASSET_JOIN} AND a.is_deleted = 0`;
 
     const [countRows] = await db.execute(
       `SELECT COUNT(*) AS total

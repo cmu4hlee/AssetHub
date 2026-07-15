@@ -81,7 +81,7 @@ async function getCostDepartment(query, req) {
        COUNT(*) as maintenance_count,
        AVG(ml.maintenance_cost) as avg_cost
      FROM maintenance_logs ml
-     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND a.tenant_id = ml.tenant_id
+     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND a.tenant_id = ml.tenant_id AND a.is_deleted = 0
      ${whereClause}
      GROUP BY a.department
      ORDER BY total_cost DESC`,
@@ -119,7 +119,7 @@ async function getCostAssetType(query, req) {
        COUNT(*) as maintenance_count,
        AVG(ml.maintenance_cost) as avg_cost
      FROM maintenance_logs ml
-     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND a.tenant_id = ml.tenant_id
+     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND a.tenant_id = ml.tenant_id AND a.is_deleted = 0
      LEFT JOIN asset_categories ac ON a.category_id = ac.id
      ${whereClause}
      GROUP BY ac.name
@@ -198,7 +198,7 @@ async function getHighCostAssets(query, req) {
        COUNT(*) as maintenance_count,
        AVG(ml.maintenance_cost) as avg_cost
      FROM maintenance_logs ml
-     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND a.tenant_id = ml.tenant_id
+     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND a.tenant_id = ml.tenant_id AND a.is_deleted = 0
      LEFT JOIN asset_categories ac ON a.category_id = ac.id
      ${whereClause}
      GROUP BY ml.asset_code, a.asset_name, ac.name, a.department

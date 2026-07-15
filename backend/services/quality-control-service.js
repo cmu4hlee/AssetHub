@@ -216,7 +216,7 @@ class QualityControlService {
     const [rows] = await db.execute(
       `SELECT q.*, a.department, a.department_new
        FROM quality_control_records q
-       LEFT JOIN assets a ON q.asset_code = a.asset_code AND a.tenant_id = q.tenant_id
+       LEFT JOIN assets a ON q.asset_code = a.asset_code AND a.tenant_id = q.tenant_id AND a.is_deleted = 0
        ${whereClause}
        ORDER BY q.qc_date DESC, q.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -244,7 +244,7 @@ class QualityControlService {
     const [records] = await db.execute(
       `SELECT q.*, a.department, a.department_new
        FROM quality_control_records q
-       LEFT JOIN assets a ON q.asset_code = a.asset_code AND a.tenant_id = q.tenant_id
+       LEFT JOIN assets a ON q.asset_code = a.asset_code AND a.tenant_id = q.tenant_id AND a.is_deleted = 0
        WHERE q.id = ? ${tenantFilter.whereClause}`,
       [id, ...tenantFilter.params],
     );
@@ -709,7 +709,7 @@ class QualityControlService {
     const [rows] = await db.execute(
       `SELECT q.*, a.department, a.department_new
        FROM quality_control_records q
-       LEFT JOIN assets a ON q.asset_code = a.asset_code AND a.tenant_id = q.tenant_id
+       LEFT JOIN assets a ON q.asset_code = a.asset_code AND a.tenant_id = q.tenant_id AND a.is_deleted = 0
        ${whereClause}
        AND q.next_qc_date IS NOT NULL
        AND q.next_qc_date <= ?

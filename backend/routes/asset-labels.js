@@ -1009,7 +1009,7 @@ router.get('/print-queue', authenticate, async (req, res) => {
     const [queue] = await db.execute(
       `SELECT pq.*, a.asset_name, a.asset_code, lt.name as template_name
        FROM asset_label_print_queue pq
-       LEFT JOIN assets a ON pq.asset_code = a.asset_code AND a.tenant_id = pq.tenant_id
+       LEFT JOIN assets a ON pq.asset_code = a.asset_code AND a.tenant_id = pq.tenant_id AND a.is_deleted = 0
        LEFT JOIN asset_label_templates lt ON pq.template_id = lt.id AND lt.tenant_id = pq.tenant_id
        ${whereClause}
        ORDER BY pq.created_at DESC`,

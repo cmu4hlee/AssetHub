@@ -15,6 +15,7 @@ const DESKTOP_MODULES = [
   { key: 'technical-documents', label: '技术资料', path: '/technical-documents', icon: '📄' },
   { key: 'acceptance', label: '验收管理', path: '/acceptance', icon: '✅' },
   { key: 'compliance', label: '合规模块', path: '/compliance', icon: '🛡️' },
+  { key: 'special-equipment', label: '特种设备管理', path: '/special-equipment', icon: '🏭' },
   { key: 'risk', label: '风险管理', path: '/risk', icon: '⚠️' },
   { key: 'staff', label: '人员资质', path: '/staff', icon: '👤' },
   { key: 'uptime', label: '开机率管理', path: '/uptime', icon: '📈' },
@@ -141,9 +142,11 @@ function getChildModules(parentKey) {
       { key: 'acceptance-list', label: '验收记录', path: '/acceptance', icon: '📋' },
       { key: 'acceptance-create', label: '创建验收', path: '/acceptance/create', icon: '➕' },
     ],
+    'special-equipment': [
+      { key: 'special-equipment-list', label: '特种设备', path: '/special-equipment', icon: '🏭' },
+    ],
     'compliance': [
       { key: 'compliance-dashboard', label: '合规仪表盘', path: '/compliance', icon: '📊' },
-      { key: 'special-equipment', label: '特种设备', path: '/special-equipment', icon: '🏭' },
     ],
     'risk': [
       { key: 'risk-dashboard', label: '风险仪表盘', path: '/risk', icon: '📊' },

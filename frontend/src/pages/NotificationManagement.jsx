@@ -5,7 +5,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Card, Tabs, Table, Tag, Button, Space, Form, Input, Select, Switch,
+  Card, Tabs, Tag, Button, Space, Form, Input, Select, Switch,
   Modal, message, Popconfirm, DatePicker, Row, Col, Statistic, Badge,
   Tooltip, Divider, Alert, Empty, InputNumber, Typography,
 } from 'antd';
@@ -15,13 +15,14 @@ import {
   NotificationOutlined, FileTextOutlined, HistoryOutlined,
   CheckCircleOutlined, MinusCircleOutlined,
   ToolOutlined, ProfileOutlined,
-  SwapOutlined, AuditOutlined, SoundOutlined, SafetyCertificateOutlined,
+  SwapOutlined, AuditOutlined, SoundOutlined, SafetyCertificateOutlined, SafetyOutlined,
   SyncOutlined, UserSwitchOutlined, DollarOutlined,
   TeamOutlined, ExperimentOutlined,
 } from '@ant-design/icons';
 import { notificationAPI, recipientStrategyAPI, userAPI, departmentsAPI } from '../utils/api';
 import dayjs from 'dayjs';
 import { useIsMobile } from '../hooks';
+import { ResponsiveTable } from '../components';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -42,6 +43,7 @@ const PROCESS_ICONS = {
   tender: <SoundOutlined />,
   acceptance: <CheckCircleOutlined />,
   quality: <SafetyCertificateOutlined />,
+  compliance: <SafetyOutlined />,
   asset: <SyncOutlined />,
   user: <UserSwitchOutlined />,
   finance: <DollarOutlined />,
@@ -109,6 +111,8 @@ const EVENT_LABELS = {
   'acceptance:reminder': '验收提醒',
   // 质量管理
   'quality:metrology-expiring': '计量证书到期',
+  // 合规 / 特种设备
+  'special_equipment:inspection_expiring': '特种设备检验到期',
   // 资产状态
   'asset_workflow:transition': '资产状态变更',
   // 用户管理
@@ -163,6 +167,11 @@ function renderTemplate(text, variables = []) {
     expected_delivery: '2026-08-10',
     certificate_no: 'JL-2026-0001', metrology_type: '强制检定',
     expiry_date: '2026-08-01', remaining_days: '17',
+    // 特种设备
+    equipment_code: 'TS-001', equipment_name: '医用电梯',
+    equipment_type: 'elevator', equipment_type_label: '电梯',
+    next_inspection_date: '2026-08-01', days_remaining: '17',
+    use_certificate_no: 'TS-2023-001', safety_manager: '张三',
     from_status: '使用中', to_status: '维修中', transition_time: '2026-07-15 10:00',
     requested_role: '资产管理员', title: '系统通知', type_name: '维修',
     message: '您有新的维修任务需要处理', time: '2026-07-15 10:00',
@@ -549,7 +558,7 @@ function NotificationRules() {
         </Col>
       </Row>
 
-      <Table
+      <ResponsiveTable
         rowKey="id"
         columns={columns}
         dataSource={data}
@@ -558,6 +567,17 @@ function NotificationRules() {
         onChange={(p) => setPagination({ ...pagination, current: p.current, pageSize: p.pageSize })}
         size="small"
         scroll={{ x: isMobile ? 800 : 'max-content' }}
+        mobileTitleKey="rule_name"
+        mobileStatusRender={r => r.enabled
+          ? <Tag color="success">启用</Tag>
+          : <Tag>停用</Tag>}
+        mobileFields={[
+          { label: '流程 / 事件', key: 'process_event' },
+          { label: '触发条件', key: 'trigger_condition' },
+        ]}
+        mobileActions={[
+          { key: 'edit', text: '编辑', icon: <EditOutlined />, onClick: (r) => setModal({ open: true, record: r }) },
+        ]}
       />
 
       <RuleModal
@@ -1072,7 +1092,7 @@ function NotificationTemplates() {
         </Col>
       </Row>
 
-      <Table
+      <ResponsiveTable
         rowKey="id"
         columns={columns}
         dataSource={data}
@@ -1080,6 +1100,15 @@ function NotificationTemplates() {
         pagination={pagination}
         onChange={(p) => setPagination({ ...pagination, current: p.current, pageSize: p.pageSize })}
         size="small"
+        mobileTitleKey="name"
+        mobileStatusRender={r => <Tag color={CHANNEL_COLORS[r.channel]}>{CHANNEL_LABELS[r.channel] || r.channel}</Tag>}
+        mobileFields={[
+          { label: '编码', key: 'code' },
+          { label: '标题', key: 'title' },
+        ]}
+        mobileActions={[
+          { key: 'edit', text: '编辑', icon: <EditOutlined />, onClick: (r) => setModal({ open: true, record: r }) },
+        ]}
       />
 
       <TemplateModal
@@ -1410,11 +1439,31 @@ function NotificationLogs() {
           </Space>
         </Col>
       </Row>
-      <Table
+      <ResponsiveTable
         rowKey="id" columns={columns} dataSource={data} loading={loading}
         pagination={pagination}
         onChange={(p) => setPagination({ ...pagination, current: p.current, pageSize: p.pageSize })}
         size="small"
+        mobileTitleKey="title"
+        mobileStatusRender={r => (
+          <Badge status={STATUS_COLORS[r.status]} text={`${r.status} ${r.sent_count || 0}/${r.total_count || 0}`} />
+        )}
+        mobileFields={[
+          {
+            label: '时间',
+            key: 'created_at',
+            render: v => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+          },
+          { label: '事件', key: 'event_code' },
+          {
+            label: '渠道',
+            key: 'channel',
+            render: v => <Tag color={CHANNEL_COLORS[v]}>{CHANNEL_LABELS[v] || v}</Tag>,
+          },
+        ]}
+        mobileActions={[
+          { key: 'view', text: '详情', icon: <EyeOutlined />, onClick: r => setDetail(r) },
+        ]}
       />
       <Modal title="发送详情" open={!!detail} onCancel={() => setDetail(null)} footer={null} width={600}>
         {detail && (
@@ -1581,7 +1630,7 @@ function RecipientStrategiesTab() {
     <div>
       <Alert
         type="info" showIcon style={{ marginBottom: 16 }}
-        message="接收人策略配置化"
+        title="接收人策略配置化"
         description={
           <span>
             为不同事件配置接收人策略。优先级：admin 配置策略 &gt; handler 默认逻辑。
@@ -1620,7 +1669,7 @@ function RecipientStrategiesTab() {
         </Col>
       </Row>
 
-      <Table
+      <ResponsiveTable
         rowKey="id" columns={columns} dataSource={list} loading={loading}
         pagination={{
           ...pagination,
@@ -1631,6 +1680,25 @@ function RecipientStrategiesTab() {
           selectedRowKeys: [],
           onChange: (keys) => keys.length && handleBatchDelete(keys),
         }}
+        mobileTitleKey="eventCode"
+        mobileStatusRender={r => r.enabled
+          ? <Tag color="success">启用</Tag>
+          : <Tag>停用</Tag>}
+        mobileFields={[
+          {
+            label: '策略类型',
+            key: 'strategyType',
+            render: v => {
+              const meta = strategyTypeMap[v];
+              return meta ? <Tag color="geekblue">{meta.name}</Tag> : <Tag>{v}</Tag>;
+            },
+          },
+          { label: '优先级', key: 'priority' },
+          { label: '备注', key: 'remark' },
+        ]}
+        mobileActions={[
+          { key: 'edit', text: '编辑', icon: <EditOutlined />, onClick: (r) => { setEditing(r); setEditorOpen(true); } },
+        ]}
       />
 
       <StrategyEditor
@@ -1800,12 +1868,12 @@ function StrategyEditor({ open, editing, meta, onClose, onSaved }) {
           <Input.TextArea rows={2} placeholder="例如：报废申请只通知系统管理员" maxLength={200} showCount />
         </Form.Item>
         {typeMeta && !typeMeta.needValue && (
-          <Alert type="info" showIcon message={typeMeta.description} style={{ marginTop: 8 }} />
+          <Alert type="info" showIcon description={typeMeta.description} style={{ marginTop: 8 }} />
         )}
         {eventCode && !editing && (
           <Alert
             type="warning" showIcon style={{ marginTop: 8 }}
-            message="保存后将覆盖该事件的默认接收人逻辑"
+            title="保存后将覆盖该事件的默认接收人逻辑"
             description="可随时禁用或删除此策略，事件会回退到 handler 的硬编码默认逻辑"
           />
         )}

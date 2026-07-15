@@ -47,6 +47,20 @@ export const complianceAPI = {
   getSpecialEquipmentExpiringInspections: params =>
     getNormalizedList(api.get('/compliance/special-equipment/expiring-inspections', { params })),
 
+  // 特种设备导入/导出
+  getSpecialEquipmentImportTemplate: () =>
+    api.get('/compliance/special-equipment/import-template', { responseType: 'blob' }),
+  validateSpecialEquipmentImport: formData =>
+    api.post('/compliance/special-equipment/import/validate', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  importSpecialEquipment: formData =>
+    api.post('/compliance/special-equipment/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  exportSpecialEquipment: params =>
+    api.get('/compliance/special-equipment/export', { params, responseType: 'blob' }),
+
   getSafetyInspections: params =>
     getNormalizedList(api.get('/compliance/safety-inspections', { params })),
   createSafetyInspection: data => api.post('/compliance/safety-inspections', data),

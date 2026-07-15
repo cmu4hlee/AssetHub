@@ -19,6 +19,7 @@ import {
   RobotOutlined,
   ExperimentOutlined,
   WarningOutlined,
+  AlertOutlined,
   SafetyOutlined,
   MessageOutlined,
   ToolOutlined,
@@ -206,6 +207,16 @@ export const desktopMenuItems = [
     ],
   },
   {
+    key: 'special-equipment',
+    icon: <AlertOutlined />,
+    label: '特种设备管理',
+    color: '#f59e0b',
+    path: '/special-equipment',
+    children: [
+      { key: 'special-equipment-list', label: '特种设备', path: '/special-equipment' },
+    ],
+  },
+  {
     key: 'compliance',
     icon: <SafetyOutlined />,
     label: '合规模块',
@@ -214,7 +225,6 @@ export const desktopMenuItems = [
     children: [
       { key: 'compliance-dashboard', label: '合规仪表盘', path: '/compliance' },
       { key: 'maintenance-level', label: '维护等级', path: '/compliance/maintenance-level' },
-      { key: 'special-equipment', label: '特种设备', path: '/special-equipment' },
       { key: 'safety-inspection', label: '安全巡检', path: '/safety-inspection' },
     ],
   },

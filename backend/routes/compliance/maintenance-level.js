@@ -187,7 +187,7 @@ router.get('/plans', authenticate, async (req, res) => {
         ${selectExecutor},
         ${hasAssetJoin ? 'a.asset_name, a.asset_code' : 'NULL AS asset_name, NULL AS asset_code'}
       FROM maintenance_level_plans mlp
-      ${hasAssetJoin ? 'LEFT JOIN assets a ON mlp.asset_id = a.id AND a.tenant_id = mlp.tenant_id' : ''}
+      ${hasAssetJoin ? 'LEFT JOIN assets a ON mlp.asset_id = a.id AND a.tenant_id = mlp.tenant_id AND a.is_deleted = 0' : ''}
       WHERE mlp.tenant_id = ?
     `;
     const params = [tenantId];

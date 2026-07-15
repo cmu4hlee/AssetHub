@@ -30,7 +30,7 @@ class AssetUsageService {
 
     const [countRows] = await db.execute(
       `SELECT COUNT(*) as total FROM asset_usage_records aur
-       LEFT JOIN assets a ON aur.asset_code = a.asset_code AND a.tenant_id = aur.tenant_id
+       LEFT JOIN assets a ON aur.asset_code = a.asset_code AND a.tenant_id = aur.tenant_id AND a.is_deleted = 0
        ${whereClause}`,
       queryParams,
     );
@@ -39,7 +39,7 @@ class AssetUsageService {
     const [rows] = await db.execute(
       `SELECT aur.*, a.asset_name
        FROM asset_usage_records aur
-       LEFT JOIN assets a ON aur.asset_code = a.asset_code AND a.tenant_id = aur.tenant_id
+       LEFT JOIN assets a ON aur.asset_code = a.asset_code AND a.tenant_id = aur.tenant_id AND a.is_deleted = 0
        ${whereClause}
        ORDER BY aur.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -67,7 +67,7 @@ class AssetUsageService {
     const [rows] = await db.execute(
       `SELECT aur.*, a.asset_name
        FROM asset_usage_records aur
-       LEFT JOIN assets a ON aur.asset_code = a.asset_code AND a.tenant_id = aur.tenant_id
+       LEFT JOIN assets a ON aur.asset_code = a.asset_code AND a.tenant_id = aur.tenant_id AND a.is_deleted = 0
        WHERE aur.id = ? AND aur.tenant_id = ?`,
       [id, tenantId],
     );
@@ -236,7 +236,7 @@ class AssetUsageService {
     const [rows] = await db.execute(
       `SELECT aur.*, a.asset_name
        FROM asset_usage_records aur
-       LEFT JOIN assets a ON aur.asset_code = a.asset_code AND a.tenant_id = aur.tenant_id
+       LEFT JOIN assets a ON aur.asset_code = a.asset_code AND a.tenant_id = aur.tenant_id AND a.is_deleted = 0
        WHERE aur.user_id = ? AND aur.tenant_id = ?
        ORDER BY aur.checkout_date DESC`,
       [userId, tenantId],

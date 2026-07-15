@@ -6,7 +6,11 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/database');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, authorize } = require('../../middleware/auth');
+
+// 资产变更权限集合（与前端 useCan('asset', ...) 对齐）
+const ASSET_WRITE_ROLES = ['asset.add', 'asset.edit_all', 'asset.edit_own_department'];
+const ASSET_DELETE_ROLES = ['asset.delete_all', 'asset.delete_own_department'];
 const { addTenantFilter, getTenantId, requireTenantId } = require('../../middleware/tenant-filter');
 const { logAudit } = require('../../middleware/auditLogger');
 const { cacheService } = require('../../services/cache/CacheService');
@@ -79,7 +83,7 @@ async function recordChangeLog(connection, assetCode, tenantId, userId, action, 
  *       201:
  *         description: 资产创建成功
  */
-router.post('/', authenticate, requireTenantId, async (req, res) => {
+router.post('/', authenticate, requireTenantId, authorize(ASSET_WRITE_ROLES), async (req, res) => {
   const connection = await db.getConnection();
 
   try {
@@ -260,7 +264,7 @@ router.post('/', authenticate, requireTenantId, async (req, res) => {
  *           schema:
  *             $ref: '#/components/schemas/AssetCreateRequest'
  */
-router.put('/:id', authenticate, async (req, res) => {
+router.put('/:id', authenticate, authorize(ASSET_WRITE_ROLES), async (req, res) => {
   const connection = await db.getConnection();
 
   try {
@@ -418,7 +422,7 @@ router.put('/:id', authenticate, async (req, res) => {
  *         required: true
  *         schema: { type: integer }
  */
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, authorize(ASSET_DELETE_ROLES), async (req, res) => {
   const connection = await db.getConnection();
 
   try {

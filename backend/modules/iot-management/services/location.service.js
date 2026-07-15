@@ -13,7 +13,7 @@ const buildTenantScopedClause = (tenantId, alias = '') => {
 };
 
 const ASSET_LOCATION_ASSET_JOIN =
-  'LEFT JOIN assets a ON al.asset_code = a.asset_code AND al.tenant_id = a.tenant_id';
+  'LEFT JOIN assets a ON al.asset_code = a.asset_code AND al.tenant_id = a.tenant_id AND a.is_deleted = 0';
 
 // 尝试加载redis模块，如果失败则使用内存缓存作为降级方案
 let redis = null;

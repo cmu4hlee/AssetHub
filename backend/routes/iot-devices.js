@@ -64,7 +64,7 @@ function validateCoordinate(name, value, min, max) {
 const IOT_DEVICE_ASSET_LOCATION_JOIN =
   'LEFT JOIN asset_locations al ON d.device_id = al.device_id AND al.is_active = 1 AND al.tenant_id = d.tenant_id';
 const IOT_DEVICE_ASSET_JOIN =
-  'LEFT JOIN assets a ON al.asset_code = a.asset_code AND a.tenant_id = al.tenant_id';
+  'LEFT JOIN assets a ON al.asset_code = a.asset_code AND a.tenant_id = al.tenant_id AND a.is_deleted = 0';
 const IOT_DEVICE_LINKED_DEVICE_JOIN =
   'LEFT JOIN iot_devices d ON al.device_id = d.device_id AND d.tenant_id = al.tenant_id';
 

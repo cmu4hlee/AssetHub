@@ -11,7 +11,7 @@ const { getTenantId } = require('../../middleware/tenant-filter');
 const logger = require('../../config/logger');
 
 const COMPLIANCE_SAFETY_INSPECTION_ASSET_JOIN =
-  'LEFT JOIN assets a ON si.asset_id = a.id AND a.tenant_id = si.tenant_id';
+  'LEFT JOIN assets a ON si.asset_id = a.id AND a.tenant_id = si.tenant_id AND a.is_deleted = 0';
 
 async function hasTenantAsset(assetId, tenantId) {
   if (!assetId) {

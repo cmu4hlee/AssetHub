@@ -1076,6 +1076,16 @@ const authorize = permission => {
                   'statistics.view',
                 ];
                 break;
+              case 'maintenance_engineer':
+                userPermissions = [
+                  'asset.view_own_department',
+                  'maintenance.view',
+                  'maintenance.add',
+                  'maintenance.edit',
+                  'statistics.view',
+                  'iot.device.view',
+                ];
+                break;
               case 'acceptance_admin':
                 userPermissions = [
                   'asset.view_own_department',

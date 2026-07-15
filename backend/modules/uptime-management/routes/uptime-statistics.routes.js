@@ -6,7 +6,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../../../middleware/auth');
 const UPTIME_STATISTICS_ROUTE_ASSET_JOIN =
-  'LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id';
+  'LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id AND a.is_deleted = 0';
 
 // 所有路由都需要认证
 router.use(authenticate);

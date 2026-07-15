@@ -566,6 +566,146 @@ async function initDatabase() {
       logger.warn('special_equipment 表迁移跳过:', seMigrateErr.message);
     }
 
+    // ========== 知识库模块表（kb_bases / kb_documents / kb_chunks / kb_qa_records / kb_settings）==========
+    try {
+      const conn = await db.getConnection();
+
+      const [kbTables] = await conn.execute(
+        `SELECT TABLE_NAME FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME IN ('knowledge_bases','knowledge_documents','knowledge_chunks','knowledge_qa_records','knowledge_settings')`,
+      );
+      const existingKb = new Set(kbTables.map(r => r.TABLE_NAME));
+
+      if (!existingKb.has('knowledge_bases')) {
+        await conn.execute(`CREATE TABLE IF NOT EXISTS knowledge_bases (
+          id INT NOT NULL AUTO_INCREMENT,
+          tenant_id INT NOT NULL DEFAULT 0 COMMENT '租户ID',
+          kb_code VARCHAR(64) NOT NULL COMMENT '知识库编码',
+          kb_name VARCHAR(200) NOT NULL COMMENT '知识库名称',
+          description TEXT DEFAULT NULL COMMENT '描述',
+          scope VARCHAR(50) NOT NULL DEFAULT 'general' COMMENT '用途: general/asset/maintenance/sop/policy',
+          icon VARCHAR(50) DEFAULT 'book' COMMENT '图标',
+          sort_order INT NOT NULL DEFAULT 0 COMMENT '排序',
+          doc_count INT NOT NULL DEFAULT 0 COMMENT '文档数',
+          chunk_count INT NOT NULL DEFAULT 0 COMMENT '分块数',
+          status VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT '状态: active/archived',
+          created_by VARCHAR(50) DEFAULT NULL COMMENT '创建人',
+          created_by_id INT DEFAULT NULL COMMENT '创建人ID',
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+          updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+          PRIMARY KEY (id),
+          UNIQUE KEY uk_tenant_code (tenant_id, kb_code),
+          KEY idx_kb_tenant_status (tenant_id, status),
+          KEY idx_kb_tenant_scope (tenant_id, scope)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='知识库表'`);
+        logger.info('knowledge_bases 表创建成功');
+      }
+
+      if (!existingKb.has('knowledge_documents')) {
+        await conn.execute(`CREATE TABLE IF NOT EXISTS knowledge_documents (
+          id INT NOT NULL AUTO_INCREMENT,
+          tenant_id INT NOT NULL DEFAULT 0 COMMENT '租户ID',
+          kb_id INT NOT NULL COMMENT '所属知识库ID',
+          title VARCHAR(500) NOT NULL COMMENT '文档标题',
+          description TEXT DEFAULT NULL COMMENT '描述',
+          file_name VARCHAR(500) NOT NULL COMMENT '原始文件名',
+          file_path VARCHAR(1000) NOT NULL COMMENT '存储路径',
+          file_size BIGINT NOT NULL DEFAULT 0 COMMENT '文件字节数',
+          file_ext VARCHAR(20) DEFAULT NULL COMMENT '文件扩展名',
+          mime_type VARCHAR(100) DEFAULT NULL COMMENT 'MIME',
+          file_hash VARCHAR(64) DEFAULT NULL COMMENT 'SHA256',
+          parse_status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT '解析状态: pending/parsing/ready/failed',
+          parse_error TEXT DEFAULT NULL COMMENT '解析错误信息',
+          char_count INT NOT NULL DEFAULT 0 COMMENT '提取的字符数',
+          chunk_count INT NOT NULL DEFAULT 0 COMMENT '分块数',
+          parsed_at TIMESTAMP NULL DEFAULT NULL COMMENT '解析完成时间',
+          uploaded_by VARCHAR(50) DEFAULT NULL COMMENT '上传人',
+          uploaded_by_id INT DEFAULT NULL COMMENT '上传人ID',
+          uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
+          status VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT '状态: active/deleted',
+          PRIMARY KEY (id),
+          KEY idx_kb_doc_tenant_kb (tenant_id, kb_id, status),
+          KEY idx_kb_doc_tenant_status (tenant_id, status),
+          KEY idx_kb_doc_tenant_parse (tenant_id, parse_status),
+          KEY idx_kb_doc_hash (tenant_id, file_hash)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='知识库文档表'`);
+        logger.info('knowledge_documents 表创建成功');
+      }
+
+      if (!existingKb.has('knowledge_chunks')) {
+        await conn.execute(`CREATE TABLE IF NOT EXISTS knowledge_chunks (
+          id INT NOT NULL AUTO_INCREMENT,
+          tenant_id INT NOT NULL DEFAULT 0 COMMENT '租户ID',
+          doc_id INT NOT NULL COMMENT '所属文档ID',
+          kb_id INT NOT NULL COMMENT '所属知识库ID(冗余便于检索)',
+          chunk_index INT NOT NULL DEFAULT 0 COMMENT '块序号',
+          content MEDIUMTEXT NOT NULL COMMENT '块内容',
+          content_length INT NOT NULL DEFAULT 0 COMMENT '块字符数',
+          keywords TEXT DEFAULT NULL COMMENT '关键词JSON数组',
+          tokens_estimate INT NOT NULL DEFAULT 0 COMMENT '估算 token 数',
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+          PRIMARY KEY (id),
+          KEY idx_kb_chunk_tenant_kb (tenant_id, kb_id),
+          KEY idx_kb_chunk_tenant_doc (tenant_id, doc_id),
+          KEY idx_kb_chunk_doc_idx (doc_id, chunk_index)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='知识库分块表'`);
+        logger.info('knowledge_chunks 表创建成功');
+      }
+
+      if (!existingKb.has('knowledge_qa_records')) {
+        await conn.execute(`CREATE TABLE IF NOT EXISTS knowledge_qa_records (
+          id INT NOT NULL AUTO_INCREMENT,
+          tenant_id INT NOT NULL DEFAULT 0 COMMENT '租户ID',
+          kb_id INT DEFAULT NULL COMMENT '知识库ID(可空表示全租户检索)',
+          session_id VARCHAR(128) DEFAULT NULL COMMENT '会话ID',
+          user_id INT DEFAULT NULL COMMENT '用户ID',
+          user_name VARCHAR(50) DEFAULT NULL COMMENT '用户名',
+          question TEXT NOT NULL COMMENT '问题',
+          answer MEDIUMTEXT DEFAULT NULL COMMENT '回答',
+          retrieved_chunks MEDIUMTEXT DEFAULT NULL COMMENT '检索到的分块JSON',
+          citations MEDIUMTEXT DEFAULT NULL COMMENT '引用列表JSON',
+          provider VARCHAR(50) DEFAULT NULL COMMENT 'AI provider',
+          model VARCHAR(100) DEFAULT NULL COMMENT 'AI 模型',
+          latency_ms INT NOT NULL DEFAULT 0 COMMENT '耗时毫秒',
+          status VARCHAR(20) NOT NULL DEFAULT 'success' COMMENT '状态: success/failed',
+          error_message TEXT DEFAULT NULL COMMENT '失败原因',
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+          PRIMARY KEY (id),
+          KEY idx_kb_qa_tenant_created (tenant_id, created_at),
+          KEY idx_kb_qa_tenant_kb (tenant_id, kb_id),
+          KEY idx_kb_qa_tenant_user (tenant_id, user_id),
+          KEY idx_kb_qa_tenant_session (tenant_id, session_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='知识库问答记录'`);
+        logger.info('knowledge_qa_records 表创建成功');
+      }
+
+      if (!existingKb.has('knowledge_settings')) {
+        await conn.execute(`CREATE TABLE IF NOT EXISTS knowledge_settings (
+          id INT NOT NULL AUTO_INCREMENT,
+          tenant_id INT NOT NULL DEFAULT 0 COMMENT '租户ID',
+          chunk_size INT NOT NULL DEFAULT 600 COMMENT '分块大小(字符)',
+          chunk_overlap INT NOT NULL DEFAULT 80 COMMENT '分块重叠(字符)',
+          top_k INT NOT NULL DEFAULT 5 COMMENT '检索 topK',
+          min_score DECIMAL(4,3) NOT NULL DEFAULT 0.020 COMMENT '最低分阈值',
+          ai_enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用 AI 问答',
+          ai_provider VARCHAR(50) NOT NULL DEFAULT 'openclaw' COMMENT 'AI provider',
+          ai_model VARCHAR(100) NOT NULL DEFAULT 'openclaw' COMMENT 'AI 模型',
+          max_context_chars INT NOT NULL DEFAULT 6000 COMMENT '上下文最大字符数',
+          system_prompt TEXT DEFAULT NULL COMMENT '系统提示(留空用默认)',
+          updated_by INT DEFAULT NULL COMMENT '最后更新人ID',
+          updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+          PRIMARY KEY (id),
+          UNIQUE KEY uk_tenant (tenant_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='知识库租户设置'`);
+        logger.info('knowledge_settings 表创建成功');
+      }
+
+      conn.release();
+    } catch (kbMigrateErr) {
+      logger.warn('知识库表检查/创建跳过:', kbMigrateErr.message);
+    }
+
     logger.info('数据库表结构初始化完成');
   } catch (error) {
     logger.error('数据库表结构初始化失败:', error.message);
@@ -1065,6 +1205,8 @@ app.use('/api/asset-ai-assistant', ...moduleRoute('/api/asset-ai-assistant', 'as
 app.use('/api/tendering', ...moduleRoute('/api/tendering', 'tendering-management', require('./modules/tendering-management/routes/index')));
 // 巡检管理（巡检模板/任务/规范巡检记录单/异常问题整改跟踪）
 app.use('/api/inspection', ...moduleRoute('/api/inspection', 'inspection-management', require('./modules/inspection-management/routes/index')));
+// 知识库管理（知识库 CRUD / 文档上传 / 解析 / 检索 / OpenClaw AI 问答）
+app.use('/api/knowledge-base', ...moduleRoute('/api/knowledge-base', 'knowledge-base-management', require('./modules/knowledge-base/routes/index')));
 
 // ============================================
 // 旧版路由（已弃用）- 使用 deprecatedRoute 注册

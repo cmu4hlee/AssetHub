@@ -37,6 +37,7 @@ import {
   ProfileOutlined,
   BarChartOutlined,
   KeyOutlined,
+  BookOutlined,
 } from '@ant-design/icons';
 import { assetAPI, rolesPermissionsAPI, tenantAPI, userAPI } from '../utils/api';
 import { menuAPI } from '../api/domains/platform';
@@ -79,6 +80,8 @@ const ICON_MAP = {
   ProfileOutlined: <ProfileOutlined />,
   BarChartOutlined: <BarChartOutlined />,
   FileProtectOutlined: <FileProtectOutlined />,
+  BookOutlined: <BookOutlined />,
+  ReadOutlined: <BookOutlined />,
 };
 
 const HIDDEN_MENU_KEYS = new Set([
@@ -526,6 +529,7 @@ const AppLayout = ({ children }) => {
         else if (key.includes('monitoring') || key.includes('location'))
           icon = <EnvironmentOutlined />;
         else if (key.includes('document')) icon = <FileTextOutlined />;
+        else if (key.includes('knowledge')) icon = <BookOutlined />;
         else if (key.includes('quality') || key.includes('qc')) icon = <ExperimentOutlined />;
         else if (key.includes('acceptance')) icon = <CheckCircleOutlined />;
         else if (key.includes('depreciation')) icon = <DollarOutlined />;

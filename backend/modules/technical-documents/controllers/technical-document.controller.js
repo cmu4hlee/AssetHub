@@ -282,7 +282,7 @@ class TechnicalDocumentController {
          FROM assets a
          JOIN technical_document_asset_relations tdar ON a.asset_code = tdar.asset_code
          JOIN technical_documents td ON td.id = tdar.document_id AND td.tenant_id = a.tenant_id
-         WHERE td.status != ? AND a.tenant_id = ? AND ${assetCondition}
+         WHERE td.status != ? AND a.tenant_id = ? AND a.is_deleted = 0 AND ${assetCondition}
          GROUP BY td.id
          ORDER BY td.upload_date DESC`,
         ['deleted', tenantId, ...assetParams],

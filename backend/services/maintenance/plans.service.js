@@ -70,7 +70,7 @@ async function getPlans(query, req) {
   const [rows] = await db.execute(
     `SELECT pmp.*, a.department, a.location
      FROM preventive_maintenance_plans pmp
-     LEFT JOIN assets a ON pmp.asset_code = a.asset_code AND a.tenant_id = pmp.tenant_id
+     LEFT JOIN assets a ON pmp.asset_code = a.asset_code AND a.tenant_id = pmp.tenant_id AND a.is_deleted = 0
      ${whereClause}
      ORDER BY pmp.next_maintenance_date ASC, pmp.created_at DESC
      LIMIT ? OFFSET ?`,
@@ -94,7 +94,7 @@ async function getPlan(id, req) {
   const [rows] = await db.execute(
     `SELECT pmp.*, a.department, a.location, a.brand, a.model
      FROM preventive_maintenance_plans pmp
-     LEFT JOIN assets a ON pmp.asset_code = a.asset_code AND a.tenant_id = pmp.tenant_id
+     LEFT JOIN assets a ON pmp.asset_code = a.asset_code AND a.tenant_id = pmp.tenant_id AND a.is_deleted = 0
      WHERE pmp.id = ? ${tenantFilter.whereClause}`,
     [id, ...tenantFilter.params],
   );

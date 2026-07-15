@@ -6,7 +6,7 @@ const tableMetaCache = new Map();
 const SAFETY_STATUS_VALUES = new Set(['normal', 'expiring', 'expired', 'stopped']);
 const USE_STATUS_VALUES = new Set(['in_use', 'out_of_service', 'scrapped', 'suspended', 'transferred']);
 const SPECIAL_EQUIPMENT_ASSET_JOIN =
-  'LEFT JOIN assets a ON se.asset_id = a.id AND a.tenant_id = se.tenant_id';
+  'LEFT JOIN assets a ON se.asset_id = a.id AND a.tenant_id = se.tenant_id AND a.is_deleted = 0';
 
 function normalizeSafetyStatus(value) {
   if (!value) return null;
@@ -157,7 +157,7 @@ class SpecialEquipmentService {
 
     // 获取总数（与主查询筛选条件保持一致）
     let countSql = keyword
-      ? 'SELECT COUNT(*) as total FROM special_equipment se LEFT JOIN assets a ON se.asset_id = a.id AND a.tenant_id = se.tenant_id WHERE se.tenant_id = ?'
+      ? 'SELECT COUNT(*) as total FROM special_equipment se LEFT JOIN assets a ON se.asset_id = a.id AND a.tenant_id = se.tenant_id AND a.is_deleted = 0 WHERE se.tenant_id = ?'
       : 'SELECT COUNT(*) as total FROM special_equipment WHERE tenant_id = ?';
     const countParams = [tenantId];
     if (status) {

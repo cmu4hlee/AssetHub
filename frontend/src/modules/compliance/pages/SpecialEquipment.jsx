@@ -10,20 +10,36 @@ import {
   Card, Table, Button, Tag, Space, Modal, Form, Input, Select, 
   DatePicker, message, Popconfirm, Row, Col, Statistic,
   Tabs, Badge, Alert, Drawer, Descriptions, InputNumber,
-  Divider, Tooltip
+  Divider, Tooltip, Steps, Spin
 } from 'antd';
 import { 
   PlusOutlined, EditOutlined, DeleteOutlined, ToolOutlined,
   ClockCircleOutlined, CheckCircleOutlined,
   WarningOutlined, FileSearchOutlined,
   HistoryOutlined, SearchOutlined, ReloadOutlined,
-  EyeOutlined, FilterOutlined, ClearOutlined
+  EyeOutlined, FilterOutlined, ClearOutlined,
+  DownloadOutlined, UploadOutlined, ExportOutlined
 } from '@ant-design/icons';
 import { complianceAPI } from '../../../utils/api';
 import { assetAPI } from '../../../api/domains/assets';
 import dayjs from 'dayjs';
+import { Upload } from 'antd';
 
 const { Option } = Select;
+
+// 触发浏览器下载（Blob）
+function downloadBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }, 100);
+}
 const { TextArea } = Input;
 
 const SpecialEquipmentManagement = () => {
@@ -59,6 +75,8 @@ const SpecialEquipmentManagement = () => {
   // 资产联想
   const [assetSearchLoading, setAssetSearchLoading] = useState(false);
   const [assetOptions, setAssetOptions] = useState([]);
+  // 标记是否已经在当前 Modal 生命周期内发起过至少一次搜索(用于区分"未输入"与"无结果")
+  const [assetHasSearched, setAssetHasSearched] = useState(false);
   
   // 检验记录相关状态
   const [inspections, setInspections] = useState([]);
@@ -82,6 +100,17 @@ const SpecialEquipmentManagement = () => {
     expired: 0
   });
   const [typeStatistics, setTypeStatistics] = useState([]);
+
+  // 导入/导出相关状态
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importStep, setImportStep] = useState(0); // 0: 选择文件, 1: 校验预览
+  const [importFile, setImportFile] = useState(null);
+  const [importSummary, setImportSummary] = useState(null); // { validCount, invalidCount, associatedCount, unassociatedCount, totalRows }
+  const [importFailedRows, setImportFailedRows] = useState([]);
+  const [importPreview, setImportPreview] = useState([]);
+  const [importValidating, setImportValidating] = useState(false);
+  const [importImporting, setImportImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const equipmentTypes = [
     { value: 'elevator', label: '电梯', icon: '🛗' },
@@ -270,39 +299,77 @@ const SpecialEquipmentManagement = () => {
     fetchInspections({ current: 1, pageSize: inspectionPageSize }, selectedEquipment?.id, cleared);
   };
 
-  // 资产联想搜索
-  const handleAssetSearch = async (value) => {
-    if (!value || value.length < 1) {
+  // 资产联想搜索(带防抖 + 竞态保护)
+  const assetSearchTimerRef = useRef(null);
+  const assetSearchSeqRef = useRef(0);
+  const handleAssetSearch = (value) => {
+    // 输入清空时直接清空选项
+    if (!value) {
       setAssetOptions([]);
+      setAssetHasSearched(false);
       return;
     }
-    setAssetSearchLoading(true);
-    try {
-      const response = await assetAPI.getAssets({ keyword: value, pageSize: 20 });
-      if (response?.success && Array.isArray(response.data)) {
-        setAssetOptions(response.data.map(a => ({
-          label: `${a.asset_code} - ${a.asset_name}${a.department ? ` (${a.department})` : ''}`,
-          value: a.id,
-          asset_code: a.asset_code,
-          asset_name: a.asset_name,
-          department: a.department
-        })));
-      }
-    } catch (_error) {
-      // 资产搜索失败不打断流程
-    } finally {
-      setAssetSearchLoading(false);
+    if (assetSearchTimerRef.current) {
+      clearTimeout(assetSearchTimerRef.current);
     }
+    assetSearchTimerRef.current = setTimeout(async () => {
+      const seq = ++assetSearchSeqRef.current;
+      setAssetSearchLoading(true);
+      try {
+        const response = await assetAPI.getAssets({ keyword: value, pageSize: 20 });
+        // 竞态保护:只有最后一次请求的结果才被采纳
+        if (seq !== assetSearchSeqRef.current) return;
+        setAssetHasSearched(true);
+        if (response?.success && Array.isArray(response.data)) {
+          setAssetOptions(
+            response.data.map(a => {
+              // 显示用的部门名:优先 JOIN 出来的 department_name(规范数据),
+              // 兜底用 assets.department(历史数据可能直接存了部门名,JOIN 不到)
+              const deptLabel = a.department_name || a.department || '';
+              return {
+                label: `${a.asset_code} - ${a.asset_name}${deptLabel ? ` (${deptLabel})` : ''}`,
+                value: a.id,
+                asset_code: a.asset_code,
+                asset_name: a.asset_name,
+                department: deptLabel,
+              };
+            }),
+          );
+        }
+      } catch (_error) {
+        // 资产搜索失败不打断流程
+      } finally {
+        if (seq === assetSearchSeqRef.current) {
+          setAssetSearchLoading(false);
+        }
+      }
+    }, 300);
   };
 
   const handleAssetSelect = (value, option) => {
     if (option) {
-      equipmentForm.setFieldsValue({
+      const patch = {
         asset_code: option.asset_code,
         asset_name: option.asset_name,
-        department: option.department
-      });
+      };
+      // 仅当 option 上有部门信息时才覆盖(编辑场景预加载的 option 不带部门,不能清空原值)
+      if (option.department) {
+        patch.department = option.department;
+      }
+      equipmentForm.setFieldsValue(patch);
     }
+  };
+
+  // 关闭弹窗时清理防抖定时器和序列号,避免关闭后状态更新引发 warning
+  const handleEquipmentModalClose = () => {
+    if (assetSearchTimerRef.current) {
+      clearTimeout(assetSearchTimerRef.current);
+      assetSearchTimerRef.current = null;
+    }
+    assetSearchSeqRef.current += 1; // 让进行中的请求自然过期
+    setAssetHasSearched(false);
+    setEquipmentModalVisible(false);
+    setAssetOptions([]);
   };
 
   // 设备管理功能
@@ -310,11 +377,13 @@ const SpecialEquipmentManagement = () => {
     setEditingEquipment(null);
     equipmentForm.resetFields();
     equipmentForm.setFieldsValue({ safety_status: 'normal' });
+    setAssetHasSearched(false);
     setEquipmentModalVisible(true);
   };
 
   const handleEditEquipment = (record) => {
     setEditingEquipment(record);
+    setAssetHasSearched(false);
     equipmentForm.setFieldsValue({
       ...record,
       registration_date: record.registration_date ? dayjs(record.registration_date) : null,
@@ -325,10 +394,13 @@ const SpecialEquipmentManagement = () => {
     // 预加载已关联资产信息
     if (record.asset_id) {
       setAssetOptions([{
-        label: `${record.asset_code || ''} - ${record.asset_name || ''}`,
+        label: `${record.asset_code || ''} - ${record.asset_name || ''}${record.department ? ` (${record.department})` : ''}`,
         value: record.asset_id,
         asset_code: record.asset_code,
         asset_name: record.asset_name,
+        // 编辑场景下 record.department 是特种设备自身的所属部门(来自 special_equipment.department),
+        // 切资产时不要被覆盖,所以这里不传 department,handleAssetSelect 也只在 option.department 非空时才写入
+        department: '',
       }]);
     }
     setEquipmentModalVisible(true);
@@ -370,6 +442,113 @@ const SpecialEquipmentManagement = () => {
     } catch (_error) {
       if (_error?.errorFields) return; // 表单校验错误，不提示
       message.error('操作失败');
+    }
+  };
+
+  // ============ 导入 / 导出 ============
+
+  // 下载导入模板
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await complianceAPI.getSpecialEquipmentImportTemplate();
+      const blob = response?.data instanceof Blob ? response.data : new Blob([response?.data]);
+      downloadBlob(blob, 'special_equipment_import_template.xlsx');
+      message.success('模板已开始下载');
+    } catch (_error) {
+      message.error('下载模板失败');
+    }
+  };
+
+  // 导出当前筛选条件下的台账
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = {};
+      if (equipmentFilters.keyword) params.keyword = equipmentFilters.keyword;
+      if (equipmentFilters.equipment_type) params.equipment_type = equipmentFilters.equipment_type;
+      if (equipmentFilters.safety_status) params.safety_status = equipmentFilters.safety_status;
+      const response = await complianceAPI.exportSpecialEquipment(params);
+      const blob = response?.data instanceof Blob ? response.data : new Blob([response?.data]);
+      downloadBlob(blob, `special_equipment_export_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
+      message.success('导出成功');
+    } catch (_error) {
+      message.error('导出失败');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const openImportModal = () => {
+    setImportStep(0);
+    setImportFile(null);
+    setImportSummary(null);
+    setImportFailedRows([]);
+    setImportPreview([]);
+    setImportModalVisible(true);
+  };
+
+  // 选择文件后自动预校验
+  const handleImportFileSelected = async (file) => {
+    setImportFile(file);
+    setImportStep(1);
+    setImportValidating(true);
+    setImportSummary(null);
+    setImportFailedRows([]);
+    setImportPreview([]);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await complianceAPI.validateSpecialEquipmentImport(formData);
+      if (response?.success) {
+        setImportSummary({
+          totalRows: response.totalRows,
+          validCount: response.validCount,
+          invalidCount: response.invalidCount,
+          associatedCount: response.associatedCount,
+          unassociatedCount: response.unassociatedCount,
+        });
+        setImportFailedRows(response.failedRows || []);
+        setImportPreview(response.preview || []);
+      } else {
+        message.error(response?.message || '预校验失败');
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || '预校验失败';
+      message.error(msg);
+    } finally {
+      setImportValidating(false);
+    }
+    return false; // 阻止 antd 自动上传
+  };
+
+  // 确认导入
+  const handleImportConfirm = async () => {
+    if (!importFile) {
+      message.warning('请先选择文件');
+      return;
+    }
+    setImportImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      const response = await complianceAPI.importSpecialEquipment(formData);
+      if (response?.success) {
+        const { successCount, failedCount, associatedCount, unassociatedCount } = response;
+        message.success(
+          `导入完成：成功 ${successCount} 条（已关联 ${associatedCount} / 未关联 ${unassociatedCount}），失败 ${failedCount} 条`,
+        );
+        setImportModalVisible(false);
+        await fetchEquipment({ current: 1, pageSize: equipmentPagination.pageSize });
+        await fetchEquipmentOptions();
+        await fetchSpecialEquipmentStats();
+      } else {
+        message.error(response?.message || '导入失败');
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || '导入失败';
+      message.error(msg);
+    } finally {
+      setImportImporting(false);
     }
   };
 
@@ -639,6 +818,21 @@ const SpecialEquipmentManagement = () => {
                 </Button>
               </Col>
               <Col>
+                <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+                  下载模板
+                </Button>
+              </Col>
+              <Col>
+                <Button icon={<UploadOutlined />} onClick={openImportModal}>
+                  批量导入
+                </Button>
+              </Col>
+              <Col>
+                <Button icon={<ExportOutlined />} loading={exporting} onClick={handleExport}>
+                  导出Excel
+                </Button>
+              </Col>
+              <Col>
                 <Button type="primary" icon={<PlusOutlined />} onClick={handleAddEquipment}>
                   新增设备
                 </Button>
@@ -829,7 +1023,7 @@ const SpecialEquipmentManagement = () => {
         title={editingEquipment ? '编辑特种设备' : '新增特种设备'}
         open={equipmentModalVisible}
         onOk={handleEquipmentSubmit}
-        onCancel={() => { setEquipmentModalVisible(false); setAssetOptions([]); }}
+        onCancel={handleEquipmentModalClose}
         width={900}
         destroyOnHidden
       >
@@ -901,7 +1095,13 @@ const SpecialEquipmentManagement = () => {
                   loading={assetSearchLoading}
                   allowClear
                   options={assetOptions}
-                  notFoundContent={assetSearchLoading ? '搜索中...' : '请输入关键词搜索'}
+                  notFoundContent={
+                    assetSearchLoading
+                      ? '搜索中...'
+                      : assetHasSearched
+                        ? '未找到匹配资产,请换个关键词试试'
+                        : '请输入资产编码或名称搜索'
+                  }
                 />
               </Form.Item>
             </Col>
@@ -969,6 +1169,133 @@ const SpecialEquipmentManagement = () => {
             <TextArea rows={3} placeholder="请输入安全注意事项" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 批量导入弹窗 */}
+      <Modal
+        title="批量导入特种设备"
+        open={importModalVisible}
+        onCancel={() => setImportModalVisible(false)}
+        width={760}
+        destroyOnHidden
+        footer={[
+          <Button key="cancel" onClick={() => setImportModalVisible(false)}>取消</Button>,
+          importStep === 1 && (
+            <Button
+              key="back"
+              onClick={() => { setImportStep(0); setImportFile(null); setImportSummary(null); setImportFailedRows([]); setImportPreview([]); }}
+            >
+              重新选择文件
+            </Button>
+          ),
+          importStep === 1 && (
+            <Button
+              key="confirm"
+              type="primary"
+              loading={importImporting}
+              disabled={!importSummary || importSummary.validCount === 0}
+              onClick={handleImportConfirm}
+            >
+              确认导入{importSummary ? `（${importSummary.validCount} 条）` : ''}
+            </Button>
+          ),
+        ].filter(Boolean)}
+      >
+        <Steps
+          current={importStep}
+          size="small"
+          style={{ marginBottom: 24 }}
+          items={[
+            { title: '选择文件' },
+            { title: '校验预览' },
+          ]}
+        />
+
+        {importStep === 0 && (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="请先下载模板，按模板填写后上传。系统将按「资产编码」自动关联当前租户资产，未匹配则作为未关联设备导入。"
+            />
+            <Upload.Dragger
+              accept=".xlsx,.xls"
+              showUploadList={false}
+              beforeUpload={handleImportFileSelected}
+            >
+              <p className="ant-upload-drag-icon"><UploadOutlined /></p>
+              <p className="ant-upload-text">点击或拖拽 Excel 文件到此区域</p>
+              <p className="ant-upload-hint">仅支持 .xlsx / .xls 格式</p>
+            </Upload.Dragger>
+          </>
+        )}
+
+        {importStep === 1 && (
+          <>
+            {importValidating ? (
+              <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                <Spin spinning={importValidating} tip="正在校验..." />
+              </div>
+            ) : (
+              <>
+                {importSummary && (
+                  <Alert
+                    type={importSummary.validCount > 0 ? 'success' : 'warning'}
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message={`共解析 ${importSummary.totalRows} 行：可导入 ${importSummary.validCount} 条（已关联资产 ${importSummary.associatedCount} / 未关联 ${importSummary.unassociatedCount}），异常 ${importSummary.invalidCount} 条`}
+                  />
+                )}
+
+                {importFailedRows.length > 0 && (
+                  <Card size="small" title={`异常数据（${importFailedRows.length} 条）`} style={{ marginBottom: 16 }}>
+                    <Table
+                      size="small"
+                      rowKey={(r) => r.rowNumber}
+                      dataSource={importFailedRows.slice(0, 50)}
+                      pagination={false}
+                      scroll={{ y: 220 }}
+                      columns={[
+                        { title: '行号', dataIndex: 'rowNumber', width: 60 },
+                        { title: '设备编号', width: 120, render: (_, r) => r.rowData?.equipment_code || '-' },
+                        { title: '设备名称', width: 140, render: (_, r) => r.rowData?.equipment_name || '-' },
+                        { title: '错误原因', render: (_, r) => <span style={{ color: '#f5222d' }}>{r.error}</span> },
+                      ]}
+                    />
+                  </Card>
+                )}
+
+                {importPreview.length > 0 && (
+                  <Card size="small" title={`可导入预览（前 ${Math.min(importPreview.length, 10)} 条）`}>
+                    <Table
+                      size="small"
+                      rowKey={(r) => r.rowNumber}
+                      dataSource={importPreview.slice(0, 10)}
+                      pagination={false}
+                      scroll={{ y: 220 }}
+                      columns={[
+                        { title: '行号', dataIndex: 'rowNumber', width: 60 },
+                        { title: '设备编号', width: 120, render: (_, r) => r.rowData?.equipment_code || '-' },
+                        { title: '设备名称', width: 140, render: (_, r) => r.rowData?.equipment_name || '-' },
+                        { title: '设备类型', width: 120, render: (_, r) => r.rowData?.equipment_type || '-' },
+                        {
+                          title: '资产关联',
+                          width: 110,
+                          render: (_, r) => (
+                            r.association?.matched
+                              ? <Tag color="green">已关联</Tag>
+                              : <Tag color="default">未关联</Tag>
+                          ),
+                        },
+                      ]}
+                    />
+                  </Card>
+                )}
+              </>
+            )}
+          </>
+        )}
       </Modal>
 
       {/* 检验记录编辑弹窗 */}

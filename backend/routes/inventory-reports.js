@@ -11,11 +11,11 @@ const path = require('path');
 const INVENTORY_RECORD_DETAIL_JOIN =
   'LEFT JOIN inventory_details idetail ON ir.id = idetail.inventory_id AND idetail.tenant_id = ir.tenant_id';
 const INVENTORY_DETAIL_ASSET_JOIN =
-  'LEFT JOIN assets a ON idetail.asset_code = a.asset_code AND a.tenant_id = idetail.tenant_id';
+  'LEFT JOIN assets a ON idetail.asset_code = a.asset_code AND a.tenant_id = idetail.tenant_id AND a.is_deleted = 0';
 const INVENTORY_DISCREPANCY_RECORD_JOIN =
   'LEFT JOIN inventory_records ir ON id.inventory_id = ir.id AND ir.tenant_id = id.tenant_id';
 const INVENTORY_DISCREPANCY_ASSET_JOIN =
-  'LEFT JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = id.tenant_id';
+  'LEFT JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = id.tenant_id AND a.is_deleted = 0';
 
 function logInventoryReportError(message, error, req, context = {}) {
   logger.error(message, {

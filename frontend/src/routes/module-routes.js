@@ -93,6 +93,11 @@ const documentRoutes = [
   { path: '/technical-documents/ai', component: lazyPage(() => import('../pages/TechnicalDocumentsAI')), key: 'doc-ai' },
 ];
 
+const knowledgeBaseRoutes = [
+  { path: '/knowledge-base', component: lazyPage(() => import('../pages/KnowledgeBaseList')), key: 'knowledge-base-list' },
+  { path: '/knowledge-base/qa', component: lazyPage(() => import('../pages/KnowledgeBaseQA')), key: 'knowledge-base-qa' },
+];
+
 const qualityRoutes = [
   { path: '/quality-control', component: lazyPage(() => import('../pages/QualityControlList')), key: 'qc-list' },
   { path: '/quality-control/new', component: lazyPage(() => import('../pages/QualityControlForm')), key: 'qc-new' },
@@ -197,6 +202,7 @@ const moduleRouteMap = {
   users: userRoutes,
   maintenance: maintenanceRoutes,
   documents: documentRoutes,
+  knowledgeBase: knowledgeBaseRoutes,
   quality: qualityRoutes,
   iot: iotRoutes,
   ai: aiRoutes,

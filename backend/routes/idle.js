@@ -52,7 +52,7 @@ function validatePublishInput(data) {
   return { valid: errors.length === 0, errors };
 }
 
-const IDLE_ASSET_ASSET_JOIN = 'LEFT JOIN assets a ON ia.asset_id = a.id AND a.tenant_id = ia.tenant_id';
+const IDLE_ASSET_ASSET_JOIN = 'LEFT JOIN assets a ON ia.asset_id = a.id AND a.tenant_id = ia.tenant_id AND a.is_deleted = 0';
 const IDLE_ASSET_TEMP_JOIN =
   'LEFT JOIN temp_assets t ON ia.asset_id = t.id AND t.tenant_id = ia.tenant_id';
 

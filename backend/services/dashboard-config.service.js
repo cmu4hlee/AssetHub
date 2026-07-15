@@ -18,7 +18,7 @@ async function getAssetsCount(tenantId) {
   const params = tenantId ? [tenantId] : [];
   const [rows] = await db.execute(
     `SELECT COUNT(*) as total, COALESCE(SUM(a.purchase_price), 0) as total_value
-     FROM assets a WHERE 1=1 ${where}`,
+     FROM assets a WHERE 1=1 AND a.is_deleted = 0 ${where}`,
     params,
   );
   return rows[0] || { total: 0, total_value: 0 };
@@ -29,7 +29,7 @@ async function getAssetsByStatus(tenantId) {
   const params = tenantId ? [tenantId] : [];
   const [rows] = await db.execute(
     `SELECT a.status, COUNT(*) as count
-     FROM assets a WHERE 1=1 ${where}
+     FROM assets a WHERE 1=1 AND a.is_deleted = 0 ${where}
      GROUP BY a.status`,
     params,
   );
@@ -41,7 +41,7 @@ async function getAssetsByDepartment(tenantId) {
   const params = tenantId ? [tenantId] : [];
   const [rows] = await db.execute(
     `SELECT a.department, COUNT(*) as count
-     FROM assets a WHERE a.department IS NOT NULL ${where}
+     FROM assets a WHERE a.department IS NOT NULL AND a.is_deleted = 0 ${where}
      GROUP BY a.department
      ORDER BY count DESC
      LIMIT 10`,

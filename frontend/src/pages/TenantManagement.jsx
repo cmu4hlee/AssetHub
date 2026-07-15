@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Card,
-  Table,
   Button,
   Space,
   Tag,
@@ -31,6 +30,7 @@ import {
 } from '@ant-design/icons';
 import { tenantAPI, rolesPermissionsAPI } from '../utils/api';
 import dayjs from 'dayjs';
+import { ResponsiveTable } from '../components';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -411,7 +411,7 @@ const TenantManagement = () => {
         </div>
 
         {/* 租户列表 */}
-        <Table
+        <ResponsiveTable
           columns={columns}
           dataSource={tenants}
           rowKey="id"
@@ -424,6 +424,38 @@ const TenantManagement = () => {
               setPagination({ ...pagination, current: page, pageSize });
             },
           }}
+          mobileTitleKey="tenant_name"
+          mobileStatusRender={r => {
+            const m = { active: 'success', inactive: 'default' }[r.status] || 'default';
+            const text = { active: '启用', inactive: '停用' }[r.status] || r.status || '-';
+            return <Tag color={m}>{text}</Tag>;
+          }}
+          mobileFields={[
+            { label: '租户编码', key: 'tenant_code' },
+            { label: '联系人', key: 'contact_person' },
+            { label: '联系电话', key: 'contact_phone' },
+            {
+              label: '订阅类型',
+              key: 'subscription_type',
+              render: type => {
+                const typeMap = {
+                  free: <Tag color="default">免费版</Tag>,
+                  standard: <Tag color="blue">标准版</Tag>,
+                  professional: <Tag color="purple">专业版</Tag>,
+                  enterprise: <Tag color="red">企业版</Tag>,
+                };
+                return typeMap[type] || type || '-';
+              },
+            },
+            {
+              label: '用户配额',
+              key: 'max_users',
+              render: (max, record) => `${record.user_count || 0} / ${max || '-'}`,
+            },
+          ]}
+          mobileActions={[
+            { key: 'edit', text: '编辑', icon: <EditOutlined />, onClick: handleEdit },
+          ]}
         />
       </Card>
 

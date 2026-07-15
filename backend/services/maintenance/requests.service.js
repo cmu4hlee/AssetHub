@@ -138,7 +138,7 @@ async function getRequests(query, req) {
   const [rows] = await db.execute(
     `SELECT mr.*, a.department, a.location
      FROM maintenance_requests mr
-     LEFT JOIN assets a ON mr.asset_code = a.asset_code
+     LEFT JOIN assets a ON mr.asset_code = a.asset_code AND mr.tenant_id = a.tenant_id AND a.is_deleted = 0
      ${whereClause}
      ORDER BY mr.request_date DESC, mr.created_at DESC
      LIMIT ? OFFSET ?`,
@@ -162,7 +162,7 @@ async function getRequest(id, req) {
   const [rows] = await db.execute(
     `SELECT mr.*, a.department, a.location, a.brand, a.model
      FROM maintenance_requests mr
-     LEFT JOIN assets a ON mr.asset_code = a.asset_code
+     LEFT JOIN assets a ON mr.asset_code = a.asset_code AND mr.tenant_id = a.tenant_id AND a.is_deleted = 0
      WHERE mr.id = ? ${tenantFilter.whereClause}`,
     [id, ...tenantFilter.params]
   );
@@ -178,6 +178,74 @@ async function getRequest(id, req) {
     statusCode: 200,
     body: { success: true, data: rows[0] },
   };
+}
+
+/**
+ * 获取申请单最近一条由本申请产生的维修日志
+ * 用于"修订"场景预填表单
+ * 优先按 source_type='request' AND source_id=? 查；找不到再按 asset_code + maintenance_type='故障维修' 兜底
+ */
+async function getLatestLog(id, req) {
+  const tenantFilter = addTenantFilter(req, 'mr');
+  const [requests] = await db.execute(
+    `SELECT id, asset_code, tenant_id FROM maintenance_requests mr WHERE mr.id = ? ${tenantFilter.whereClause}`,
+    [id, ...tenantFilter.params]
+  );
+  if (requests.length === 0) {
+    return { statusCode: 404, body: { success: false, message: '维修申请不存在' } };
+  }
+  const request = requests[0];
+
+  const [logs] = await db.execute(
+    `SELECT id, maintenance_date, maintenance_person, maintenance_content,
+            maintenance_cost, parts_replaced, remark, source_type, source_id,
+            created_at, updated_at
+       FROM maintenance_logs
+      WHERE source_type = 'request' AND source_id = ?
+      ORDER BY id DESC LIMIT 1`,
+    [id]
+  );
+
+  if (logs.length === 0) {
+    const [fallbackLogs] = await db.execute(
+      `SELECT id, maintenance_date, maintenance_person, maintenance_content,
+              maintenance_cost, parts_replaced, remark, source_type, source_id,
+              created_at, updated_at
+         FROM maintenance_logs
+        WHERE asset_code = ? AND maintenance_type = '故障维修'
+        ORDER BY id DESC LIMIT 1`,
+      [request.asset_code]
+    );
+    if (fallbackLogs.length > 0) {
+      return { statusCode: 200, body: { success: true, data: fallbackLogs[0], fallback: true } };
+    }
+    return { statusCode: 200, body: { success: true, data: null } };
+  }
+
+  return { statusCode: 200, body: { success: true, data: logs[0] } };
+}
+
+/**
+ * 获取申请单的审计历史
+ * 包含完整 timeline（state changes + 修订）
+ */
+async function getRequestHistory(id, req) {
+  const tenantFilter = addTenantFilter(req, 'mr');
+  const [requests] = await db.execute(
+    `SELECT id FROM maintenance_requests mr WHERE mr.id = ? ${tenantFilter.whereClause}`,
+    [id, ...tenantFilter.params]
+  );
+  if (requests.length === 0) {
+    return { statusCode: 404, body: { success: false, message: '维修申请不存在' } };
+  }
+  const [rows] = await db.execute(
+    `SELECT id, action_type, action_description, action_by, action_at, revision_snapshot
+       FROM maintenance_request_history
+      WHERE request_id = ?
+      ORDER BY action_at DESC, id DESC`,
+    [id]
+  );
+  return { statusCode: 200, body: { success: true, data: rows } };
 }
 
 async function createRequest(body, req) {
@@ -645,6 +713,15 @@ async function completeRequest(id, body, req) {
     );
 
     if (existingLogs.length > 0) {
+      // 修订：先快照旧内容到 history（用于审计对比）
+      const [oldLogRows] = await connection.execute(
+        `SELECT maintenance_date, maintenance_person, maintenance_content,
+                maintenance_cost, parts_replaced, remark
+           FROM maintenance_logs WHERE id = ?`,
+        [existingLogs[0].id]
+      );
+      const oldSnapshot = oldLogRows[0] || null;
+
       // 修订：更新原日志的内容
       await connection.execute(
         `UPDATE maintenance_logs SET
@@ -667,6 +744,25 @@ async function completeRequest(id, body, req) {
           tenantId,
         ]
       );
+
+      // 写一条 revise history
+      try {
+        await connection.execute(
+          `INSERT INTO maintenance_request_history
+            (request_id, tenant_id, action_type, action_description, action_by, action_at, revision_snapshot)
+           VALUES (?, ?, ?, ?, ?, NOW(), ?)`,
+          [
+            id,
+            tenantId,
+            'revise',
+            `修订维修内容（由 ${createdBy} 修订${remark ? '，备注：' + remark : ''}）`,
+            createdBy,
+            oldSnapshot ? JSON.stringify(oldSnapshot) : null,
+          ]
+        );
+      } catch (hErr) {
+        console.warn('[Request] 写修订 history 失败:', hErr.message);
+      }
     } else {
       // 首次：插入新日志（同时修复 source_type/source_id 关联 bug）
       await connection.execute(
@@ -1114,6 +1210,8 @@ async function deleteRequestAttachment(requestId, attachmentId, req) {
 module.exports = {
   getRequests,
   getRequest,
+  getLatestLog,
+  getRequestHistory,
   createRequest,
   approveRequest,
   startRequest,

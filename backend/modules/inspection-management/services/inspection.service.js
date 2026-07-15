@@ -10,7 +10,7 @@ const {
 } = require('../utils/inspection.utils');
 
 const ASSET_JOIN =
-  'LEFT JOIN assets a ON r.asset_id = a.id AND a.tenant_id = r.tenant_id';
+  'LEFT JOIN assets a ON r.asset_id = a.id AND a.tenant_id = r.tenant_id AND a.is_deleted = 0';
 
 class InspectionService {
   // ============ 巡检模板管理 ============
@@ -261,8 +261,8 @@ class InspectionService {
     let sql = `
       SELECT t.*, a.asset_name, a.asset_code, it.template_name
       FROM inspection_tasks t
-      LEFT JOIN assets a ON t.asset_id = a.id AND a.tenant_id = t.tenant_id
-      LEFT JOIN inspection_templates it ON t.template_id = it.id AND it.tenant_id = t.tenant_id
+      LEFT JOIN assets a ON t.asset_id = a.id AND a.tenant_id = t.tenant_id AND a.is_deleted = 0
+      LEFT JOIN inspection_templates it ON t.template_id = it.id AND it.tenant_id = t.tenant_id AND a.is_deleted = 0
       WHERE t.tenant_id = ?
     `;
     const queryParams = [tenantId];
@@ -343,8 +343,8 @@ class InspectionService {
     const [rows] = await db.execute(
       `SELECT t.*, a.asset_name, a.asset_code, it.template_name
        FROM inspection_tasks t
-       LEFT JOIN assets a ON t.asset_id = a.id AND a.tenant_id = t.tenant_id
-       LEFT JOIN inspection_templates it ON t.template_id = it.id AND it.tenant_id = t.tenant_id
+       LEFT JOIN assets a ON t.asset_id = a.id AND a.tenant_id = t.tenant_id AND a.is_deleted = 0
+       LEFT JOIN inspection_templates it ON t.template_id = it.id AND it.tenant_id = t.tenant_id AND a.is_deleted = 0
        WHERE t.id = ? AND t.tenant_id = ?`,
       [id, tenantId],
     );
@@ -438,7 +438,7 @@ class InspectionService {
     const [rows] = await db.execute(
       `SELECT t.*, a.asset_name, a.asset_code
        FROM inspection_tasks t
-       LEFT JOIN assets a ON t.asset_id = a.id AND a.tenant_id = t.tenant_id
+       LEFT JOIN assets a ON t.asset_id = a.id AND a.tenant_id = t.tenant_id AND a.is_deleted = 0
        WHERE t.tenant_id = ?
          AND t.status IN ('pending', 'in_progress')
          AND t.plan_date <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
@@ -869,7 +869,7 @@ class InspectionService {
       SELECT i.*, r.record_code, r.inspection_title, a.asset_name, a.asset_code
       FROM inspection_issues i
       LEFT JOIN inspection_records r ON i.record_id = r.id AND r.tenant_id = i.tenant_id
-      LEFT JOIN assets a ON i.asset_id = a.id AND a.tenant_id = i.tenant_id
+      LEFT JOIN assets a ON i.asset_id = a.id AND a.tenant_id = i.tenant_id AND a.is_deleted = 0
       WHERE i.tenant_id = ?
     `;
     const queryParams = [tenantId];
@@ -934,7 +934,7 @@ class InspectionService {
       `SELECT i.*, r.record_code, r.inspection_title, a.asset_name, a.asset_code
        FROM inspection_issues i
        LEFT JOIN inspection_records r ON i.record_id = r.id AND r.tenant_id = i.tenant_id
-       LEFT JOIN assets a ON i.asset_id = a.id AND a.tenant_id = i.tenant_id
+       LEFT JOIN assets a ON i.asset_id = a.id AND a.tenant_id = i.tenant_id AND a.is_deleted = 0
        WHERE i.id = ? AND i.tenant_id = ?`,
       [id, tenantId],
     );

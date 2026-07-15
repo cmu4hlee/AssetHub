@@ -5,12 +5,14 @@ const multer = require('multer');
 const path = require('path');
 const { authenticate, authorize } = require('../middleware/auth');
 
-// 质量控制模块权限集合：
-//   GET 路由：view_all | view_own_department | metrology.view | maintenance.view | asset.view_*
-//   POST/PUT/DELETE 路由：edit_all | edit_own_department | metrology.edit
-const QC_GET_ROLES = ['quality_control.view_all', 'quality_control.view_own_department', 'metrology.view', 'maintenance.view', 'asset.view_all', 'asset.view_own_department'];
-const QC_WRITE_ROLES = ['quality_control.edit_all', 'quality_control.edit_own_department', 'metrology.edit', 'asset.edit_all', 'asset.edit_own_department'];
-const QC_APPROVE_ROLES = ['quality_control.approve', 'metrology.approve', 'maintenance.approve'];
+// 质量控制模块权限集合（仅用于质控记录，不含计量）
+const QC_GET_ROLES = ['quality_control.view_all', 'quality_control.view_own_department', 'asset.view_all', 'asset.view_own_department', 'maintenance.view'];
+const QC_WRITE_ROLES = ['quality_control.edit_all', 'quality_control.edit_own_department', 'asset.edit_all', 'asset.edit_own_department'];
+const QC_APPROVE_ROLES = ['quality_control.approve'];
+
+// 计量管理权限集合（独立于质量控制）
+const MT_GET_ROLES = ['metrology.view', 'quality_control.view_all', 'quality_control.view_own_department', 'asset.view_all', 'asset.view_own_department'];
+const MT_WRITE_ROLES = ['metrology.edit', 'quality_control.edit_all', 'quality_control.edit_own_department', 'asset.edit_all', 'asset.edit_own_department'];
 const { addTenantFilter, getTenantId } = require('../middleware/tenant-filter');
 const { fileSecurity } = require('../middleware/fileSecurity');
 const MetrologyService = require('../services/metrology-service');
@@ -177,7 +179,7 @@ function sendAttachmentResult(res, result) {
 // ============================================
 
 // 获取计量记录列表
-router.get('/metrology', authenticate, authorize(QC_GET_ROLES), async (req, res) => {
+router.get('/metrology', authenticate, authorize(MT_GET_ROLES), async (req, res) => {
   try {
     const {
       page = 1,
@@ -242,7 +244,7 @@ function resolveImportBuffer(uploadedFile) {
 }
 
 // 下载导入模板
-router.get('/metrology/import-template', authenticate, async (req, res) => {
+router.get('/metrology/import-template', authenticate, authorize(MT_GET_ROLES), async (req, res) => {
   try {
     const buffer = await MetrologyImportService.buildImportTemplateBuffer();
     res.setHeader(
@@ -264,7 +266,7 @@ router.get('/metrology/import-template', authenticate, async (req, res) => {
 router.post(
   '/metrology/import/validate',
   authenticate,
-  authorize(QC_WRITE_ROLES),
+  authorize(MT_WRITE_ROLES),
   importUpload.single('file'),
   fileSecurity(),
   async (req, res) => {
@@ -304,7 +306,7 @@ router.post(
 router.post(
   '/metrology/import',
   authenticate,
-  authorize(QC_WRITE_ROLES),
+  authorize(MT_WRITE_ROLES),
   importUpload.single('file'),
   fileSecurity(),
   async (req, res) => {
@@ -345,7 +347,7 @@ router.post(
 );
 
 // 获取计量统计分析 - 修复路由优先级问题
-router.get('/metrology/statistics', authenticate, authorize(QC_GET_ROLES), async (req, res) => {
+router.get('/metrology/statistics', authenticate, authorize(MT_GET_ROLES), async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
 
@@ -375,7 +377,7 @@ router.get('/metrology/statistics', authenticate, authorize(QC_GET_ROLES), async
 });
 
 // 获取高级计量统计分析
-router.get('/metrology/statistics/advanced', authenticate, authorize(QC_GET_ROLES), async (req, res) => {
+router.get('/metrology/statistics/advanced', authenticate, authorize(MT_GET_ROLES), async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
 
@@ -405,7 +407,7 @@ router.get('/metrology/statistics/advanced', authenticate, authorize(QC_GET_ROLE
 });
 
 // 获取即将到期计量记录 - 修复路由优先级问题
-router.get('/metrology/expiring', authenticate, authorize(QC_GET_ROLES), async (req, res) => {
+router.get('/metrology/expiring', authenticate, authorize(MT_GET_ROLES), async (req, res) => {
   try {
     const { days = 30 } = req.query;
 
@@ -434,7 +436,7 @@ router.get('/metrology/expiring', authenticate, authorize(QC_GET_ROLES), async (
 });
 
 // 计量记录详情 - 参数化路由放在具体路由之后
-router.get('/metrology/:id', authenticate, authorize(QC_GET_ROLES), async (req, res) => {
+router.get('/metrology/:id', authenticate, authorize(MT_GET_ROLES), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -462,7 +464,7 @@ router.get('/metrology/:id', authenticate, authorize(QC_GET_ROLES), async (req, 
 });
 
 // 创建计量记录
-router.post('/metrology', authenticate, authorize(QC_WRITE_ROLES), async (req, res) => {
+router.post('/metrology', authenticate, authorize(MT_WRITE_ROLES), async (req, res) => {
   try {
     const {
       asset_code,
@@ -523,7 +525,7 @@ router.post('/metrology', authenticate, authorize(QC_WRITE_ROLES), async (req, r
 });
 
 // 更新计量记录
-router.put('/metrology/:id', authenticate, authorize(QC_WRITE_ROLES), async (req, res) => {
+router.put('/metrology/:id', authenticate, authorize(MT_WRITE_ROLES), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -586,7 +588,7 @@ router.put('/metrology/:id', authenticate, authorize(QC_WRITE_ROLES), async (req
 });
 
 // 删除计量记录
-router.delete('/metrology/:id', authenticate, authorize(QC_WRITE_ROLES), async (req, res) => {
+router.delete('/metrology/:id', authenticate, authorize(MT_WRITE_ROLES), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -844,7 +846,7 @@ router.post(
 );
 
 // 从文件分析结果创建计量记录（支持图像和PDF）
-router.post('/metrology/from-file', authenticate, upload.single('reportFile'), fileSecurity(), async (req, res) => {
+router.post('/metrology/from-file', authenticate, authorize(MT_WRITE_ROLES), upload.single('reportFile'), fileSecurity(), async (req, res) => {
   try {
     if (!req.file) {
       throw new AppError('请上传计量报告文件', 400, 'NO_FILE_UPLOADED');
@@ -937,7 +939,7 @@ router.post('/metrology/from-file', authenticate, upload.single('reportFile'), f
 const QualityReportGenerator = require('../services/quality-report-generator');
 
 // 生成计量质量报告
-router.get('/reports/metrology', authenticate, authorize(QC_GET_ROLES), async (req, res) => {
+router.get('/reports/metrology', authenticate, authorize(MT_GET_ROLES), async (req, res) => {
   try {
     const { start_date, end_date, format = 'json' } = req.query;
 
@@ -1184,7 +1186,7 @@ router.delete('/:id', authenticate, authorize(QC_WRITE_ROLES), deleteQualityCont
 // ============================================
 
 // 获取附件列表
-router.get('/metrology/:id/attachments', authenticate, authorize(QC_GET_ROLES), async (req, res) => {
+router.get('/metrology/:id/attachments', authenticate, authorize(MT_GET_ROLES), async (req, res) => {
   try {
     const result = await MetrologyService.getMetrologyAttachments(req.params.id, req);
     sendAttachmentResult(res, result);
@@ -1214,7 +1216,7 @@ router.post(
 );
 
 // 获取单个附件（用于浏览器直链下载/预览）
-router.get('/metrology/:metrologyId/attachments/:attachmentId', authenticate, authorize(QC_GET_ROLES), async (req, res) => {
+router.get('/metrology/:metrologyId/attachments/:attachmentId', authenticate, authorize(MT_GET_ROLES), async (req, res) => {
   try {
     const { metrologyId, attachmentId } = req.params;
     const result = await MetrologyService.getMetrologyAttachment(metrologyId, attachmentId, req);
@@ -1234,7 +1236,7 @@ router.get('/metrology/:metrologyId/attachments/:attachmentId', authenticate, au
 });
 
 // 删除附件
-router.delete('/metrology/attachments/:id', authenticate, authorize(QC_WRITE_ROLES), async (req, res) => {
+router.delete('/metrology/attachments/:id', authenticate, authorize(MT_WRITE_ROLES), async (req, res) => {
   try {
     const result = await MetrologyService.deleteMetrologyAttachment(req.params.id, req);
     sendAttachmentResult(res, result);

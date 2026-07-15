@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Card,
-  Table,
   Button,
   Space,
   Tag,
@@ -32,6 +31,7 @@ import {
 import { userAPI, rolesPermissionsAPI, departmentsAPI } from '../utils/api';
 import { getApiErrorMessage } from '../api/client';
 import auth from '../utils/auth';
+import { ResponsiveTable } from '../components';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -422,7 +422,7 @@ const UserRoleManagement = () => {
         </div>
 
         {/* 用户列表 */}
-        <Table
+        <ResponsiveTable
           columns={columns}
           dataSource={users}
           rowKey="id"
@@ -436,6 +436,41 @@ const UserRoleManagement = () => {
               setPagination({ ...pagination, current: page, pageSize });
             },
           }}
+          mobileTitleKey="real_name"
+          mobileFields={[
+            { label: '用户名', key: 'username' },
+            {
+              label: '部门',
+              key: 'department_code',
+              render: (code, record) => {
+                const dept = departments.find(d => d.department_code === code);
+                return dept?.department_name || code || '-';
+              },
+            },
+            { label: '手机号', key: 'phone' },
+            {
+              label: '创建时间',
+              key: 'created_at',
+              render: t => (t ? new Date(t).toLocaleString() : '-'),
+            },
+          ]}
+          mobileActions={[
+            { key: 'role', text: '分配角色', icon: <TeamOutlined />, onClick: handleAssignRole },
+            {
+              key: 'edit',
+              text: '编辑',
+              icon: <EditOutlined />,
+              onClick: r => { window.location.href = `/users/edit/${r.id}`; },
+            },
+            {
+              key: 'delete',
+              text: '删除',
+              danger: true,
+              icon: <DeleteOutlined />,
+              confirm: '确定要删除这个用户吗?',
+              onClick: r => handleDelete(r.id),
+            },
+          ]}
         />
       </Card>
 

@@ -33,9 +33,9 @@ const resolveOperationLogTable = async () => {
 };
 
 const OPERATION_LOG_ASSET_JOIN =
-  'LEFT JOIN assets a ON a.id = ol.asset_id AND a.tenant_id = ol.tenant_id';
+  'LEFT JOIN assets a ON a.id = ol.asset_id AND a.tenant_id = ol.tenant_id AND a.is_deleted = 0';
 const ASSET_OPERATION_LOG_ASSET_JOIN =
-  'LEFT JOIN assets a ON a.id = aol.asset_id AND a.tenant_id = aol.tenant_id';
+  'LEFT JOIN assets a ON a.id = aol.asset_id AND a.tenant_id = aol.tenant_id AND a.is_deleted = 0';
 
 const toDbOperationType = value => {
   if (!value) {

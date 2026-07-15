@@ -250,13 +250,13 @@ const applyManagedDepartmentScope = (
 
 const adverseReactionAssetJoin = `
   FROM adverse_reaction_records ar
-  LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id
+  LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id AND a.is_deleted = 0
 `;
 
 const adverseReactionAttachmentJoin = `
   FROM adverse_reaction_attachments aa
   INNER JOIN adverse_reaction_records ar ON ar.id = aa.record_id AND ar.tenant_id = aa.tenant_id
-  LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id
+  LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id AND a.is_deleted = 0
 `;
 
 const buildScopedRecordFilter = (req, tenantId, recordId) => {

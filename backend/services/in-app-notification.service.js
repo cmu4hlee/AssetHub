@@ -20,6 +20,7 @@ const { subscribe, SYSTEM_EVENTS } = require('../core/EventBus');
 const { pushToUser, pushToRole, pushToUsers } = require('../core/socket');
 const recipientStrategy = require('./recipient-strategy.service');
 const preferenceService = require('./notification-preference.service');
+const aggregator = require('./notification-aggregator.service');
 
 const NOTIFICATION_ENABLED = process.env.IN_APP_NOTIFICATION_ENABLED !== 'false';
 const DEFAULT_EXPIRES_DAYS = parseInt(process.env.IN_APP_NOTIFICATION_EXPIRES_DAYS || '30', 10);
@@ -157,52 +158,90 @@ async function deliver({
     );
   }
 
-  // 1. 持久化（全部落库，包含被偏好过滤的）
-  let inserted = 0;
-  try {
-    const expiresAt = DEFAULT_EXPIRES_DAYS > 0
-      ? new Date(Date.now() + DEFAULT_EXPIRES_DAYS * 24 * 60 * 60 * 1000)
-      : null;
-    const sourcePayloadJson = payload ? safeJsonStringify(payload) : null;
-
-    // 批量插入（VALUES 多行）
-    const placeholders = uniqUserIds.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(',');
-    const params = [];
-    for (const uid of uniqUserIds) {
-      params.push(
-        tenantId || 0,
-        uid,
+  // 1. 聚合检查：尝试把每条新通知合并到用户最近 N 分钟内同事件类别的未读通知
+  //    合并成功的不需要新插入；未合并的才走批量 insert
+  const userIdsToInsert = [];
+  let mergedCount = 0;
+  for (const uid of uniqUserIds) {
+    try {
+      const result = await aggregator.aggregateOrInsert({
+        userId: uid,
         eventCode,
-        category || 'system',
+        category: category || 'system',
         title,
-        content || '',
+        content,
         urgency,
-        sourcePayloadJson,
-        actionUrl || null,
-        actionText || '查看详情',
-        0,
-        expiresAt,
-      );
+        payload,
+      });
+      if (result.action === 'merged') {
+        mergedCount++;
+        // 合并的也要推送（让用户看到数字更新）
+        if (pushableUserIds.includes(uid)) {
+          pushableUserIds.push(uid); // dedup 后会剔除
+        }
+      } else {
+        userIdsToInsert.push(uid);
+      }
+    } catch (e) {
+      logger.warn(`[InAppNotify] 聚合检查失败 user=${uid}:`, e.message);
+      userIdsToInsert.push(uid); // 失败时退回普通插入
     }
-    const [result] = await db.execute(
-      `INSERT INTO in_app_notifications
-       (tenant_id, user_id, event_code, category, title, content, urgency,
-        source_payload, action_url, action_text, is_read, expires_at)
-       VALUES ${placeholders}`,
-      params,
-    );
-    inserted = result.affectedRows || 0;
-  } catch (e) {
-    logger.error(`[InAppNotify] 持久化失败 (event=${eventCode}):`, e.message);
-    // 持久化失败不阻断推送
   }
 
-  // 2. Socket 实时推送（只推未过滤的用户）
+  // 2. 持久化未合并的（批量 insert）
+  let inserted = 0;
+  if (userIdsToInsert.length) {
+    try {
+      const expiresAt = DEFAULT_EXPIRES_DAYS > 0
+        ? new Date(Date.now() + DEFAULT_EXPIRES_DAYS * 24 * 60 * 60 * 1000)
+        : null;
+      const sourcePayloadJson = payload ? safeJsonStringify(payload) : null;
+
+      // 批量插入（VALUES 多行），新加 3 个字段
+      const placeholders = userIdsToInsert.map(
+        () => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      ).join(',');
+      const params = [];
+      for (const uid of userIdsToInsert) {
+        params.push(
+          tenantId || 0,
+          uid,
+          eventCode,
+          category || 'system',
+          title,
+          content || '',
+          urgency,
+          sourcePayloadJson,
+          actionUrl || null,
+          actionText || '查看详情',
+          0,                          // is_read
+          1,                          // aggregate_count
+          null,                       // aggregate_keys
+          toMysqlDateTime(new Date()), // first_occurred_at
+          expiresAt,
+        );
+      }
+      const [result] = await db.execute(
+        `INSERT INTO in_app_notifications
+         (tenant_id, user_id, event_code, category, title, content, urgency,
+          source_payload, action_url, action_text, is_read, aggregate_count, aggregate_keys,
+          first_occurred_at, expires_at)
+         VALUES ${placeholders}`,
+        params,
+      );
+      inserted = result.affectedRows || 0;
+    } catch (e) {
+      logger.error(`[InAppNotify] 持久化失败 (event=${eventCode}):`, e.message);
+      // 持久化失败不阻断推送
+    }
+  }
+
+  // 3. Socket 实时推送（被偏好过滤的不推，合并的也推让用户看到数字更新）
+  //    去重 pushableUserIds
+  const finalPushable = [...new Set(pushableUserIds.filter(uid => uniqUserIds.includes(uid)))];
   let pushed = 0;
   try {
-    if (pushableUserIds.length) {
-      // 拿首条未过滤用户的偏好，用于决定桌面通知 / 顶部气泡
-      // （混合用户的偏好可能不同，这里用最宽松的判断）
+    if (finalPushable.length) {
       const socketData = {
         type: 'in_app_notification',
         eventCode,
@@ -214,8 +253,8 @@ async function deliver({
         actionText,
         timestamp: new Date().toISOString(),
       };
-      pushToUsers(pushableUserIds, 'app:notification', socketData);
-      pushed = pushableUserIds.length;
+      pushToUsers(finalPushable, 'app:notification', socketData);
+      pushed = finalPushable.length;
     }
   } catch (e) {
     logger.error(`[InAppNotify] Socket 推送失败 (event=${eventCode}):`, e.message);
@@ -224,10 +263,16 @@ async function deliver({
   logger.info(
     `[InAppNotify] event=${eventCode} category=${category} tenant=${tenantId} ` +
     `urgency=${urgency} recipients=${uniqUserIds.length} filtered=${filtered.length} ` +
-    `persisted=${inserted} pushed=${pushed}`,
+    `merged=${mergedCount} persisted=${inserted} pushed=${pushed}`,
   );
 
-  return { inserted, pushed, userIds: uniqUserIds, filteredCount: filtered.length };
+  return {
+    inserted,
+    pushed,
+    merged: mergedCount,
+    userIds: uniqUserIds,
+    filteredCount: filtered.length,
+  };
 }
 
 function safeJsonStringify(value) {
@@ -238,6 +283,15 @@ function safeJsonStringify(value) {
   } catch (_e) {
     return null;
   }
+}
+
+// MySQL DATETIME 格式：YYYY-MM-DD HH:mm:ss
+function toMysqlDateTime(date) {
+  if (!date) return null;
+  if (typeof date === 'string') return date;
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 19).replace('T', ' ');
 }
 
 /* ===================== 事件处理器 ===================== */

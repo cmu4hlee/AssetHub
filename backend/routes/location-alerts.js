@@ -197,7 +197,7 @@ const logger = require('../config/logger');
 const { authenticate } = require('../middleware/auth');
 const { addTenantFilter, getTenantId } = require('../middleware/tenant-filter');
 const LOCATION_ALERT_ASSET_JOIN =
-  'LEFT JOIN assets a ON la.asset_code = a.asset_code AND a.tenant_id = la.tenant_id';
+  'LEFT JOIN assets a ON la.asset_code = a.asset_code AND a.tenant_id = la.tenant_id AND a.is_deleted = 0';
 
 const logLocationAlertError = (message, error, context = {}) => {
   logger.error(message, {

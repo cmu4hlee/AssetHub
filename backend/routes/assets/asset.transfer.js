@@ -6,7 +6,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/database');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, authorize } = require('../../middleware/auth');
+
+const ASSET_TRANSFER_ROLES = ['transfer.apply', 'asset.edit_all', 'asset.edit_own_department'];
+const ASSET_TRANSFER_APPROVE_ROLES = ['transfer.approve', 'asset.edit_all'];
 const { addTenantFilter, getTenantId } = require('../../middleware/tenant-filter');
 const logger = require('../../config/logger');
 
@@ -114,7 +117,7 @@ router.get('/transfer-requests', authenticate, async (req, res) => {
 /**
  * 提交调拨申请
  */
-router.post('/:id/transfer-apply', authenticate, async (req, res) => {
+router.post('/:id/transfer-apply', authenticate, authorize(ASSET_TRANSFER_ROLES), async (req, res) => {
   const connection = await db.getConnection();
 
   try {
@@ -181,7 +184,7 @@ router.post('/:id/transfer-apply', authenticate, async (req, res) => {
 /**
  * 审批调拨申请
  */
-router.post('/transfer-requests/:request_id/approve', authenticate, async (req, res) => {
+router.post('/transfer-requests/:request_id/approve', authenticate, authorize(ASSET_TRANSFER_APPROVE_ROLES), async (req, res) => {
   const connection = await db.getConnection();
 
   try {

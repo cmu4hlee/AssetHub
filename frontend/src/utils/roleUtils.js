@@ -171,7 +171,6 @@ export const canAccessModule = (user, moduleId) => {
 
   // 某些模块有依赖关系
   const moduleFallbacks = {
-    'special-equipment-management': ['compliance-management'],
     'safety-inspection-management': ['compliance-management'],
     'asset-risk-management': ['compliance-management'],
     'staff-qualification': ['compliance-management'],

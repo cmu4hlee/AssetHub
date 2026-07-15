@@ -24,7 +24,7 @@ const {
 } = require('../services/transfer-approval-service');
 
 const TRANSFER_REQUEST_ASSET_JOIN =
-  'LEFT JOIN assets a ON t.asset_code = a.asset_code AND a.tenant_id = t.tenant_id';
+  'LEFT JOIN assets a ON t.asset_code = a.asset_code AND a.tenant_id = t.tenant_id AND a.is_deleted = 0';
 
 // 兼容中文状态筛选值 -> 数据库状态
 const STATUS_MAP = {

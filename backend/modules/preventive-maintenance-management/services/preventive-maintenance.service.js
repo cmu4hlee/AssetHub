@@ -43,7 +43,7 @@ class PreventiveMaintenanceService {
     const [rows] = await db.execute(
       `SELECT pm.*, a.asset_name
        FROM preventive_maintenance_plans pm
-       LEFT JOIN assets a ON pm.asset_code = a.asset_code AND a.tenant_id = pm.tenant_id
+       LEFT JOIN assets a ON pm.asset_code = a.asset_code AND a.tenant_id = pm.tenant_id AND a.is_deleted = 0
        ${whereClause}
        ORDER BY pm.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -71,7 +71,7 @@ class PreventiveMaintenanceService {
     const [rows] = await db.execute(
       `SELECT pm.*, a.asset_name
        FROM preventive_maintenance_plans pm
-       LEFT JOIN assets a ON pm.asset_code = a.asset_code AND a.tenant_id = pm.tenant_id
+       LEFT JOIN assets a ON pm.asset_code = a.asset_code AND a.tenant_id = pm.tenant_id AND a.is_deleted = 0
        WHERE pm.id = ? AND pm.tenant_id = ?`,
       [id, tenantId],
     );

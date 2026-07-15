@@ -222,7 +222,7 @@ class InspectionExtendedService {
     if (rows.length === 0) return null;
     const [points] = await db.execute(
       `SELECT p.*, a.asset_name, a.asset_code FROM inspection_route_points p
-       LEFT JOIN assets a ON p.asset_id = a.id AND a.tenant_id = p.tenant_id
+       LEFT JOIN assets a ON p.asset_id = a.id AND a.tenant_id = p.tenant_id AND a.is_deleted = 0
        WHERE p.route_id = ? ORDER BY p.point_order ASC`,
       [id],
     );
@@ -429,8 +429,8 @@ class InspectionExtendedService {
               t.assignee_id, t.assignee_name, t.inspection_type,
               t.inspection_area, a.asset_name, a.asset_code, it.template_name
        FROM inspection_tasks t
-       LEFT JOIN assets a ON t.asset_id = a.id AND a.tenant_id = t.tenant_id
-       LEFT JOIN inspection_templates it ON t.template_id = it.id AND it.tenant_id = t.tenant_id
+       LEFT JOIN assets a ON t.asset_id = a.id AND a.tenant_id = t.tenant_id AND a.is_deleted = 0
+       LEFT JOIN inspection_templates it ON t.template_id = it.id AND it.tenant_id = t.tenant_id AND a.is_deleted = 0
        WHERE ${where.join(' AND ')}
        ORDER BY t.plan_date ASC`,
       args,
@@ -600,7 +600,7 @@ class InspectionExtendedService {
     const [tasks] = await db.execute(
       `SELECT t.*, a.asset_name
        FROM inspection_tasks t
-       LEFT JOIN assets a ON t.asset_id = a.id AND a.tenant_id = t.tenant_id
+       LEFT JOIN assets a ON t.asset_id = a.id AND a.tenant_id = t.tenant_id AND a.is_deleted = 0
        WHERE ${where.join(' AND ')}`,
       args,
     );
@@ -721,8 +721,8 @@ class InspectionExtendedService {
       `SELECT d.id, d.department_name, COUNT(r.id) AS records,
               SUM(CASE WHEN r.overall_result = 'abnormal' THEN 1 ELSE 0 END) AS abnormal
        FROM inspection_records r
-       LEFT JOIN assets a ON r.asset_id = a.id AND a.tenant_id = r.tenant_id
-       LEFT JOIN departments d ON a.department_id = d.id
+       LEFT JOIN assets a ON r.asset_id = a.id AND a.tenant_id = r.tenant_id AND a.is_deleted = 0
+       LEFT JOIN departments d ON a.department_id = d.id AND a.is_deleted = 0
        WHERE r.tenant_id = ? ${dateFilter.replace('inspection_date', 'r.inspection_date')}
        GROUP BY d.id, d.department_name
        ORDER BY records DESC LIMIT 20`,

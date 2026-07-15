@@ -87,6 +87,8 @@ const TechnicalDocumentsExternalUpload = lazyPage(
 );
 const TechnicalDocumentsReview = lazyPage(() => import('./pages/TechnicalDocumentsReview'));
 const TechnicalDocumentsAI = lazyPage(() => import('./pages/TechnicalDocumentsAI'));
+const KnowledgeBaseList = lazyPage(() => import('./pages/KnowledgeBaseList'));
+const KnowledgeBaseQA = lazyPage(() => import('./pages/KnowledgeBaseQA'));
 const AssetShareUpload = lazyPage(() => import('./pages/AssetShareUpload'));
 const AuditLogsList = lazyPage(() => import('./pages/AuditLogsList'));
 const AuditLogManagement = lazyPage(() => import('./pages/AuditLogManagement'));
@@ -324,6 +326,8 @@ function App() {
                   <Route path="technical-documents/ai" element={<TechnicalDocumentsAI />} />
                   <Route path="technical-documents/upload" element={<TechnicalDocumentsUpload />} />
                   <Route path="technical-documents/review" element={<TechnicalDocumentsReview />} />
+                  <Route path="knowledge-base" element={<KnowledgeBaseList />} />
+                  <Route path="knowledge-base/qa" element={<KnowledgeBaseQA />} />
                   <Route path="acceptance" element={<AcceptanceList />} />
                   <Route path="acceptance/create" element={<AcceptanceForm />} />
                   <Route path="acceptance/edit/:id" element={<AcceptanceForm />} />
@@ -628,6 +632,8 @@ function App() {
                       path="/technical-documents/review"
                       element={<TechnicalDocumentsReview />}
                     />
+                    <Route path="/knowledge-base" element={<KnowledgeBaseList />} />
+                    <Route path="/knowledge-base/qa" element={<KnowledgeBaseQA />} />
                     <Route path="/acceptance" element={<AcceptanceList />} />
                     <Route path="/acceptance/create" element={<AcceptanceForm />} />
                     <Route path="/acceptance/edit/:id" element={<AcceptanceForm />} />

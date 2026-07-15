@@ -283,7 +283,7 @@ class MetrologyService {
         AND latest_asset.asset_code = ${recordAlias}.asset_code
        LEFT JOIN assets a
          ON a.id = latest_asset.latest_asset_id
-        AND a.tenant_id = latest_asset.tenant_id`;
+        AND a.tenant_id = latest_asset.tenant_id AND a.is_deleted = 0`;
   }
 
   /**

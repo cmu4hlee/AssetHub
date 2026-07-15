@@ -1,5 +1,6 @@
 const db = require('../../config/database');
 const { getTenantId } = require('../../middleware/tenant-filter');
+const costsService = require('./costs.service');
 
 function badRequest(message) {
   return { statusCode: 400, body: { success: false, message } };
@@ -178,7 +179,7 @@ async function getEfficiencyAssetFrequency(query, req) {
        AVG(ml.maintenance_duration) as avg_maintenance_time,
        SUM(ml.maintenance_cost) as total_cost
      FROM maintenance_logs ml
-     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND ml.tenant_id = a.tenant_id
+     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND ml.tenant_id = a.tenant_id AND a.is_deleted = 0
      ${whereClause}
      GROUP BY ml.asset_code
      ORDER BY maintenance_count DESC
@@ -546,6 +547,57 @@ async function getSecondaryAssetTypes(query, req) {
   };
 }
 
+/**
+ * 成本分析汇总
+ * 返回:
+ *   - assetDistribution: 高成本资产 Top N
+ *   - summary: 汇总指标 (total_cost, avg_cost, total_count, top_asset_name)
+ * 给维护效率分析页用
+ */
+async function getCostAnalysis(query, req) {
+  const { start_date, end_date, limit = 10 } = query;
+
+  // 复用 costsService 拿高成本资产列表
+  const highCostResult = await costsService.getHighCostAssets({ start_date, end_date, limit }, req);
+  const assetDistribution = highCostResult?.data || [];
+
+  // 算汇总
+  const tenantId = getTenantId(req);
+  let whereClause = 'WHERE tenant_id = ?';
+  const summaryParams = [tenantId];
+  if (start_date) {
+    whereClause += ' AND maintenance_date >= ?';
+    summaryParams.push(start_date);
+  }
+  if (end_date) {
+    whereClause += ' AND maintenance_date <= ?';
+    summaryParams.push(end_date);
+  }
+  const [summaryRows] = await db.execute(
+    `SELECT
+       COUNT(*) AS total_count,
+       COALESCE(SUM(maintenance_cost), 0) AS total_cost,
+       COALESCE(AVG(maintenance_cost), 0) AS avg_cost
+     FROM maintenance_logs
+     ${whereClause}`,
+    summaryParams,
+  );
+  const row = summaryRows[0] || {};
+  const summary = {
+    total_count: Number(row.total_count || 0),
+    total_cost: Number(row.total_cost || 0),
+    avg_cost: Number(row.avg_cost || 0),
+    top_asset_name: assetDistribution[0]?.asset_name || '-',
+    top_asset_cost: Number(assetDistribution[0]?.total_cost || 0),
+  };
+
+  return {
+    success: true,
+    data: { assetDistribution, summary },
+    message: '成本分析成功',
+  };
+}
+
 module.exports = {
   getEfficiencyOverview,
   getEfficiencyResponseTime,
@@ -554,6 +606,7 @@ module.exports = {
   getAssetHistoryAnalysis,
   getEffectivenessStats,
   getCostTrendAnalysis,
+  getCostAnalysis,
   getTechnicianPerformance,
   getTypeDistribution,
   getFrequencyAnalysis,

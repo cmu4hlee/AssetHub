@@ -222,7 +222,7 @@ const maintenanceAIService = {
         [transfers] = await db.execute(
           `SELECT t.id, t.asset_code, a.asset_name, t.current_department, t.target_department, t.reason, t.status, t.status_cn, t.transfer_date, t.applicant, t.created_at
            FROM asset_transfers t
-           LEFT JOIN assets a ON t.asset_code = a.asset_code AND a.tenant_id = t.tenant_id
+           LEFT JOIN assets a ON t.asset_code = a.asset_code AND a.tenant_id = t.tenant_id AND a.is_deleted = 0
            WHERE t.tenant_id = ? AND t.status = 'pending'
            ORDER BY t.created_at DESC LIMIT 20`,
           [tenantId],

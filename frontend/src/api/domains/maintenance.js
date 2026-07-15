@@ -183,6 +183,8 @@ export const maintenanceAPI = {
 
   getMaintenanceRequests: params => getNormalizedList(api.get('/maintenance/requests', { params })),
   getMaintenanceRequest: id => api.get(`/maintenance/requests/${id}`),
+  getMaintenanceRequestLatestLog: id => api.get(`/maintenance/requests/${id}/latest-log`),
+  getMaintenanceRequestHistory: id => api.get(`/maintenance/requests/${id}/history`),
   createMaintenanceRequest: data => api.post('/maintenance/requests', data),
   submitAIMaintenanceRequest: data => api.post('/maintenance/ai/submit-request', data),
   updateMaintenanceRequest: (id, data) => api.put(`/maintenance/requests/${id}`, data),
@@ -204,6 +206,9 @@ export const maintenanceAPI = {
   getEfficiencyResponseTime: params => api.get('/maintenance/efficiency/response-time', { params }),
   getEfficiencyTechnician: params => api.get('/maintenance/efficiency/technician', { params }),
   getEfficiencyAssetFrequency: params => api.get('/maintenance/efficiency/asset-frequency', { params }),
+  getCostAnalysis: params => api.get('/maintenance/analysis/cost-analysis', { params }),
+  getCostTrendAnalysis: params => api.get('/maintenance/analysis/cost-trend', { params }),
+  getTypeDistribution: params => api.get('/maintenance/analysis/type-distribution', { params }),
 
   getMaintenanceReminders: params => getNormalizedList(api.get('/maintenance/reminders', { params })),
   sendMaintenanceReminder: data => api.post('/maintenance/reminders/send', data),

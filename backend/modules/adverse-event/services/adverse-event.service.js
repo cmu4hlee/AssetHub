@@ -138,7 +138,7 @@ class AdverseEventService {
     const [countResult] = await db.execute(
       `SELECT COUNT(DISTINCT ar.id) as total
        FROM adverse_reaction_records ar
-       LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id
+       LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id AND a.is_deleted = 0
        ${whereClause}`,
       queryParams,
     );
@@ -148,7 +148,7 @@ class AdverseEventService {
     const [rows] = await db.execute(
       `SELECT ar.*, a.department, a.department_new
        FROM adverse_reaction_records ar
-       LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id
+       LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id AND a.is_deleted = 0
        ${whereClause}
        ORDER BY ar.occurrence_date DESC, ar.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -179,7 +179,7 @@ class AdverseEventService {
     const [records] = await db.execute(
       `SELECT ar.*, a.department, a.department_new, a.brand, a.model, a.specification
        FROM adverse_reaction_records ar
-       LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id
+       LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id AND a.is_deleted = 0
        ${scoped.whereClause}`,
       scoped.params,
     );
@@ -422,7 +422,7 @@ class AdverseEventService {
       const [existing] = await connection.execute(
         `SELECT id, event_level, severity, event_consequence, is_serious, handle_deadline, status
          FROM adverse_reaction_records ar
-         LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id
+         LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id AND a.is_deleted = 0
          ${scopedRecord.whereClause}`,
         scopedRecord.params,
       );
@@ -665,7 +665,7 @@ class AdverseEventService {
       const [existing] = await connection.execute(
         `SELECT ar.id
          FROM adverse_reaction_records ar
-         LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id
+         LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id AND a.is_deleted = 0
          ${scopedRecord.whereClause}`,
         scopedRecord.params,
       );
@@ -721,7 +721,7 @@ class AdverseEventService {
       const [records] = await connection.execute(
         `SELECT ar.*
          FROM adverse_reaction_records ar
-         LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id
+         LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id AND a.is_deleted = 0
          ${scopedRecord.whereClause}`,
         scopedRecord.params,
       );
@@ -812,7 +812,7 @@ class AdverseEventService {
       const [records] = await connection.execute(
         `SELECT ar.*
          FROM adverse_reaction_records ar
-         LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id
+         LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id AND a.is_deleted = 0
          ${scopedRecord.whereClause}`,
         scopedRecord.params,
       );
@@ -863,7 +863,7 @@ class AdverseEventService {
     const [records] = await db.execute(
       `SELECT ar.id
        FROM adverse_reaction_records ar
-       LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id
+       LEFT JOIN assets a ON a.asset_code = ar.asset_code AND a.tenant_id = ar.tenant_id AND a.is_deleted = 0
        ${scopedRecord.whereClause}`,
       scopedRecord.params,
     );
@@ -1181,7 +1181,7 @@ class AdverseEventService {
   }
 
   _buildScopedAssetFilter(user, tenantId, assetCode, assetAlias = 'a') {
-    const whereClause = `WHERE ${assetAlias}.asset_code = ? AND ${assetAlias}.tenant_id = ?`;
+    const whereClause = `WHERE ${assetAlias}.asset_code = ? AND ${assetAlias}.tenant_id = ? AND ${assetAlias}.is_deleted = 0`;
     const params = [assetCode, tenantId];
     const scoped = this._applyManagedDepartmentScope(user, tenantId, whereClause, params);
     return { whereClause: scoped.whereClause, params: [...params, ...scoped.additionalParams] };

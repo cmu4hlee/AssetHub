@@ -41,7 +41,7 @@ class RiskControlService {
     const [rows] = await db.execute(
       `SELECT rcm.*, a.asset_name, a.asset_code
        FROM risk_control_measures rcm
-       LEFT JOIN assets a ON rcm.asset_code = a.asset_code AND a.tenant_id = rcm.tenant_id
+       LEFT JOIN assets a ON rcm.asset_code = a.asset_code AND a.tenant_id = rcm.tenant_id AND a.is_deleted = 0
        ${whereClause}
        ORDER BY rcm.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -69,7 +69,7 @@ class RiskControlService {
     const [rows] = await db.execute(
       `SELECT rcm.*, a.asset_name, a.asset_code
        FROM risk_control_measures rcm
-       LEFT JOIN assets a ON rcm.asset_code = a.asset_code AND a.tenant_id = rcm.tenant_id
+       LEFT JOIN assets a ON rcm.asset_code = a.asset_code AND a.tenant_id = rcm.tenant_id AND a.is_deleted = 0
        WHERE rcm.id = ? AND rcm.tenant_id = ?`,
       [id, tenantId],
     );
@@ -192,7 +192,7 @@ class RiskControlService {
     const [rows] = await db.execute(
       `SELECT arl.*, a.asset_name, a.asset_code, a.asset_status
        FROM asset_risk_levels arl
-       LEFT JOIN assets a ON arl.asset_code = a.asset_code AND a.tenant_id = arl.tenant_id
+       LEFT JOIN assets a ON arl.asset_code = a.asset_code AND a.tenant_id = arl.tenant_id AND a.is_deleted = 0
        WHERE arl.tenant_id = ? AND arl.risk_level IN ('high', 'critical')
        ORDER BY
          CASE arl.risk_level

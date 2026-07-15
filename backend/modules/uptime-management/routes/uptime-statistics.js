@@ -80,7 +80,7 @@ router.get('/operation-logs', authenticate, async (req, res) => {
         a.asset_type,
         a.department
       FROM asset_operation_logs aol
-      LEFT JOIN assets a ON aol.asset_id = a.id AND a.tenant_id = aol.tenant_id
+      LEFT JOIN assets a ON aol.asset_id = a.id AND a.tenant_id = aol.tenant_id AND a.is_deleted = 0
       WHERE aol.tenant_id = ?
     `;
     const params = [tenantId];
@@ -238,7 +238,7 @@ router.get('/statistics', authenticate, async (req, res) => {
           ELSE 'regular'
         END as equipment_category
       FROM asset_uptime_statistics aus
-      LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id
+      LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id AND a.is_deleted = 0
       WHERE aus.tenant_id = ?
     `;
     const params = [tenantId];
@@ -303,7 +303,7 @@ router.get('/overview', authenticate, async (req, res) => {
         SUM(CASE WHEN aus.uptime_rate >= 95 THEN 1 ELSE 0 END) as qualified_count,
         SUM(CASE WHEN aus.uptime_rate < 95 THEN 1 ELSE 0 END) as unqualified_count
       FROM asset_uptime_statistics aus
-      LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id
+      LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id AND a.is_deleted = 0
       WHERE aus.tenant_id = ? AND aus.stat_year = ? AND aus.stat_month = ?
       GROUP BY equipment_category`,
       [tenantId, targetYear, targetMonth],
@@ -316,7 +316,7 @@ router.get('/overview', authenticate, async (req, res) => {
         COUNT(*) as equipment_count,
         AVG(aus.uptime_rate) as avg_uptime_rate
       FROM asset_uptime_statistics aus
-      LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id
+      LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id AND a.is_deleted = 0
       WHERE aus.tenant_id = ? AND aus.stat_year = ? AND aus.stat_month = ?
       GROUP BY a.department
       ORDER BY avg_uptime_rate DESC
@@ -334,7 +334,7 @@ router.get('/overview', authenticate, async (req, res) => {
         aus.uptime_rate,
         aus.total_downtime_hours
       FROM asset_uptime_statistics aus
-      LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id
+      LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id AND a.is_deleted = 0
       WHERE aus.tenant_id = ? AND aus.stat_year = ? AND aus.stat_month = ?
       AND aus.uptime_rate < 95
       ORDER BY aus.uptime_rate ASC

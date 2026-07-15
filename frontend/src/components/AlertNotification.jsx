@@ -25,7 +25,6 @@ import socket from '../utils/socket';
 import auth from '../utils/auth';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { useNavigate } from 'react-router-dom';
 
 dayjs.extend(relativeTime);
 
@@ -658,6 +657,7 @@ const AlertNotification = () => {
         if (open) {
           // 打开时主动拉一次最新
           fetchAppNotifs();
+          fetchDndPref();
         }
       }}
       placement="bottomRight"

@@ -8,7 +8,7 @@ const { addTenantFilter, getTenantId } = require('../middleware/tenant-filter');
 const { fileSecurity } = require('../middleware/fileSecurity');
 
 const ASSET_IMAGE_ASSET_JOIN =
-  'INNER JOIN assets a ON ai.asset_code = a.asset_code AND ai.tenant_id = a.tenant_id';
+  'INNER JOIN assets a ON ai.asset_code = a.asset_code AND ai.tenant_id = a.tenant_id AND a.is_deleted = 0';
 
 // 设置文件存储
 const storage = multer.diskStorage({

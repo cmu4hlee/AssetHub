@@ -157,8 +157,8 @@ router.get('/', authenticate, async (req, res) => {
         a.asset_name,
         u.real_name as assessor_name
       FROM ${tableName} t
-      LEFT JOIN assets a ON t.asset_id = a.id AND t.tenant_id = a.tenant_id
-      LEFT JOIN users u ON t.assessor_id = u.id AND t.tenant_id = u.tenant_id
+      LEFT JOIN assets a ON t.asset_id = a.id AND t.tenant_id = a.tenant_id AND a.is_deleted = 0
+      LEFT JOIN users u ON t.assessor_id = u.id AND t.tenant_id = u.tenant_id AND a.is_deleted = 0
       WHERE t.tenant_id = ?
     `;
     const params = [tenantId];

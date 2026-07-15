@@ -93,7 +93,7 @@ router.get('/', authenticate, async (req, res) => {
       const [deptStats] = await db.execute(
         `SELECT a.department as department_name, ra.risk_level, COUNT(*) as count
          FROM ${tableName} ra
-         LEFT JOIN assets a ON ra.asset_id = a.id AND ra.tenant_id = a.tenant_id
+         LEFT JOIN assets a ON ra.asset_id = a.id AND ra.tenant_id = a.tenant_id AND a.is_deleted = 0
          WHERE ra.tenant_id = ? AND ra.status != 'archived'
          GROUP BY a.department, ra.risk_level
          ORDER BY count DESC
@@ -112,7 +112,7 @@ router.get('/', authenticate, async (req, res) => {
       const [typeStats] = await db.execute(
         `SELECT a.asset_type, ra.risk_level, COUNT(*) as count
          FROM ${tableName} ra
-         LEFT JOIN assets a ON ra.asset_id = a.id AND ra.tenant_id = a.tenant_id
+         LEFT JOIN assets a ON ra.asset_id = a.id AND ra.tenant_id = a.tenant_id AND a.is_deleted = 0
          WHERE ra.tenant_id = ? AND ra.status != 'archived'
          GROUP BY a.asset_type, ra.risk_level
          ORDER BY count DESC
@@ -130,7 +130,7 @@ router.get('/', authenticate, async (req, res) => {
               ra.assessment_date, ra.next_assessment_date, ra.status,
               a.asset_code, a.asset_name
        FROM ${tableName} ra
-       LEFT JOIN assets a ON ra.asset_id = a.id AND ra.tenant_id = a.tenant_id
+       LEFT JOIN assets a ON ra.asset_id = a.id AND ra.tenant_id = a.tenant_id AND a.is_deleted = 0
        WHERE ra.tenant_id = ?
        ORDER BY ra.assessment_date DESC
        LIMIT 10`,
@@ -143,7 +143,7 @@ router.get('/', authenticate, async (req, res) => {
               ra.assessment_date, ra.next_assessment_date,
               a.asset_code, a.asset_name, a.asset_type, a.department
        FROM ${tableName} ra
-       LEFT JOIN assets a ON ra.asset_id = a.id AND ra.tenant_id = a.tenant_id
+       LEFT JOIN assets a ON ra.asset_id = a.id AND ra.tenant_id = a.tenant_id AND a.is_deleted = 0
        WHERE ra.tenant_id = ? AND ra.risk_level IN ('critical', 'high')
          AND ra.status = 'active'
        ORDER BY
@@ -286,7 +286,7 @@ router.get('/due-reviews', authenticate, async (req, res) => {
               a.asset_code, a.asset_name, a.asset_type,
               DATEDIFF(ra.next_assessment_date, CURDATE()) as days_until_due
        FROM ${tableName} ra
-       LEFT JOIN assets a ON ra.asset_id = a.id AND ra.tenant_id = a.tenant_id
+       LEFT JOIN assets a ON ra.asset_id = a.id AND ra.tenant_id = a.tenant_id AND a.is_deleted = 0
        WHERE ra.tenant_id = ? AND ${dateCondition}
        ORDER BY
          CASE WHEN DATEDIFF(ra.next_assessment_date, CURDATE()) < 0 THEN 0 ELSE 1 END,

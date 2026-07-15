@@ -276,7 +276,7 @@ const { addTenantFilter, getTenantId } = require('../middleware/tenant-filter');
 const INVENTORY_DISCREPANCY_RECORD_JOIN =
   'LEFT JOIN inventory_records ir ON id.inventory_id = ir.id AND ir.tenant_id = id.tenant_id';
 const INVENTORY_DISCREPANCY_ASSET_JOIN =
-  'LEFT JOIN assets a ON id.asset_code COLLATE utf8mb4_unicode_ci = a.asset_code COLLATE utf8mb4_unicode_ci AND a.tenant_id = id.tenant_id';
+  'LEFT JOIN assets a ON id.asset_code COLLATE utf8mb4_unicode_ci = a.asset_code COLLATE utf8mb4_unicode_ci AND a.tenant_id = id.tenant_id AND a.is_deleted = 0';
 
 const logInventoryDiscrepancyError = (message, error, context = {}) => {
   logger.error(message, {

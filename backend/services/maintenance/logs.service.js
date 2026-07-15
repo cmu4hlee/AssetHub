@@ -164,7 +164,7 @@ async function getLogs(query, req) {
   const [rows] = await db.execute(
     `SELECT ml.*, a.department, a.location
      FROM maintenance_logs ml
-     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND a.tenant_id = ml.tenant_id
+     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND a.tenant_id = ml.tenant_id AND a.is_deleted = 0
      ${whereClause}
      ORDER BY ml.maintenance_date DESC, ml.created_at DESC
      LIMIT ? OFFSET ?`,
@@ -538,7 +538,7 @@ async function getLogById(id, req) {
   const [rows] = await db.execute(
     `SELECT ml.*, a.department, a.location, a.brand, a.model
      FROM maintenance_logs ml
-     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND a.tenant_id = ml.tenant_id
+     LEFT JOIN assets a ON ml.asset_code = a.asset_code AND a.tenant_id = ml.tenant_id AND a.is_deleted = 0
      WHERE ml.id = ? ${tenantFilter.whereClause}`,
     [id, ...tenantFilter.params],
   );

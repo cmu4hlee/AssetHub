@@ -12,9 +12,9 @@ const logger = require('../../config/logger');
 
 const isMissingTableError = error => error?.code === 'ER_NO_SUCH_TABLE';
 const COMPLIANCE_OPERATION_LOG_ASSET_JOIN =
-  'LEFT JOIN assets a ON aol.asset_id = a.id AND a.tenant_id = aol.tenant_id';
+  'LEFT JOIN assets a ON aol.asset_id = a.id AND a.tenant_id = aol.tenant_id AND a.is_deleted = 0';
 const COMPLIANCE_UPTIME_STATISTICS_ASSET_JOIN =
-  'LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id';
+  'LEFT JOIN assets a ON aus.asset_id = a.id AND a.tenant_id = aus.tenant_id AND a.is_deleted = 0';
 
 async function hasTenantAsset(assetId, tenantId, executor = db) {
   if (!assetId) {

@@ -41,7 +41,7 @@ class RiskAssessmentService {
     const [rows] = await db.execute(
       `SELECT rar.*, a.asset_name, a.asset_code
        FROM risk_assessment_records rar
-       LEFT JOIN assets a ON rar.asset_code = a.asset_code AND a.tenant_id = rar.tenant_id
+       LEFT JOIN assets a ON rar.asset_code = a.asset_code AND a.tenant_id = rar.tenant_id AND a.is_deleted = 0
        ${whereClause}
        ORDER BY rar.assessed_at DESC
        LIMIT ? OFFSET ?`,
@@ -69,7 +69,7 @@ class RiskAssessmentService {
     const [rows] = await db.execute(
       `SELECT rar.*, a.asset_name, a.asset_code
        FROM risk_assessment_records rar
-       LEFT JOIN assets a ON rar.asset_code = a.asset_code AND a.tenant_id = rar.tenant_id
+       LEFT JOIN assets a ON rar.asset_code = a.asset_code AND a.tenant_id = rar.tenant_id AND a.is_deleted = 0
        WHERE rar.id = ? AND rar.tenant_id = ?`,
       [id, tenantId],
     );

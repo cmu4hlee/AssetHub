@@ -11,11 +11,11 @@ const { addTenantFilter, getTenantId } = require('../../middleware/tenant-filter
 const logger = require('../../config/logger');
 
 const COMPLIANCE_SPECIAL_EQUIPMENT_ASSET_JOIN =
-  'LEFT JOIN assets a ON se.asset_id = a.id AND a.tenant_id = se.tenant_id';
+  'LEFT JOIN assets a ON se.asset_id = a.id AND a.tenant_id = se.tenant_id AND a.is_deleted = 0';
 const COMPLIANCE_SPECIAL_EQUIPMENT_INSPECTION_JOIN =
   'LEFT JOIN special_equipment se ON sei.equipment_id = se.id AND se.tenant_id = sei.tenant_id';
 const COMPLIANCE_SPECIAL_EQUIPMENT_INSPECTION_ASSET_JOIN =
-  'LEFT JOIN assets a ON se.asset_id = a.id AND a.tenant_id = se.tenant_id';
+  'LEFT JOIN assets a ON se.asset_id = a.id AND a.tenant_id = se.tenant_id AND a.is_deleted = 0';
 
 async function hasTenantAsset(assetId, tenantId, executor = db) {
   if (!assetId) {

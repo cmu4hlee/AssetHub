@@ -128,7 +128,7 @@ class InventoryService extends BaseService {
       `SELECT id.*, a.asset_code, a.asset_name, a.brand, a.model
        FROM inventory_details id
        INNER JOIN inventory_records ir ON id.inventory_id = ir.id
-       LEFT JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = id.tenant_id
+       LEFT JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = id.tenant_id AND a.is_deleted = 0
        WHERE id.inventory_id = ? AND id.tenant_id = ?`,
       [id, tenantId],
     );
@@ -486,7 +486,7 @@ class InventoryService extends BaseService {
       `SELECT id.*, a.asset_name, a.department as expected_department,
               a.department_new as actual_department, a.status as asset_status
        FROM inventory_details id
-       LEFT JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = ?
+       LEFT JOIN assets a ON id.asset_code = a.asset_code AND a.tenant_id = ? AND a.is_deleted = 0
        WHERE id.inventory_id = ? AND id.asset_code = ?`,
       [tenantId, id, asset_code],
     );
@@ -774,7 +774,7 @@ class InventoryService extends BaseService {
       throw new AppError('自助盘点已结束', 400, 'INVALID_STATUS');
     }
 
-    let whereClause = 'WHERE a.tenant_id = ?';
+    let whereClause = 'WHERE a.tenant_id = ? AND a.is_deleted = 0';
     const params = [tenantId];
 
     if (inventory.self_check_scope === 'all') {
@@ -908,7 +908,7 @@ class InventoryService extends BaseService {
     return {
       clause: ` AND EXISTS (
         SELECT 1 FROM inventory_details idetail
-        INNER JOIN assets a ON idetail.asset_code = a.asset_code AND a.tenant_id = ir.tenant_id
+        INNER JOIN assets a ON idetail.asset_code = a.asset_code AND a.tenant_id = ir.tenant_id AND a.is_deleted = 0
         WHERE idetail.inventory_id = ir.id AND (
           a.department IN (
             SELECT department_name FROM departments WHERE tenant_id = ir.tenant_id AND department_code IN (${placeholders})

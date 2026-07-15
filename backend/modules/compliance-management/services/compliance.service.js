@@ -304,7 +304,7 @@ class ComplianceService {
         a.asset_code,
         ${hasTemplateRef ? 'mlt.template_name' : 'NULL AS template_name'}
       FROM maintenance_level_plans mlp
-      LEFT JOIN assets a ON mlp.asset_id = a.id AND a.tenant_id = mlp.tenant_id
+      LEFT JOIN assets a ON mlp.asset_id = a.id AND a.tenant_id = mlp.tenant_id AND a.is_deleted = 0
       ${hasTemplateRef ? 'LEFT JOIN maintenance_level_templates mlt ON mlp.template_id = mlt.id AND mlt.tenant_id = mlp.tenant_id' : ''}
       WHERE 1 = 1
     `;
@@ -373,13 +373,13 @@ class ComplianceService {
               `SELECT a.*, arl.risk_level
                FROM assets a
                LEFT JOIN asset_risk_levels arl ON a.id = arl.asset_id AND arl.tenant_id = ?
-               WHERE a.id = ? AND a.tenant_id = ?`,
+               WHERE a.id = ? AND a.tenant_id = ? AND a.is_deleted = 0`,
               [tenantId, assetId, tenantId],
             )
           : await connection.execute(
               `SELECT a.*, NULL AS risk_level
                FROM assets a
-               WHERE a.id = ? AND a.tenant_id = ?`,
+               WHERE a.id = ? AND a.tenant_id = ? AND a.is_deleted = 0`,
               [assetId, tenantId],
             );
 

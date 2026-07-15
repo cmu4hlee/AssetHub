@@ -306,7 +306,7 @@ class DeviceController {
       const [rows] = await db.execute(
         `SELECT a.id as asset_id, a.asset_code, a.asset_name, al.last_update_time
          FROM asset_locations al
-         LEFT JOIN assets a ON al.asset_code = a.asset_code AND a.tenant_id = al.tenant_id
+         LEFT JOIN assets a ON al.asset_code = a.asset_code AND a.tenant_id = al.tenant_id AND a.is_deleted = 0
          WHERE al.device_id = ? AND al.is_active = 1 AND al.tenant_id = ?`,
         [deviceId, tenantId],
       );

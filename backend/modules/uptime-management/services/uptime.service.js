@@ -102,11 +102,11 @@ const parseHours = value => {
 // ========== SQL JOIN 语句 ==========
 
 const UPTIME_STATISTICS_ASSET_JOIN =
-  'LEFT JOIN assets a ON a.id = us.asset_id AND a.tenant_id = us.tenant_id';
+  'LEFT JOIN assets a ON a.id = us.asset_id AND a.tenant_id = us.tenant_id AND a.is_deleted = 0';
 const ASSET_OPERATION_LOG_ASSET_JOIN =
-  'LEFT JOIN assets a ON a.id = aol.asset_id AND a.tenant_id = aol.tenant_id';
+  'LEFT JOIN assets a ON a.id = aol.asset_id AND a.tenant_id = aol.tenant_id AND a.is_deleted = 0';
 const OPERATION_LOG_ASSET_JOIN =
-  'LEFT JOIN assets a ON a.id = ol.asset_id AND a.tenant_id = ol.tenant_id';
+  'LEFT JOIN assets a ON a.id = ol.asset_id AND a.tenant_id = ol.tenant_id AND a.is_deleted = 0';
 
 // ========== 计算相关 ==========
 

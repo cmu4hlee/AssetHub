@@ -5,7 +5,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../config/database');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, authorize } = require('../../middleware/auth');
+
+// 资产分享权限集合
+const ASSET_SHARE_WRITE_ROLES = ['asset.edit_all', 'asset.edit_own_department', 'asset.add'];
 const { getTenantId } = require('../../middleware/tenant-filter');
 const crypto = require('crypto');
 const logger = require('../../config/logger');
@@ -40,7 +43,7 @@ async function resolveAssetId(idOrCode, tenantId) {
  * 创建分享链接
  * POST /api/assets/:id/share
  */
-router.post('/:id/share', authenticate, async (req, res) => {
+router.post('/:id/share', authenticate, authorize(ASSET_SHARE_WRITE_ROLES), async (req, res) => {
   try {
     const { id } = req.params;
     const tenantId = getTenantId(req);
@@ -147,7 +150,7 @@ router.get('/:id/shares', authenticate, async (req, res) => {
  * 删除分享链接
  * DELETE /api/assets/shares/:share_id
  */
-router.delete('/shares/:share_id', authenticate, async (req, res) => {
+router.delete('/shares/:share_id', authenticate, authorize(ASSET_SHARE_WRITE_ROLES), async (req, res) => {
   try {
     const { share_id } = req.params;
     const tenantId = getTenantId(req);

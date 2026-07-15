@@ -285,7 +285,7 @@ class InventoryService extends BaseService {
     return {
       clause: ` AND EXISTS (
         SELECT 1 FROM inventory_details idetail
-        INNER JOIN assets a ON idetail.asset_code = a.asset_code AND a.tenant_id = ir.tenant_id
+        INNER JOIN assets a ON idetail.asset_code = a.asset_code AND a.tenant_id = ir.tenant_id AND a.is_deleted = 0
         WHERE idetail.inventory_id = ir.id AND (
           a.department IN (
             SELECT department_name FROM departments WHERE tenant_id = ir.tenant_id AND department_code IN (${placeholders})

@@ -112,6 +112,9 @@ const MaintenanceRequestList = () => {
   const [engineersLoading, setEngineersLoading] = useState(false);
   // 路由加载失败 (404 等) - 显示明确"未找到"页面而非 toast 提示
   const [notFoundRecord, setNotFoundRecord] = useState(null);
+  // 申请审计历史
+  const [requestHistory, setRequestHistory] = useState([]);
+  const [requestHistoryLoading, setRequestHistoryLoading] = useState(false);
 
   // 获取维修申请列表
   const fetchMaintenanceRequests = async (params = {}, filters = searchParams) => {
@@ -152,6 +155,20 @@ const MaintenanceRequestList = () => {
       setAttachments([]);
     } finally {
       setAttachmentsLoading(false);
+    }
+  };
+
+  // 加载申请审计历史
+  const loadRequestHistory = async requestId => {
+    setRequestHistoryLoading(true);
+    try {
+      const response = await maintenanceAPI.getMaintenanceRequestHistory(requestId);
+      setRequestHistory(response?.data || response || []);
+    } catch (error) {
+      console.error('获取维修申请历史失败:', error);
+      setRequestHistory([]);
+    } finally {
+      setRequestHistoryLoading(false);
     }
   };
 
@@ -400,6 +417,7 @@ const MaintenanceRequestList = () => {
       // 详情 / 编辑 / 完成都要加载附件列表
       if (recordId) {
         loadRequestAttachments(recordId);
+        loadRequestHistory(recordId);
       }
 
       if (pathname === `/maintenance/requests/edit/${recordId}`) {
@@ -533,11 +551,41 @@ const MaintenanceRequestList = () => {
   };
 
   // 打开操作模态框
+  // 加载申请最近一条维修日志用于"修订"预填表单
+  const loadLatestLogForPrefill = async record => {
+    try {
+      const resp = await maintenanceAPI.getMaintenanceRequestLatestLog(record.id);
+      const log = resp?.data || resp;
+      if (!log) return;
+      // 预填：日期、content、cost、parts、remark
+      const prefill = {};
+      if (log.maintenance_date) {
+        // 兼容字符串 'YYYY-MM-DD' 格式
+        const dateStr = typeof log.maintenance_date === 'string'
+          ? log.maintenance_date.slice(0, 10)
+          : dayjs(log.maintenance_date).format('YYYY-MM-DD');
+        prefill.repair_end_date = dayjs(dateStr);
+      }
+      if (log.maintenance_content) prefill.repair_content = log.maintenance_content;
+      if (log.maintenance_cost !== null && log.maintenance_cost !== undefined) {
+        prefill.repair_cost = Number(log.maintenance_cost);
+      }
+      if (log.parts_replaced) prefill.parts_replaced = log.parts_replaced;
+      if (log.remark) prefill.remark = log.remark;
+      actionForm.setFieldsValue(prefill);
+    } catch (e) {
+      // 静默失败：拉不到上次日志不影响用户操作
+      console.warn('[Request] 预填最近维修日志失败:', e);
+    }
+  };
+
   const openActionModal = (record, type) => {
     setCurrentRecord(record);
     setActionType(type);
     actionForm.resetFields();
     if (type === 'complete') {
+      // 修订场景：先预填上次的 content/cost/parts，再 navigate
+      loadLatestLogForPrefill(record);
       navigate(`/maintenance/requests/complete/${record.id}`);
       return;
     }
@@ -1463,6 +1511,68 @@ const MaintenanceRequestList = () => {
                 </p>
               </Card>
             )}
+            <Card title="操作历史" style={{ marginTop: 16 }}>
+              {requestHistoryLoading ? (
+                <div style={{ textAlign: 'center', padding: 16 }}>
+                  <Spin />
+                </div>
+              ) : requestHistory.length === 0 ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="暂无操作历史"
+                  style={{ padding: '12px 0' }}
+                />
+              ) : (
+                <Timeline
+                  items={requestHistory.map(h => {
+                    let snapshot = null;
+                    if (h.revision_snapshot) {
+                      try {
+                        snapshot = typeof h.revision_snapshot === 'string'
+                          ? JSON.parse(h.revision_snapshot)
+                          : h.revision_snapshot;
+                      } catch (_) { /* ignore */ }
+                    }
+                    const isRevise = h.action_type === 'revise';
+                    return {
+                      color: isRevise ? 'orange' : 'blue',
+                      children: (
+                        <div>
+                          <div style={{ fontWeight: 500 }}>{h.action_description}</div>
+                          <div style={{ color: '#999', fontSize: 12, marginTop: 2 }}>
+                            {h.action_by} · {dayjs(h.action_at).format('YYYY-MM-DD HH:mm:ss')}
+                          </div>
+                          {isRevise && snapshot && (
+                            <div
+                              style={{
+                                marginTop: 6,
+                                padding: 8,
+                                background: '#fafafa',
+                                borderRadius: 4,
+                                fontSize: 12,
+                                color: '#666',
+                              }}
+                            >
+                              <div style={{ fontWeight: 500, marginBottom: 4 }}>修订前内容：</div>
+                              {snapshot.maintenance_content && (
+                                <div>内容：{snapshot.maintenance_content}</div>
+                              )}
+                              {snapshot.maintenance_cost !== null && snapshot.maintenance_cost !== undefined && (
+                                <div>费用：¥{Number(snapshot.maintenance_cost).toFixed(2)}</div>
+                              )}
+                              {snapshot.parts_replaced && (
+                                <div>更换部件：{snapshot.parts_replaced}</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ),
+                    };
+                  })}
+                />
+              )}
+            </Card>
+
             <Card title="故障图片" style={{ marginTop: 16 }}>
               {attachmentsLoading ? (
                 <div style={{ textAlign: 'center', padding: 24 }}>

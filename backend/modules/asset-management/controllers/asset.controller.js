@@ -266,17 +266,30 @@ class AssetController {
       const { id } = req.params;
       const tenantId = req.user?.tenant_id || req.headers['x-tenant-id'];
       const userId = req.user?.id;
+      const force = req.query?.force === 'true' || req.body?.force === true;
 
-      await assetService.deleteAsset(id, tenantId, userId);
+      await assetService.deleteAsset(id, tenantId, userId, { force });
 
       res.json({ success: true, message: '资产删除成功' });
     } catch (error) {
       logger.error('删除资产失败', {
         error: error.message,
+        code: error.code,
+        blockers: error.blockers,
         stack: error.stack,
         assetId: req.params?.id,
         tenantId: req.user?.tenant_id || req.headers['x-tenant-id'],
       });
+
+      // 反向引用校验失败：返回 409 + 详细阻塞列表
+      if (error.code === 'ASSET_HAS_ACTIVE_REFERENCES') {
+        return res.status(409).json({
+          success: false,
+          message: error.message,
+          errorType: 'ASSET_HAS_ACTIVE_REFERENCES',
+          blockers: error.blockers || [],
+        });
+      }
 
       sendErrorResponse(res, error, '删除资产失败');
     }

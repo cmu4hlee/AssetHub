@@ -35,6 +35,7 @@ export {
 } from '../api/domains/maintenance';
 
 export { technicalDocumentsAPI, technicalDocumentsAI, auditLogsAPI, backupAPI } from '../api/domains/documents';
+export { knowledgeBaseAPI } from '../api/domains/knowledgeBase';
 
 export {
   systemConfigAPI,

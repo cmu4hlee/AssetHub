@@ -78,10 +78,14 @@ class AssetService {
     const { total } = countRows[0];
 
     // Get data
+    // 关联 asset_categories + departments（特种设备等模块的下拉搜索依赖部门名称展示）
     const [rows] = await db.execute(
-      `SELECT a.*, c.name AS category_name, c.code AS category_code
+      `SELECT a.*,
+              c.name AS category_name, c.code AS category_code,
+              d.department_name AS department_name
        FROM assets a
        LEFT JOIN asset_categories c ON a.category_id = c.id AND c.tenant_id = a.tenant_id
+       LEFT JOIN departments d ON a.department_new = d.department_code AND d.tenant_id = a.tenant_id
        ${whereClause}
        ORDER BY a.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -554,40 +558,153 @@ class AssetService {
    * @param {string|number} idOrCode - 资产ID 或 asset_code
    * @param {string} tenantId - 租户ID
    * @param {number} userId - 操作用户ID
+   * @param {Object} [options] - 可选项
+   * @param {boolean} [options.force=false] - 强制删除（跳过反向引用校验）
    * @returns {Promise<{ deleted: boolean, asset_code: string }>}
    */
-  async deleteAsset(idOrCode, tenantId, userId) {
+  async deleteAsset(idOrCode, tenantId, userId, options = {}) {
     const identifier = this.resolveAssetIdentifier(idOrCode);
     if (!identifier) {
       throw new Error('资产标识不能为空');
     }
 
+    // 1) 先查出资产 code（如果入参是 id），并校验存在
+    let resolvedAssetCode = null;
+    let resolvedAssetId = null;
+    {
+      const whereCol = identifier.column;
+      const whereVal = identifier.value;
+      const [rows] = await db.execute(
+        `SELECT id, asset_code FROM assets WHERE ${whereCol} = ? AND tenant_id = ? AND is_deleted = 0`,
+        [whereVal, tenantId],
+      );
+      if (rows.length === 0) {
+        throw new Error('资产不存在');
+      }
+      resolvedAssetId = rows[0].id;
+      resolvedAssetCode = rows[0].asset_code;
+    }
+
+    // 2) 反向引用校验：存在未结/未到期的关联数据则阻止删除
+    if (!options.force) {
+      const blockers = await this._checkAssetReferences(resolvedAssetId, resolvedAssetCode, tenantId);
+      if (blockers.length > 0) {
+        const err = new Error(`资产存在未结关联，禁止删除：${blockers.join('；')}`);
+        err.code = 'ASSET_HAS_ACTIVE_REFERENCES';
+        err.blockers = blockers;
+        err.statusCode = 409;
+        throw err;
+      }
+    }
+
+    // 3) 软删除
     const [result] = await db.execute(
       `UPDATE assets
        SET is_deleted = 1, deleted_at = NOW(), deleted_by = ?
-       WHERE ${identifier.column} = ? AND tenant_id = ? AND is_deleted = 0`,
-      [userId || null, identifier.value, tenantId],
+       WHERE id = ? AND tenant_id = ? AND is_deleted = 0`,
+      [userId || null, resolvedAssetId, tenantId],
     );
 
     if (result.affectedRows === 0) {
-      throw new Error('资产不存在');
+      // 极端情况：被并发删除了
+      throw new Error('资产已被其他操作删除');
     }
 
     // Clear cache
     await cacheService.deleteByTag('asset:list');
 
-    let resolvedAssetCode = null;
-    if (identifier.column === 'asset_code') {
-      resolvedAssetCode = identifier.value;
-    } else {
-      const [rows] = await db.execute(
-        'SELECT asset_code FROM assets WHERE id = ? AND tenant_id = ?',
-        [identifier.value, tenantId],
-      );
-      resolvedAssetCode = rows[0]?.asset_code || null;
-    }
-
     return { deleted: true, asset_code: resolvedAssetCode };
+  }
+
+  /**
+   * 检查资产是否存在未结/未到期的关联数据
+   * @param {number} assetId
+   * @param {string} assetCode
+   * @param {string|number} tenantId
+   * @returns {Promise<string[]>} 阻塞原因列表（空数组表示可删除）
+   */
+  async _checkAssetReferences(assetId, assetCode, tenantId) {
+    // COLLATE workaround：不同表字符集/排序规则不一致，统一用 utf8mb4_0900_ai_ci 比较
+    const idCondition = (col) =>
+      `(CAST(${col} AS CHAR) COLLATE utf8mb4_0900_ai_ci = ? COLLATE utf8mb4_0900_ai_ci OR ${col} = ?)`;
+    const idParams = [String(assetId), assetCode];
+
+    const checks = [
+      // 维修申请：待审批 / 已批准 / 维修中
+      {
+        sql: `SELECT COUNT(*) AS cnt FROM maintenance_requests
+              WHERE tenant_id = ? AND ${idCondition('asset_code')}
+                AND status IN ('待审批','已批准','维修中')`,
+        params: [tenantId, ...idParams],
+        reason: '存在未结维修申请',
+      },
+      // 工单：pending / assigned / in_progress / pending_acceptance
+      {
+        sql: `SELECT COUNT(*) AS cnt FROM work_orders
+              WHERE tenant_id = ? AND ${idCondition('asset_code')}
+                AND status IN ('pending','assigned','in_progress','pending_acceptance')`,
+        params: [tenantId, ...idParams],
+        reason: '存在未完工单',
+      },
+      // 保修：当前在生效期（end_date >= 今天）
+      {
+        sql: `SELECT COUNT(*) AS cnt FROM warranty_info
+              WHERE tenant_id = ? AND ${idCondition('asset_code')}
+                AND end_date >= CURDATE() AND warranty_status IN ('在保','即将到期')`,
+        params: [tenantId, ...idParams],
+        reason: '存在生效中的保修',
+      },
+      // 盘点：进行中
+      {
+        sql: `SELECT COUNT(*) AS cnt FROM inventory_details idetail
+              JOIN inventory_records ir ON idetail.inventory_id = ir.id AND ir.tenant_id = idetail.tenant_id
+              WHERE idetail.tenant_id = ? AND ${idCondition('idetail.asset_code')}
+                AND ir.status = '进行中'`,
+        params: [tenantId, ...idParams],
+        reason: '存在进行中的盘点',
+      },
+      // 巡检任务：待处理 / 进行中
+      {
+        sql: `SELECT COUNT(*) AS cnt FROM inspection_tasks
+              WHERE tenant_id = ? AND ${idCondition('asset_id')}
+                AND status IN ('pending','in_progress')`,
+        params: [tenantId, ...idParams],
+        reason: '存在未完巡检任务',
+      },
+      // 闲置资产发布：发布中
+      {
+        sql: `SELECT COUNT(*) AS cnt FROM idle_assets
+              WHERE tenant_id = ? AND ${idCondition('asset_id')}
+                AND status = '发布中'`,
+        params: [tenantId, ...idParams],
+        reason: '存在发布中的闲置资产',
+      },
+      // 位置告警：未处理（is_handled = 0）
+      {
+        sql: `SELECT COUNT(*) AS cnt FROM location_alerts
+              WHERE tenant_id = ? AND ${idCondition('asset_id')}
+                AND is_handled = 0`,
+        params: [tenantId, ...idParams],
+        reason: '存在未处理的位置告警',
+      },
+      // 风险评估：未完结（高/极高风险且未处置）
+      {
+        sql: `SELECT COUNT(*) AS cnt FROM risk_assessments
+              WHERE tenant_id = ? AND ${idCondition('asset_id')}
+                AND risk_level IN ('high','critical') AND status != 'closed'`,
+        params: [tenantId, ...idParams],
+        reason: '存在未关闭的高风险评估',
+      },
+    ];
+
+    const results = await Promise.all(
+      checks.map(async (c) => {
+        const [rows] = await db.execute(c.sql, c.params);
+        return { reason: c.reason, cnt: rows[0]?.cnt || 0 };
+      }),
+    );
+
+    return results.filter((r) => r.cnt > 0).map((r) => `${r.reason}（${r.cnt}）`);
   }
 
   /**
