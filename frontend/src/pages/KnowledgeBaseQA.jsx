@@ -24,274 +24,275 @@ const { TextArea } = Input;
 
 const STORAGE_KEY = 'knowledge-base-qa-sessions';
 
-const newSessionId = () => `kbqa-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
 const KnowledgeBaseQA = () => {
+  const [selectedKb, setSelectedKb] = useState(null);
   const [kbs, setKbs] = useState([]);
-  const [kbId, setKbId] = useState(null); // null = 全租户
-  const [sessions, setSessions] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) { /* ignore */ }
-    return [{ id: newSessionId(), title: '新会话', messages: [], createdAt: Date.now() }];
-  });
-  const [activeSessionId, setActiveSessionId] = useState(sessions[0]?.id);
+  const [loadingKbs, setLoadingKbs] = useState(false);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
   const [streamEnabled, setStreamEnabled] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [historyRecords, setHistoryRecords] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [currentAskKb, setCurrentAskKb] = useState(null);
+  const chatContainerRef = useRef(null);
 
-  const scrollRef = useRef(null);
+  // 会话管理
+  const [sessions, setSessions] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.map(s => ({
+          ...s,
+          messages: s.messages || [],
+          streaming: false,
+        }));
+      }
+    } catch (_e) { /* ignore */ }
+    return [{ id: Date.now().toString(), title: '新会话', messages: [], createdAt: Date.now(), streaming: false }];
+  });
+  const [activeSessionId, setActiveSessionId] = useState(() => {
+    const s = sessions[0];
+    return s ? s.id : null;
+  });
+
+  const activeSession = sessions.find(s => s.id === activeSessionId);
 
   // 持久化会话
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-    } catch (e) { /* ignore quota */ }
+    if (sessions.length > 0) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions.map(s => ({
+        ...s, streaming: false,
+      })))); } catch (_e) { /* ignore */ }
+    }
   }, [sessions]);
 
   // 加载知识库
-  useEffect(() => {
-    (async () => {
-      try {
-        const result = await knowledgeBaseAPI.listKnowledgeBases({ page: 1, pageSize: 100 });
-        if (result.success) {
-          setKbs(result.data || []);
+  const loadKbs = useCallback(async () => {
+    setLoadingKbs(true);
+    try {
+      const res = await knowledgeBaseAPI.getKnowledgeBases({ pageSize: 200 });
+      if (res?.success) {
+        setKbs(res.data || []);
+        if (!selectedKb && res.data?.length > 0) {
+          setSelectedKb(res.data[0].id);
         }
-      } catch (e) {
-        console.error('加载知识库失败:', e);
       }
-    })();
+    } catch (_e) {
+      // 忽略
+    } finally {
+      setLoadingKbs(false);
+    }
+  }, [selectedKb]);
+
+  useEffect(() => { void loadKbs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleNewSession = useCallback(() => {
+    const newS = { id: Date.now().toString(), title: '新会话', messages: [], createdAt: Date.now(), streaming: false };
+    setSessions(prev => [newS, ...prev]);
+    setActiveSessionId(newS.id);
   }, []);
 
-  const activeSession = useMemo(
-    () => sessions.find(s => s.id === activeSessionId) || sessions[0],
-    [sessions, activeSessionId]
-  );
-
-  // 自动滚动到底部
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [activeSession?.messages, loading]);
-
-  // ============= 会话管理 =============
-
-  const handleNewSession = () => {
-    const s = { id: newSessionId(), title: '新会话', messages: [], createdAt: Date.now() };
-    setSessions(prev => [s, ...prev]);
-    setActiveSessionId(s.id);
-  };
-
-  const handleDeleteSession = id => {
+  const handleDeleteSession = useCallback((id) => {
     setSessions(prev => {
-      const next = prev.filter(s => s.id !== id);
-      if (next.length === 0) {
-        const blank = { id: newSessionId(), title: '新会话', messages: [], createdAt: Date.now() };
-        setActiveSessionId(blank.id);
-        return [blank];
+      const filtered = prev.filter(s => s.id !== id);
+      if (filtered.length === 0) {
+        const newS = { id: Date.now().toString(), title: '新会话', messages: [], createdAt: Date.now(), streaming: false };
+        setActiveSessionId(newS.id);
+        return [newS];
       }
-      if (id === activeSessionId) setActiveSessionId(next[0].id);
-      return next;
+      if (id === activeSessionId) {
+        setActiveSessionId(filtered[0].id);
+      }
+      return filtered;
     });
-  };
+  }, [activeSessionId]);
 
-  const updateSession = (id, patch) => {
-    setSessions(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
-  };
-
-  const appendMessage = (id, message) => {
-    setSessions(prev => prev.map(s => s.id === id ? { ...s, messages: [...s.messages, message] } : s));
-  };
-
-  const updateLastMessage = (id, patch) => {
+  // 添加消息到当前会话
+  const addMessage = useCallback((msg) => {
     setSessions(prev => prev.map(s => {
-      if (s.id !== id) return s;
-      const messages = [...s.messages];
-      if (messages.length === 0) return s;
-      messages[messages.length - 1] = { ...messages[messages.length - 1], ...patch };
-      return { ...s, messages };
+      if (s.id !== activeSessionId) return s;
+      return { ...s, messages: [...s.messages, msg], title: s.title === '新会话' && msg.role === 'user' ? msg.content.slice(0, 30) : s.title };
     }));
-  };
+  }, [activeSessionId]);
 
-  // ============= 发送问答 =============
+  // 更新会话的最后一条消息（用于流式追加）
+  const updateLastMessage = useCallback((updater) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id !== activeSessionId) return s;
+      const msgs = [...s.messages];
+      if (msgs.length > 0) {
+        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], ...updater(msgs[msgs.length - 1]) };
+      }
+      return { ...s, messages: msgs };
+    }));
+  }, [activeSessionId]);
 
   const handleSend = useCallback(async () => {
-    const text = input.trim();
-    if (!text || loading) return;
+    const content = input.trim();
+    if (!content || sending || !selectedKb || !activeSessionId) return;
 
-    let sessionId = activeSessionId;
-    if (!sessionId) {
-      const blank = { id: newSessionId(), title: text.slice(0, 30), messages: [], createdAt: Date.now() };
-      setSessions(prev => [blank, ...prev]);
-      setActiveSessionId(blank.id);
-      sessionId = blank.id;
-    }
-
-    // 第一次提问时把会话标题更新
-    if (activeSession && activeSession.messages.length === 0) {
-      updateSession(sessionId, { title: text.slice(0, 30) });
-    }
-
-    const userMsg = { role: 'user', content: text, ts: Date.now() };
-    appendMessage(sessionId, userMsg);
-    appendMessage(sessionId, { role: 'assistant', content: '', ts: Date.now(), loading: true });
     setInput('');
-    setLoading(true);
+    setSending(true);
 
-    if (streamEnabled) {
-      // 流式路径
-      try {
-        const { body } = await knowledgeBaseAPI.askStream({
-          question: text, kb_id: kbId, session_id: sessionId,
+    addMessage({ role: 'user', content, timestamp: Date.now() });
+    const aiMsgId = `ai-${Date.now()}`;
+    addMessage({ id: aiMsgId, role: 'assistant', content: '', timestamp: Date.now(), references: [] });
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionId) return { ...s, streaming: true };
+      return s;
+    }));
+
+    try {
+      if (streamEnabled) {
+        // 流式模式
+        const params = new URLSearchParams({ kb_id: selectedKb, question: content });
+        const response = await fetch(`/api/knowledge-base/ask-stream?${params}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
-        const reader = body.getReader();
-        const decoder = new TextDecoder('utf-8');
+        if (!response.ok) {
+          const errText = await response.text().catch(() => '请求失败');
+          throw new Error(errText);
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
         let buffer = '';
-        let fullText = '';
-        let meta = { provider: null, model: null, latency_ms: 0, citations: [] };
+        let fullContent = '';
+        let refs = [];
 
-        // 读 SSE 流
-        // eslint-disable-next-line no-constant-condition
         while (true) {
-          const { value, done } = await reader.read();
+          const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          let idx;
-          while ((idx = buffer.indexOf('\n\n')) >= 0) {
-            const block = buffer.slice(0, idx);
-            buffer = buffer.slice(idx + 2);
-            // 解析 event: / data: 行
-            let eventName = 'message';
-            let dataLines = [];
-            for (const line of block.split('\n')) {
-              if (line.startsWith('event:')) eventName = line.slice(6).trim();
-              else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
-            }
-            const dataStr = dataLines.join('\n');
-            if (!dataStr) continue;
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() || '';
+          for (const part of parts) {
+            if (!part.startsWith('data: ')) continue;
+            const data = part.slice(6).trim();
+            if (!data) continue;
             try {
-              const payload = JSON.parse(dataStr);
-              if (eventName === 'delta' && payload.text) {
-                fullText += payload.text;
-                // 增量更新最后一条 assistant 消息
-                setSessions(prev => prev.map(s => {
-                  if (s.id !== sessionId) return s;
-                  const msgs = [...s.messages];
-                  const last = msgs[msgs.length - 1];
-                  if (last && last.role === 'assistant') {
-                    msgs[msgs.length - 1] = { ...last, content: fullText, loading: true };
-                  }
-                  return { ...s, messages: msgs };
-                }));
-              } else if (eventName === 'done') {
-                meta = {
-                  provider: payload.provider,
-                  model: payload.model,
-                  latency_ms: payload.latency_ms,
-                  citations: payload.citations || [],
-                };
-              } else if (eventName === 'error') {
-                setSessions(prev => prev.map(s => {
-                  if (s.id !== sessionId) return s;
-                  const msgs = [...s.messages];
-                  const last = msgs[msgs.length - 1];
-                  if (last && last.role === 'assistant') {
-                    msgs[msgs.length - 1] = { ...last, error: payload.message || '流式错误', loading: false };
-                  }
-                  return { ...s, messages: msgs };
-                }));
-                message.error(payload.message || '流式错误');
-                return; // 不再 await finally
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'chunk' && parsed.content !== undefined) {
+                fullContent += parsed.content;
+                updateLastMessage(() => ({ content: fullContent }));
+              } else if (parsed.type === 'reference' && parsed.data) {
+                refs = parsed.data;
+              } else if (parsed.type === 'done') {
+                updateLastMessage(() => ({ content: fullContent, references: refs }));
+              } else if (parsed.type === 'error') {
+                updateLastMessage(() => ({ content: `错误: ${parsed.message || '未知错误'}` }));
               }
-            } catch (parseErr) {
-              // 忽略解析失败
+            } catch (_e) {
+              // 忽略解析错误
             }
           }
         }
-        // 流结束后 finalize
-        setSessions(prev => prev.map(s => {
-          if (s.id !== sessionId) return s;
-          const msgs = [...s.messages];
-          const last = msgs[msgs.length - 1];
-          if (last && last.role === 'assistant') {
-            msgs[msgs.length - 1] = { ...last, content: fullText || '(无回答)', ...meta, loading: false };
-          }
-          return { ...s, messages: msgs };
-        }));
-      } catch (e) {
-        const msg = e.message || '流式问答失败';
-        updateLastMessage(sessionId, { content: '', error: msg, loading: false });
-        message.error(msg);
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    // 非流式路径
-    try {
-      const result = await knowledgeBaseAPI.ask({
-        question: text,
-        kb_id: kbId,
-        session_id: sessionId,
-      });
-      if (result.success) {
-        const data = result.data || {};
-        updateLastMessage(sessionId, {
-          content: data.answer || '(无回答)',
-          citations: data.citations || [],
-          provider: data.provider,
-          model: data.model,
-          latency_ms: data.latency_ms,
-          loading: false,
-        });
+        updateLastMessage(prev => ({ references: refs }));
       } else {
-        updateLastMessage(sessionId, {
-          content: '',
-          error: result.message || '问答失败',
-          loading: false,
-        });
-        message.error(result.message || '问答失败');
+        // 非流式
+        const res = await knowledgeBaseAPI.askKnowledgeBase(selectedKb, content);
+        if (res?.success && res.data) {
+          updateLastMessage(() => ({
+            content: res.data.answer || res.data.content || '未获取到回答',
+            references: res.data.references || [],
+          }));
+        } else {
+          updateLastMessage(() => ({ content: '抱歉，无法获取回答' }));
+        }
       }
-    } catch (e) {
-      const msg = e.response?.data?.message || e.message || '问答失败';
-      updateLastMessage(sessionId, { content: '', error: msg, loading: false });
-      message.error(msg);
+    } catch (error) {
+      updateLastMessage(() => ({ content: `请求失败: ${error.message}` }));
     } finally {
-      setLoading(false);
+      setSending(false);
+      setSessions(prev => prev.map(s => {
+        if (s.id === activeSessionId) return { ...s, streaming: false };
+        return s;
+      }));
     }
-  }, [input, loading, activeSessionId, activeSession, kbId, streamEnabled]);
+  }, [input, sending, selectedKb, activeSessionId, streamEnabled, addMessage, updateLastMessage]);
 
-  const handleKeyDown = e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+  // 引用点击
+  const handleSelectCitation = useCallback((citation) => {
+    if (citation && citation.index) {
+      setInput(prev => `${prev}[参考资料 ${citation.index}] ${citation.doc_title || ''}`.trim());
     }
-  };
+  }, []);
 
-  // ============= 历史记录 =============
-
-  const loadHistory = async () => {
-    setHistoryLoading(true);
+  const loadHistory = useCallback(async () => {
+    if (!selectedKb) return;
     try {
-      const result = await knowledgeBaseAPI.listQaRecords({ page: 1, pageSize: 50 });
-      if (result.success) setHistoryRecords(result.data || []);
-    } catch (e) {
-      message.error('加载历史记录失败');
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
+      const res = await knowledgeBaseAPI.getQARecords(selectedKb, { pageSize: 50 });
+      if (res?.success && Array.isArray(res.data)) {
+        setSessions(prev => {
+          const existing = prev.map(s => ({ ...s, messages: s.messages || [] }));
+          const newSessions = res.data.map((record, idx) => ({
+            id: `hist-${record.id || idx}`,
+            title: record.question ? record.question.slice(0, 30) : '历史记录',
+            messages: [
+              { role: 'user', content: record.question || '', timestamp: record.created_at },
+              { role: 'assistant', content: record.answer || '', timestamp: record.created_at, references: record.references || [] },
+            ],
+            createdAt: record.created_at,
+            streaming: false,
+          }));
+          return [...newSessions, ...existing];
+        });
+      }
+    } catch (_e) { /* ignore */ }
+  }, [selectedKb]);
 
-  // ============= 渲染 =============
+  // ==================== 消息气泡渲染 ====================
+  const MessageBubble = useMemo(() => {
+    // eslint-disable-next-line react/display-name
+    return React.memo(({ message, onSelectCitation }) => {
+      const isUser = message.role === 'user';
+      return (
+        <div style={{
+          display: 'flex',
+          marginBottom: 16,
+          justifyContent: isUser ? 'flex-end' : 'flex-start',
+        }}>
+          <div style={{
+            maxWidth: '70%',
+            padding: '10px 14px',
+            borderRadius: 12,
+            background: isUser ? '#1890ff' : '#f5f5f5',
+            color: isUser ? '#fff' : '#333',
+            fontSize: 14,
+            lineHeight: 1.6,
+            wordBreak: 'break-word',
+          }}>
+            {isUser ? (
+              <div>{message.content}</div>
+            ) : (
+              <div>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content || ''}</ReactMarkdown>
+                {Array.isArray(message.references) && message.references.length > 0 && (
+                  <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px solid #e8e8e8' }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>参考资料:</Text>
+                    <div style={{ marginTop: 4 }}>
+                      {message.references.map((ref, idx) => (
+                        <Tag
+                          key={idx}
+                          color="blue"
+                          style={{ cursor: 'pointer', marginBottom: 4 }}
+                          onClick={() => onSelectCitation && onSelectCitation({ ...ref, index: idx + 1 })}
+                        >
+                          [{idx + 1}] {ref.doc_title || ref.file_name || `来源 ${idx + 1}`}
+                        </Tag>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {message.streaming && (
+                  <span style={{ display: 'inline-block', animation: 'pulse 1s infinite' }}>▊</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    });
+  }, []);
 
   return (
     <div style={{ padding: 16, height: 'calc(100vh - 64px)' }}>
@@ -320,7 +321,7 @@ const KnowledgeBaseQA = () => {
             style={{ height: '100%' }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            {sessions.map(s => (
+              {sessions.map(s => (
                 <div
                   key={s.id}
                   onClick={() => setActiveSessionId(s.id)}
@@ -347,10 +348,10 @@ const KnowledgeBaseQA = () => {
                   </div>
                   <Button
                     type="text" size="small" danger icon={<DeleteOutlined />}
-                    onClick={e => { e.stopPropagation(); handleDeleteSession(s.id); }}
+                    onClick={() => handleDeleteSession(s.id)}
                   />
                 </div>
-              )}
+              ))}
             </div>
           </Card>
         </Col>
@@ -361,268 +362,128 @@ const KnowledgeBaseQA = () => {
             size="small"
             title={
               <Space>
-                <RobotOutlined style={{ color: '#1890ff' }} />
-                <span>知识库智能问答</span>
-                <Tag color="blue">OpenClaw</Tag>
+                <BookOutlined />
+                <Select
+                  placeholder="选择知识库..."
+                  value={selectedKb}
+                  onChange={setSelectedKb}
+                  loading={loadingKbs}
+                  style={{ minWidth: 200 }}
+                  options={kbs.map(kb => ({ label: kb.name, value: kb.id }))}
+                />
               </Space>
             }
             extra={
               <Space>
-                <Text type="secondary">知识库:</Text>
-                <Select
-                  size="small" value={kbId}
-                  onChange={setKbId}
-                  style={{ width: 200 }}
-                  placeholder="全租户"
-                  allowClear
-                  options={[
-                    ...kbs.map(kb => ({ value: kb.id, label: `${kb.kb_name} (${kb.doc_count} 文档)` })),
-                  ]}
-                />
+                <span style={{ fontSize: 12, color: '#999' }}>流式</span>
+                <Switch size="small" checked={streamEnabled} onChange={setStreamEnabled} />
               </Space>
             }
-            styles={{ body: {
-              padding: 0,
-              height: 'calc(100% - 40px)',
-              display: 'flex',
-              flexDirection: 'column',
-            } }}
+            styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: 'calc(100% - 40px)' } }}
             style={{ height: '100%' }}
           >
-            {/* 消息列表 */}
-            <div
-              ref={scrollRef}
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: 16,
-                background: '#fafafa',
-              }}
-            >
-              {!activeSession || activeSession.messages.length === 0 ? (
-                <Empty
-                  image={<BulbOutlined style={{ fontSize: 64, color: '#1890ff' }} />}
-                  styles={{ image: { height: 80 } }}
-                  description={
-                    <div>
-                      <p style={{ fontSize: 16, color: '#666' }}>向知识库提问</p>
-                      <p style={{ color: '#999', marginTop: 8 }}>
-                        上传文档到知识库后,在这里向 AI 提问,它会基于文档内容回答,并标注引用来源
-                      </p>
-                      <div style={{ marginTop: 20 }}>
-                        <Text type="secondary">试试这样问:</Text>
-                        <div style={{ marginTop: 8 }}>
-                          {['CT 设备的日常保养要点?', '实验室安全操作规范有哪些?', '设备故障报修流程是什么?'].map(q => (
-                            <Tag
-                              key={q} color="blue" style={{ cursor: 'pointer', marginBottom: 6 }}
-                              onClick={() => setInput(q)}
-                            >
-                              {q}
-                            </Tag>
-                          ))}
+            <div style={{ flex: 1, overflow: 'auto', padding: 16 }} ref={chatContainerRef}>
+              {(() => {
+                if (!activeSession || activeSession.messages.length === 0) {
+                  return (
+                    <Empty
+                      image={<BulbOutlined style={{ fontSize: 64, color: '#1890ff' }} />}
+                      styles={{ image: { height: 80 } }}
+                      description={
+                        <div>
+                          <p style={{ fontSize: 16, color: '#666' }}>向知识库提问</p>
+                          <p style={{ color: '#999', marginTop: 8 }}>
+                            上传文档到知识库后,在这里向 AI 提问,它会基于文档内容回答,并标注引用来源
+                          </p>
+                          <div style={{ marginTop: 20 }}>
+                            <Text type="secondary">试试这样问:</Text>
+                            <div style={{ marginTop: 8 }}>
+                              {['CT 设备的日常保养要点?', '实验室安全操作规范有哪些?', '设备故障报修流程是什么?'].map(q => (
+                                <Tag
+                                  key={q} color="blue" style={{ cursor: 'pointer', marginBottom: 6 }}
+                                  onClick={() => setInput(q)}
+                                >
+                                  {q}
+                                </Tag>
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  }
-                />
-              ) : (
-                activeSession.messages.map((m, idx) => (
+                      }
+                    />
+                  );
+                }
+                return activeSession.messages.map((m, idx) => (
                   <MessageBubble
                     key={idx}
                     message={m}
-                    onSelectCitation={(citation) => {
-                      setInput(prev => `${prev}[参考资料 ${citation.index}] ${citation.doc_title || ''}`.trim());
-                    }}
+                    onSelectCitation={handleSelectCitation}
                   />
-                ))
-              ))}
+                ));
+              })()}
             </div>
 
             {/* 输入区 */}
             <div style={{ borderTop: '1px solid #f0f0f0', padding: 12, background: '#fff' }}>
-              <TextArea
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="输入你的问题,Shift+Enter 换行"
-                autoSize={{ minRows: 2, maxRows: 6 }}
-                disabled={loading}
-              />
-              <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Space>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    <QuestionCircleOutlined /> 回答将基于 {kbId ? (kbs.find(k => k.id === kbId)?.kb_name || '当前知识库') : '全部已启用知识库'}
-                  </Text>
-                  <Tooltip title="开启后, AI 回答会逐字流式输出">
-                    <Switch size="small" checked={streamEnabled} onChange={setStreamEnabled} checkedChildren="流式" unCheckedChildren="一次性" />
-                  </Tooltip>
-                </Space>
-                <Space>
-                  <Button
-                    icon={<ClearOutlined />}
-                    onClick={() => {
-                      if (activeSession) updateSession(activeSession.id, { messages: [] });
-                    }}
-                    disabled={!activeSession?.messages?.length}
-                  >
-                    清空对话
-                  </Button>
-                  <Button
-                    type="primary"
-                    icon={<SendOutlined />}
-                    onClick={handleSend}
-                    loading={loading}
-                    disabled={!input.trim()}
-                  >
-                    发送
-                  </Button>
-                </Space>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <TextArea
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder="输入问题..."
+                  autoSize={{ minRows: 2, maxRows: 6 }}
+                  style={{ flex: 1 }}
+                  onPressEnter={e => {
+                    if (!e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                />
+                <Button
+                  type="primary"
+                  icon={<SendOutlined />}
+                  onClick={handleSend}
+                  loading={sending}
+                  disabled={!input.trim() || !selectedKb}
+                />
               </div>
             </div>
           </Card>
         </Col>
       </Row>
 
-      {/* 历史问答记录 */}
+      {/* 历史记录抽屉 */}
       <Drawer
         title="历史问答记录"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        size="large"
+        width={400}
       >
-        {historyLoading ? (
-          <Spin />
-        ) : historyRecords.length === 0 ? (
-          <Empty />
-        ) : (
-          <div>
-            {historyRecords.map(item => (
-              <div key={item.id} style={{ padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <Space>
-                  <Text strong>{item.question}</Text>
-                  {item.status === 'failed' && <Tag color="red">失败</Tag>}
-                </Space>
-                <Space direction="vertical" size={4} style={{ width: '100%', marginTop: 4 }}>
-                  <div style={{
-                    background: '#f5f5f5', padding: 8, borderRadius: 4,
-                    maxHeight: 120, overflow: 'hidden', position: 'relative',
-                  }}>
-                    <Text style={{ fontSize: 12 }}>{item.answer || item.error_message || '(无)'}</Text>
-                  </div>
-                  <Space size={12}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{item.user_name || '匿名'}</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {item.provider} / {item.model}
-                    </Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{item.latency_ms}ms</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {new Date(item.created_at).toLocaleString('zh-CN')}
-                    </Text>
-                  </Space>
-                </Space>
-              </div>
-            ))}
-          </div>
-        )}
+        <Button type="primary" block onClick={() => {
+          loadHistory();
+        }}>刷新历史记录</Button>
+        <div style={{ marginTop: 16 }}>
+          {sessions.filter(s => s.id.startsWith('hist-')).map(s => (
+            <Card
+              key={s.id}
+              size="small"
+              hoverable
+              style={{ marginBottom: 8 }}
+              onClick={() => {
+                setActiveSessionId(s.id);
+                setDrawerOpen(false);
+              }}
+            >
+              <Text ellipsis style={{ display: 'block' }}>{s.title || '历史记录'}</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {s.messages.length > 0 ? `${s.messages[0].content.slice(0, 50)}...` : ''}
+              </Text>
+            </Card>
+          ))}
+        </div>
       </Drawer>
     </div>
   );
 };
-
-// 消息气泡
-const MessageBubble = ({ message, onSelectCitation }) => {
-  const isUser = message.role === 'user';
-  return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: isUser ? 'flex-end' : 'flex-start',
-        marginBottom: 16,
-      }}
-    >
-      {!isUser && (
-        <Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#1890ff', marginRight: 8, flexShrink: 0 }} />
-      )}
-      <div style={{ maxWidth: '80%' }}>
-        <div
-          style={{
-            background: isUser ? '#1890ff' : '#fff',
-            color: isUser ? '#fff' : '#333',
-            padding: '10px 14px',
-            borderRadius: 8,
-            boxShadow: isUser ? 'none' : '0 1px 2px rgba(0,0,0,0.06)',
-            border: isUser ? 'none' : '1px solid #f0f0f0',
-            whiteSpace: 'normal',
-          }}
-        >
-          {message.loading ? (
-            <Space>
-              <Spin size="small" />
-              <Text type="secondary">正在检索并生成答案...</Text>
-            </Space>
-          ) : message.error ? (
-            <Text type="danger">{message.error}</Text>
-          ) : isUser ? (
-            message.content
-          ) : (
-            <MarkdownContent content={message.content} />
-          )}
-        </div>
-
-        {/* 引用来源 */}
-        {!isUser && !message.loading && message.citations && message.citations.length > 0 && (
-          <div style={{ marginTop: 8, paddingLeft: 4 }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>参考资料:</Text>
-            <div style={{ marginTop: 4 }}>
-              {message.citations.map(c => (
-                <Tooltip
-                  key={c.index}
-                  title={
-                    <div style={{ maxWidth: 360 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 4 }}>{c.doc_title || '(无标题)'}</div>
-                      <div style={{ fontSize: 12, color: '#ddd' }}>{c.snippet}</div>
-                    </div>
-                  }
-                >
-                  <Tag
-                    color="blue" style={{ cursor: 'pointer', marginBottom: 4 }}
-                    onClick={() => onSelectCitation && onSelectCitation(c)}
-                  >
-                    [{c.index}] {c.doc_title || '文档'}
-                  </Tag>
-                </Tooltip>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 元信息 */}
-        {!isUser && !message.loading && !message.error && (message.provider || message.latency_ms) && (
-          <div style={{ marginTop: 4, paddingLeft: 4 }}>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {message.provider} · {message.model} · {message.latency_ms}ms
-            </Text>
-          </div>
-        )}
-      </div>
-      {isUser && (
-        <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#52c41a', marginLeft: 8, flexShrink: 0 }} />
-      )}
-    </div>
-  );
-};
-
-const MarkdownContent = ({ content }) => (
-  <div className="markdown-body" style={{ lineHeight: 1.7 }}>
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener" />,
-      }}
-    >
-      {String(content || '')}
-    </ReactMarkdown>
-  </div>
-);
 
 export default KnowledgeBaseQA;
