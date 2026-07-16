@@ -90,6 +90,16 @@ router.get('/analysis/cost-trend', authenticate, authorize(MN_GET), async (req, 
   }
 });
 
+router.get('/analysis/cost-analysis', authenticate, authorize(MN_GET), async (req, res) => {
+  try {
+    const result = await analyticsService.getCostAnalysis(req.query, req);
+    sendResult(res, result);
+  } catch (error) {
+    console.error('获取维护成本分析失败:', error);
+    res.status(500).json({ success: false, message: '获取维护成本分析失败', error: error.message });
+  }
+});
+
 router.get('/analysis/technician-performance', authenticate, authorize(MN_GET), async (req, res) => {
   try {
     const result = await analyticsService.getTechnicianPerformance(req.query, req);
@@ -128,6 +138,17 @@ router.get('/analysis/workorder-distribution', authenticate, authorize(MN_GET), 
   } catch (error) {
     console.error('获取工单分布失败:', error);
     res.status(500).json({ success: false, message: '获取工单分布失败', error: error.message });
+  }
+});
+
+// 维修维护综合仪表盘概览（聚合 综合维修 + 预防性维护）
+router.get('/dashboard/overview', authenticate, authorize(MN_GET), async (req, res) => {
+  try {
+    const result = await analyticsService.getDashboardOverview(req.query, req);
+    sendResult(res, result);
+  } catch (error) {
+    console.error('获取维修维护仪表盘概览失败:', error);
+    res.status(500).json({ success: false, message: '获取维修维护仪表盘概览失败', error: error.message });
   }
 });
 
