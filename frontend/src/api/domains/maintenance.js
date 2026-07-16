@@ -208,6 +208,7 @@ export const maintenanceAPI = {
   getEfficiencyAssetFrequency: params => api.get('/maintenance/efficiency/asset-frequency', { params }),
   getCostAnalysis: params => api.get('/maintenance/analysis/cost-analysis', { params }),
   getCostTrendAnalysis: params => api.get('/maintenance/analysis/cost-trend', { params }),
+  getMaintenanceDashboardOverview: params => api.get('/maintenance/dashboard/overview', { params }),
   getTypeDistribution: params => api.get('/maintenance/analysis/type-distribution', { params }),
 
   getMaintenanceReminders: params => getNormalizedList(api.get('/maintenance/reminders', { params })),
@@ -231,6 +232,8 @@ export const maintenanceAPI = {
   cancelMaintenanceWorkOrder: (id, data) => api.post(`/maintenance/workorders/${id}/cancel`, data),
   getEngineers: params => api.get('/maintenance/workorders/engineers', { params }),
   getWorkOrderDispatchPanel: params => api.get('/maintenance/workorders/dispatch-panel', { params }),
+  getWorkOrderHistory: id => api.get(`/maintenance/workorders/${id}/history`),
+  getWorkOrderStatistics: params => api.get('/maintenance/workorders/statistics', { params }),
 
   getAssetUsage: params => getNormalizedList(api.get('/maintenance/usage/asset-usage', { params })),
   getUsageRecords: params => getNormalizedList(api.get('/maintenance/usage/records', { params })),

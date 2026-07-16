@@ -2,6 +2,7 @@ const db = require('../../config/database');
 const { addTenantFilter, getTenantId } = require('../../middleware/tenant-filter');
 const { publishAsync } = require('../../core/EventBus');
 const logger = require('../../config/logger');
+const assetStatusService = require('../asset-status.service');
 
 const ENGINEER_ROLES = ['maintenance_admin', 'maintenance_engineer'];
 
@@ -95,6 +96,10 @@ function buildWorkOrderWhereClause(query, req, alias = 'wo') {
     status,
     priority,
     source_type,
+    source_types, // 旧 source_type IN 过滤，保留以防回退
+    from_plan,    // 1 → 预防性维护工单 (maintenance_plan_id IS NOT NULL)
+    from_request, // 1 → 维修工单 (maintenance_request_id IS NOT NULL)
+    include_orphan, // 1 → 包含 plan_id 和 req_id 都为 NULL 的孤儿工单（兜底）
     assigned_to,
     start_date,
     end_date,
@@ -128,6 +133,30 @@ function buildWorkOrderWhereClause(query, req, alias = 'wo') {
   if (source_type) {
     whereClause += ` AND ${alias}.source_type = ?`;
     params.push(source_type);
+  }
+  // 工单管理 Tab 拆分：
+  //   from_plan=1        → 预防性维护工单（maintenance_plan_id IS NOT NULL）
+  //   from_request=1     → 维修工单（maintenance_request_id IS NOT NULL）
+  //   include_orphan=1   → 加上 plan_id 和 req_id 都为 NULL 的孤儿工单（兜底）
+  // 注意：from_plan 和 from_request 互斥；同时传以 from_request 为准
+  if (from_plan === '1' || from_plan === 'true') {
+    whereClause += ` AND ${alias}.maintenance_plan_id IS NOT NULL`;
+  } else if (from_request === '1' || from_request === 'true') {
+    whereClause += ` AND (${alias}.maintenance_request_id IS NOT NULL`;
+    if (include_orphan === '1' || include_orphan === 'true') {
+      whereClause += ` OR (${alias}.maintenance_plan_id IS NULL AND ${alias}.maintenance_request_id IS NULL)`;
+    }
+    whereClause += `)`;
+  } else if (source_types) {
+    // 回退：旧 source_type IN 过滤（如前端没升级）
+    const list = String(source_types)
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (list.length > 0) {
+      whereClause += ` AND ${alias}.source_type IN (${list.map(() => '?').join(',')})`;
+      params.push(...list);
+    }
   }
   if (assigned_to) {
     whereClause += ` AND ${alias}.assigned_to LIKE ?`;
@@ -1047,6 +1076,31 @@ async function deleteLegacyWorkOrder(id, req) {
   return { success: true, message: '维护工单删除成功' };
 }
 
+/**
+ * 获取工单历史轨迹 (Timeline)
+ */
+async function getWorkOrderHistory(id, req) {
+  const located = await locateWorkOrder(id, req);
+  if (!located) {
+    return { success: false, message: '工单不存在' };
+  }
+
+  const { tenantFilter } = located;
+  const [histories] = await db.execute(
+    `SELECT id, action_type, action_description, action_by, action_at, created_at
+     FROM work_order_history
+     WHERE work_order_id = ?
+     ORDER BY action_at DESC, id DESC
+     LIMIT 50`,
+    [id]
+  );
+
+  return {
+    success: true,
+    data: histories,
+  };
+}
+
 async function assignWorkOrder(id, body, req) {
   const { assigned_to } = body;
 
@@ -1060,7 +1114,7 @@ async function assignWorkOrder(id, body, req) {
   }
 
   // 分配功能已移除，保留此函数但放宽状态限制
-  if (!['in_progress', 'pending_review', 'completed', 'closed'].includes(located.row.status)) {
+  if (!['pending', 'in_progress', 'pending_review', 'completed', 'closed'].includes(located.row.status)) {
     throw createHttpError(400, '该工单状态不允许操作');
   }
 
@@ -1421,8 +1475,14 @@ async function completeWorkOrder(id, body, req) {
     // 不影响工单完成流程
   }
 
-  // Bug4 修复：工单完成后恢复资产状态（当资产为"维修"且无其他活跃工单时）
-  await restoreAssetStatusIfNeeded(assetCode, req);
+  // P0-4 修复: 工单完成后恢复资产状态, 统一走 assetStatusService.transition
+  // WORKORDER_COMPLETED 事件: 仅在当前是「维修」+ 无其他活跃工单时回退「在用」
+  await assetStatusService.transition(
+    db,
+    assetCode,
+    assetStatusService.EVENTS.WORKORDER_COMPLETED,
+    { tenantId, excludeWorkOrderId: id }
+  );
 
   // 工单完成后发飞书通知事件（异步，不阻塞）
   try {
@@ -1661,48 +1721,8 @@ async function locateWorkOrder(id, req, roleBasedFilter = '', roleBasedParams = 
   return null;
 }
 
-/**
- * 恢复资产状态为"在用"（Bug4 修复：工单完成后检查资产是否可恢复）
- * 仅当资产当前状态为"维修"且无其他活跃工单时恢复
- */
-async function restoreAssetStatusIfNeeded(assetCode, req) {
-  try {
-    const { ASSET_STATUSES } = require('../../config/asset-status.constants');
-    const assetTenantFilter = addTenantFilter(req, 'a');
-    const [assets] = await db.execute(
-      `SELECT a.status FROM assets a WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
-      [assetCode, ...assetTenantFilter.params],
-    );
-    if (assets.length === 0) return;
-    const currentStatus = assets[0].status;
-    if (currentStatus !== ASSET_STATUSES.MAINTENANCE && currentStatus !== '维修') return;
-
-    // 检查该资产是否还有其他活跃工单（新表 + 旧表）
-    const activeStatuses = ['pending', 'assigned', 'in_progress'];
-    const placeholders = activeStatuses.map(() => '?').join(',');
-    const woTenantFilter = addTenantFilter(req, 'wo');
-    const mwoTenantFilter = addTenantFilter(req, 'mwo');
-
-    const [newActive] = await db.execute(
-      `SELECT COUNT(*) as cnt FROM work_orders wo WHERE wo.asset_code = ? AND wo.status IN (${placeholders}) ${woTenantFilter.whereClause}`,
-      [assetCode, ...activeStatuses, ...woTenantFilter.params],
-    );
-    const [oldActive] = await db.execute(
-      `SELECT COUNT(*) as cnt FROM maintenance_workorders mwo WHERE mwo.asset_code = ? AND mwo.status IN (${placeholders}) ${mwoTenantFilter.whereClause}`,
-      [assetCode, ...activeStatuses, ...mwoTenantFilter.params],
-    );
-
-    const totalActive = (newActive[0]?.cnt || 0) + (oldActive[0]?.cnt || 0);
-    if (totalActive === 0) {
-      await db.execute(
-        `UPDATE assets a SET a.status = ?, a.updated_at = NOW() WHERE a.asset_code = ? ${assetTenantFilter.whereClause}`,
-        [ASSET_STATUSES.IN_USE, assetCode, ...assetTenantFilter.params],
-      );
-    }
-  } catch (err) {
-    console.warn('[WorkOrder] 恢复资产状态失败:', err.message);
-  }
-}
+// P0-4 修复: 旧的 restoreAssetStatusIfNeeded 已删除, 改用 assetStatusService.transition
+// (调用点见 completeWorkOrder / 类似流程, 事件: WORKORDER_COMPLETED)
 
 async function getEngineers(req) {
   const tenantFilter = addTenantFilter(req, 'utr');
@@ -1735,6 +1755,93 @@ async function getEngineers(req) {
   };
 }
 
+/**
+ * 工单统计: 总数 / 待派工 / 进行中 / 待评价 / 已完成 / 逾期
+ * 逾期定义: 申请 expected_repair_date < 当前日期 且 状态非 closed/cancelled
+ */
+async function getWorkOrderStatistics(query, req) {
+  const tenantFilter = addTenantFilter(req, 'wo');
+  const whereClause = `WHERE 1=1 ${tenantFilter.whereClause.replace('WHERE', 'AND')}`;
+
+  // 1. 状态分布
+  const [statusRows] = await db.execute(
+    `SELECT wo.status, COUNT(*) AS count
+     FROM work_orders wo
+     ${whereClause}
+     GROUP BY wo.status`,
+    tenantFilter.params
+  );
+
+  // 2. 优先级分布
+  const [priorityRows] = await db.execute(
+    `SELECT wo.priority, COUNT(*) AS count
+     FROM work_orders wo
+     ${whereClause}
+     GROUP BY wo.priority`,
+    tenantFilter.params
+  );
+
+  // 3. 逾期: 关联 maintenance_requests.expected_repair_date
+  const [overdueRows] = await db.execute(
+    `SELECT COUNT(*) AS overdue_count
+     FROM work_orders wo
+     INNER JOIN maintenance_requests mr ON mr.id = wo.maintenance_request_id
+     ${whereClause.replace('wo.', 'mr.').replace('${tenantFilter.whereClause}', '${tenantFilter.whereClause}')}
+       AND mr.expected_repair_date IS NOT NULL
+       AND mr.expected_repair_date < CURDATE()
+       AND wo.status NOT IN ('closed', 'cancelled', 'completed', 'pending_acceptance')`,
+    tenantFilter.params
+  );
+
+  // 4. 平均工时 (已完成/已关闭)
+  const [hoursRows] = await db.execute(
+    `SELECT
+      AVG(actual_hours) AS avg_actual,
+      AVG(estimated_hours) AS avg_estimated,
+      COUNT(CASE WHEN actual_hours IS NOT NULL THEN 1 END) AS with_hours
+     FROM work_orders wo
+     ${whereClause}
+       AND wo.status IN ('closed', 'completed', 'pending_acceptance')`,
+    tenantFilter.params
+  );
+
+  // 5. 平均评分
+  const [ratingRows] = await db.execute(
+    `SELECT AVG(applicant_rating) AS avg_rating, COUNT(*) AS rated_count
+     FROM work_orders wo
+     ${whereClause}
+       AND applicant_rating IS NOT NULL AND applicant_rating > 0`,
+    tenantFilter.params
+  );
+
+  const statusMap = {};
+  for (const r of statusRows) statusMap[r.status] = r.count;
+  const priorityMap = {};
+  for (const r of priorityRows) priorityMap[r.priority] = r.count;
+
+  return {
+    success: true,
+    data: {
+      total: Object.values(statusMap).reduce((a, b) => a + b, 0),
+      by_status: statusMap,
+      by_priority: priorityMap,
+      pending: statusMap.pending || 0,                  // 待派工
+      assigned: statusMap.assigned || 0,
+      in_progress: statusMap.in_progress || 0,         // 进行中
+      pending_acceptance: statusMap.pending_acceptance || 0,  // 待评价
+      completed: statusMap.completed || 0,
+      closed: statusMap.closed || 0,
+      cancelled: statusMap.cancelled || 0,
+      overdue: overdueRows[0]?.overdue_count || 0,
+      avg_actual_hours: Number(hoursRows[0]?.avg_actual || 0).toFixed(1),
+      avg_estimated_hours: Number(hoursRows[0]?.avg_estimated || 0).toFixed(1),
+      with_hours_count: hoursRows[0]?.with_hours || 0,
+      avg_rating: Number(ratingRows[0]?.avg_rating || 0).toFixed(1),
+      rated_count: ratingRows[0]?.rated_count || 0,
+    },
+  };
+}
+
 module.exports = {
   getWorkOrders,
   getDispatchPanel,
@@ -1755,4 +1862,6 @@ module.exports = {
   closeWorkOrder,
   cancelWorkOrder,
   getEngineers,
+  getWorkOrderStatistics,
+  getWorkOrderHistory,
 };

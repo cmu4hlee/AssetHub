@@ -37,7 +37,7 @@ import dayjs from 'dayjs';
 const { Option } = Select;
 const { TextArea } = Input;
 
-const MaintenanceWorkOrderForm = ({ record, mode, onSuccess, onCancel }) => {
+const MaintenanceWorkOrderForm = ({ record, mode, visible, onSuccess, onCancel }) => {
   const canDelete = useCan('workorder', 'delete');
   const canEdit = useCan('workorder', 'edit');
   const [form] = Form.useForm();
@@ -265,6 +265,11 @@ const MaintenanceWorkOrderForm = ({ record, mode, onSuccess, onCancel }) => {
       ),
     },
   ];
+
+  // 关键: visible=false 时不渲染整个 Form (避免内部 5 个 DatePicker 触发 antd 6 useInvalidate date4.isValid 错误)
+  if (visible === false) {
+    return null;
+  }
 
   return (
     <div className="maintenance-workorder-form">

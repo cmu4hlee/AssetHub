@@ -42,12 +42,30 @@ router.get('/workorders/dispatch-panel', authenticate, authorize(WO_GET_ROLES), 
   }
 });
 
+router.get('/workorders/statistics', authenticate, authorize(WO_GET_ROLES), async (req, res) => {
+  try {
+    const result = await workordersService.getWorkOrderStatistics(req.query, req);
+    res.json(result);
+  } catch (error) {
+    handleError(res, error, '获取工单统计失败');
+  }
+});
+
 router.get('/workorders/engineers', authenticate, authorize(WO_GET_ROLES), async (req, res) => {
   try {
     const result = await workordersService.getEngineers(req);
     res.json(result);
   } catch (error) {
     handleError(res, error, '获取工程师列表失败');
+  }
+});
+
+router.get('/workorders/:id/history', authenticate, authorize(WO_GET_ROLES), async (req, res) => {
+  try {
+    const result = await workordersService.getWorkOrderHistory(req.params.id, req);
+    res.json(result);
+  } catch (error) {
+    handleError(res, error, '获取工单历史失败');
   }
 });
 
