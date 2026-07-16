@@ -5,10 +5,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useCan } from '../../../hooks';
-import { 
-  Card, Table, Button, Tag, Space, Modal, Form, Input, Select, 
+import {
+  Card, Table, Button, Tag, Space, Modal, Form, Input, Select,
   DatePicker, InputNumber, message, Popconfirm, Row, Col, Statistic,
-  Tabs, Badge
+  Tabs, Badge, Tooltip
 } from 'antd';
 import { 
   PlusOutlined, EditOutlined, DeleteOutlined, 
@@ -49,12 +49,39 @@ const MaintenanceLevelManagement = () => {
     completedPlans: 0
   });
 
-  const maintenanceLevels = [
-    { value: 'daily', label: '日常保养', color: 'green', desc: '每日基础检查' },
-    { value: 'first', label: '一级保养', color: 'blue', desc: '月度保养' },
-    { value: 'second', label: '二级保养', color: 'orange', desc: '季度保养' },
-    { value: 'third', label: '三级保养', color: 'red', desc: '年度保养' }
+  // 保养级别按业务两级分组:
+  //   第一级 (使用科室): 日常保养
+  //   第二级 (临床工程师): 月度/季度/年度技术保养
+  // 物理 enum 保留 4 个值 (daily/level1/level2/level3), 仅在 UI 层嵌套展示
+  const maintenanceLevelGroups = [
+    {
+      key: 'user_dept',
+      label: '第一级 · 使用科室',
+      desc: '使用科室的日常检查、清洁等',
+      levels: [
+        { value: 'daily', label: '日常保养', color: 'green', cycle: '每日', desc: '日常基础检查' },
+      ],
+    },
+    {
+      key: 'engineer',
+      label: '第二级 · 临床工程师',
+      desc: '临床工程师的预防性技术保养 (含月度/季度/年度 3 个子级)',
+      levels: [
+        { value: 'level1', label: '一级保养 · 月度', color: 'blue', cycle: '月', desc: '月度保养' },
+        { value: 'level2', label: '二级保养 · 季度', color: 'orange', cycle: '季', desc: '季度保养' },
+        { value: 'level3', label: '三级保养 · 年度', color: 'red', cycle: '年', desc: '年度保养' },
+      ],
+    },
   ];
+
+  // 扁平化查单个 level (Tag 渲染用)
+  const findLevelByValue = value => {
+    for (const g of maintenanceLevelGroups) {
+      const found = g.levels.find(l => l.value === value);
+      if (found) return { ...found, group: g };
+    }
+    return null;
+  };
 
   const cycleTypes = [
     { value: 'day', label: '天' },
@@ -251,8 +278,12 @@ const MaintenanceLevelManagement = () => {
       dataIndex: 'maintenance_level', 
       key: 'maintenance_level',
       render: (v) => {
-        const level = maintenanceLevels.find(l => l.value === v);
-        return <Tag color={level?.color}>{level?.label}</Tag>;
+        const level = findLevelByValue(v);
+        return (
+          <Tooltip title={level?.group ? `${level.group.label} · ${level.group.desc}` : ''}>
+            <Tag color={level?.color}>{level?.label || v}</Tag>
+          </Tooltip>
+        );
       }
     },
     { title: '适用分类', dataIndex: 'asset_category', key: 'asset_category' },
@@ -295,8 +326,12 @@ const MaintenanceLevelManagement = () => {
       dataIndex: 'maintenance_level', 
       key: 'maintenance_level',
       render: (v) => {
-        const level = maintenanceLevels.find(l => l.value === v);
-        return <Tag color={level?.color}>{level?.label}</Tag>;
+        const level = findLevelByValue(v);
+        return (
+          <Tooltip title={level?.group ? `${level.group.label} · ${level.group.desc}` : ''}>
+            <Tag color={level?.color}>{level?.label || v}</Tag>
+          </Tooltip>
+        );
       }
     },
     { title: '计划日期', dataIndex: 'planned_date', key: 'planned_date' },
@@ -429,8 +464,14 @@ const MaintenanceLevelManagement = () => {
             <Col span={12}>
               <Form.Item name="maintenance_level" label="保养级别" rules={[{ required: true }]}>
                 <Select placeholder="请选择保养级别">
-                  {maintenanceLevels.map(l => (
-                    <Option key={l.value} value={l.value}>{l.label} - {l.desc}</Option>
+                  {maintenanceLevelGroups.map(g => (
+                    <Select.OptGroup key={g.key} label={g.label}>
+                      {g.levels.map(l => (
+                        <Option key={l.value} value={l.value}>
+                          {l.label} - {l.desc}
+                        </Option>
+                      ))}
+                    </Select.OptGroup>
                   ))}
                 </Select>
               </Form.Item>
@@ -511,7 +552,13 @@ const MaintenanceLevelManagement = () => {
             <Col span={12}>
               <Form.Item name="maintenance_level" label="保养级别" rules={[{ required: true }]}>
                 <Select placeholder="请选择保养级别">
-                  {maintenanceLevels.map(l => <Option key={l.value} value={l.value}>{l.label}</Option>)}
+                  {maintenanceLevelGroups.map(g => (
+                    <Select.OptGroup key={g.key} label={g.label}>
+                      {g.levels.map(l => (
+                        <Option key={l.value} value={l.value}>{l.label}</Option>
+                      ))}
+                    </Select.OptGroup>
+                  ))}
                 </Select>
               </Form.Item>
             </Col>
