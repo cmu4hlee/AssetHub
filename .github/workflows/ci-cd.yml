@@ -23,11 +23,11 @@ jobs:
           cache: ''
 
       - name: Install backend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
         working-directory: ./backend
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
         working-directory: ./frontend
 
       - name: Run ESLint (backend)
@@ -64,7 +64,7 @@ jobs:
           cache: ''
 
       - name: Install backend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
         working-directory: ./backend
 
       - name: Run backend tests
@@ -92,7 +92,7 @@ jobs:
           cache: ''
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
         working-directory: ./frontend
 
       - name: Run frontend tests
@@ -143,11 +143,11 @@ jobs:
           cache: ''
 
       - name: Install backend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
         working-directory: ./backend
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
         working-directory: ./frontend
 
       - name: Build frontend
