@@ -1,238 +1,169 @@
-# 📚 项目文档目录
+# AssetHub 文档中心
 
-本目录包含项目的所有分析报告、配置说明和部署文档。
-
-> 💡 **快速查找**: 查看 [文档索引.md](./文档索引.md) 可以快速找到需要的文档
-
-> 🧭 **快速导航**: 查看 [文档导航.md](./文档导航.md) 按角色和任务查找文档
-
-> 🚀 **新手入门**: 查看 [快速开始/QUICKSTART.md](./快速开始/QUICKSTART.md) 快速启动项目
-
-## 📁 目录结构
-
-```
-docs/
-├── 快速开始/          # 快速启动和入门指南
-├── 分析报告/          # 项目分析和问题报告
-├── 配置说明/          # 各种配置文件的说明
-├── 规范指南/          # 开发规范和配置指南
-├── 优化方案/          # 项目优化方案和参考
-├── 部署文档/          # 部署相关的文档
-└── 运维文档/          # 运维和监控相关文档
-```
+> 80+ 文档分类导航 · 最后更新 2026-07-18
 
 ---
 
-## 🚀 快速开始
+## 🚀 快速开始 (新成员)
 
-### QUICKSTART.md
-- **内容**: 项目快速启动指南
-- **包含**:
-  - 前置要求
-  - 数据库初始化
-  - 依赖安装
-  - 启动服务
-  - 常见问题
+1. [项目介绍](../README.md) — AssetHub 全景
+2. [项目介绍中文版](project-introduction.zh-CN.md) — 详细产品介绍
+3. [模块化架构设计](modular-architecture-design.md) — 必读! 理解 48 模块怎么组织
+4. [模块开发指南](module-development-guide.md) — 创建一个新模块的完整步骤
+5. [模块模板](module-template.md) — copy-paste 模板
+6. [API 完整文档](API完整文档.md) — 所有 API 速查
 
----
+## 🏗️ 架构设计
 
-## 📊 分析报告
+| 文档 | 说明 |
+|------|------|
+| [modular-architecture-design.md](modular-architecture-design.md) | 模块化架构总设计 (48 模块的拆分原则) |
+| [module-dependencies.md](module-dependencies.md) | 模块依赖关系图 |
+| [module-classification-proposal.md](module-classification-proposal.md) | 模块分类方案 |
+| [module-template.md](module-template.md) | 新模块的代码模板 |
+| [module-development-guide.md](module-development-guide.md) | 模块开发完整指南 |
+| [module-system-test-cases.md](module-system-test-cases.md) | 模块系统化测试用例 |
+| [agent-mesh-architecture.md](agent-mesh-architecture.md) | AI agent mesh 微服务架构 |
+| [quality-management-architecture.md](quality-management-architecture.md) | 质量管理模块架构 |
+| [quality-management-interfaces.md](quality-management-interfaces.md) | 质量管理模块接口 |
+| [component-refactoring-plan.md](component-refactoring-plan.md) | 组件重构计划 |
+| [long-term-roadmap.md](long-term-roadmap.md) | 长期路线图 |
 
-### 项目逻辑问题分析报告.md
-- **内容**: 项目中发现的所有逻辑问题和bug分析
-- **状态**: 已修复大部分问题
-- **优先级**: 高
+## 📘 API 文档
 
-### 技术资料系统问题分析和扩展建议.md
-- **内容**: 技术资料系统的问题分析和改进建议
-- **状态**: 分析完成
+| 文档 | 说明 |
+|------|------|
+| [API.md](API.md) | API 概览 |
+| [API完整文档.md](API完整文档.md) | **完整 API 速查 (推荐)** |
+| [API_全量接口说明_供AI读取.md](API_全量接口说明_供AI读取.md) | AI 读取的全量接口 |
+| [AssetHub_API_Documentation.md](AssetHub_API_Documentation.md) | 完整 API 文档 (Postman 友好) |
+| [open-api-usage.zh-CN.md](open-api-usage.zh-CN.md) | OpenAPI 使用说明 |
+| [swagger.json](swagger.json) | Swagger 完整 spec |
+| **在线文档** | 启动后访问 <http://localhost:5183/api-docs> |
+| **完整后端 API 文档** | [backend/docs/api-documentation.md](../backend/docs/api-documentation.md) (28,714 行) |
 
-### 项目完善分析报告.md
-- **内容**: 项目整体完善建议
-- **状态**: 分析完成
+## 🔐 多租户与安全
 
-### 代码规范化完成报告.md
-- **内容**: 代码规范化工作的完成情况
-- **状态**: 已完成
+| 文档 | 说明 |
+|------|------|
+| [多租户改造说明.md](多租户改造说明.md) | 多租户架构改造 |
+| [多企业隔离完整分析报告.md](多企业隔离完整分析报告.md) | 隔离分析 |
+| [多企业隔离改造完成总结.md](多企业隔离改造完成总结.md) | 改造总结 |
+| [多企业隔离改造最终报告.md](多企业隔离改造最终报告.md) | 最终报告 |
+| [多企业隔离改造进度.md](多企业隔离改造进度.md) | 进度跟踪 |
+| [租户隔离完善进度报告.md](租户隔离完善进度报告.md) | 完善进度 |
+| [租户隔离遗漏点检查报告.md](租户隔离遗漏点检查报告.md) | 遗漏点检查 |
+| [PERMISSIONS_SYSTEM_ENHANCEMENT.md](PERMISSIONS_SYSTEM_ENHANCEMENT.md) | 权限系统增强 |
+| [角色系统调整说明.md](角色系统调整说明.md) | 角色调整说明 |
+| [multi-tenant-login-design.md](../backend/docs/multi-tenant-login-design.md) | 多租户登录设计 (backend) |
 
-### 项目安全性分析报告.md
-- **内容**: 项目整体安全性分析和改进建议
-- **包含**:
-  - 认证与授权分析
-  - 数据库安全
-  - 网络安全
-  - 文件上传安全
-  - 输入验证
-  - 依赖项安全
-  - 安全改进建议
-- **优先级**: 高（生产环境部署前必读）
+## 🤖 AI / 智能助手
 
-### 移动端响应式优化完成报告.md
-- **内容**: 移动端响应式优化完成情况
-- **包含**:
-  - 已优化的页面列表
-  - 优化模式和效果
-  - 待优化页面清单
-  - 测试建议
+| 文档 | 说明 |
+|------|------|
+| [AI助手集成指南.md](AI助手集成指南.md) | AI 助手集成 (OpenAI/通义/Ollama) |
+| [AI助手全面整理与适配说明.md](AI助手全面整理与适配说明.md) | AI 助手完整整理 |
+| [AI助手可扩展功能模块分析.md](AI助手可扩展功能模块分析.md) | 可扩展功能分析 |
+| [AI工具扩展方案.md](AI工具扩展方案.md) | 工具扩展方案 |
+| [OpenClaw技能调用说明.md](OpenClaw技能调用说明.md) | OpenClaw 技能调用 |
+| [OpenClaw系统提示词与技能模板.md](OpenClaw系统提示词与技能模板.md) | OpenClaw 提示词模板 |
+| [OpenClaw设备监测与故障上报说明.md](OpenClaw设备监测与故障上报说明.md) | 设备监测集成 |
+| [OpenClaw长期记忆与角色权限模板.md](OpenClaw长期记忆与角色权限模板.md) | 长期记忆 |
+| [openclaw-assethub-runtime-memory.md](openclaw-assethub-runtime-memory.md) | OpenClaw 运行时记忆 |
+| [opencode-assethub-mcp-integration.md](opencode-assethub-mcp-integration.md) | OpenCode MCP 集成 |
+| [open-api-usage.zh-CN.md](open-api-usage.zh-CN.md) | OpenAPI 中文用法 |
+| [AssetHub直连API技能生成说明.md](AssetHub直连API技能生成说明.md) | 技能生成 |
+| [mcp-coverage-gap-matrix.md](mcp-coverage-gap-matrix.md) | MCP 覆盖矩阵 |
+| [编程辅助插件推荐.md](编程辅助插件推荐.md) | IDE 插件推荐 |
+| [llm-finetune/](llm-finetune/) | LLM 微调数据 |
 
----
+## 🔔 通知 / 提醒
 
-## ⚙️ 配置说明
+| 文档 | 说明 |
+|------|------|
+| [notification-system-guide.md](notification-system-guide.md) | 通知系统完整指南 |
+| [in-app-notification 集成](../backend/services/in-app-notification.service.js) | 应用内通知 (backend) |
 
-### .env配置说明.md
-- **位置**: `backend/.env配置说明.md`
-- **内容**: 后端环境变量配置文件详细说明
-- **用途**: 部署时配置数据库、服务器等参数
+## 📊 数据 & 资产
 
-### 文件上传问题修复说明.md
-- **位置**: `backend/文件上传问题修复说明.md`
-- **内容**: 文件上传功能的修复说明
-- **状态**: 已修复
+| 文档 | 说明 |
+|------|------|
+| [database-documentation.md](database-documentation.md) | **完整数据库文档 (61K 行)** |
+| [资产分类字段显示规则.md](资产分类字段显示规则.md) | 资产分类规则 |
+| [资产调配逻辑整理.md](资产调配逻辑整理.md) | 资产调配逻辑 |
+| [maintenance-analysis-2026-07-16.md](maintenance-analysis-2026-07-16.md) | 维修分析报告 (2026-07-16) |
+| [质量控制模块使用说明.md](质量控制模块使用说明.md) | 质控模块用法 |
+| [质量控制模块菜单配置说明.md](质量控制模块菜单配置说明.md) | 质控菜单配置 |
+| [质量管理模块功能清单.md](质量管理模块功能清单.md) | 质量管理清单 |
+| [质量管理模块完善说明.md](质量管理模块完善说明.md) | 质量完善 |
+| [质量管理模块数据库初始化说明.md](质量管理模块数据库初始化说明.md) | 质控 DB |
+| [第三方应用故障上报接口说明.md](第三方应用故障上报接口说明.md) | 第三方故障上报 |
+| [第三方程序患者量上报接口说明.md](第三方程序患者量上报接口说明.md) | 第三方患者量上报 |
 
-### 修复硬编码凭据说明.md
-- **位置**: `backend/修复硬编码凭据说明.md`
-- **内容**: 硬编码凭据的修复说明
-- **状态**: 待修复
+## 🛠️ 部署 / 运维
 
-### 文件名编码分析.md
-- **位置**: `backend/文件名编码分析.md`
-- **内容**: 文件名编码问题的分析和解决方案
+| 文档 | 说明 |
+|------|------|
+| [开发模式启动问题排查.md](开发模式启动问题排查.md) | 开发模式排查 |
+| [开发模式端口配置统一完成报告.md](开发模式端口配置统一完成报告.md) | 端口配置 |
+| [端口配置统一检查报告.md](端口配置统一检查报告.md) | 端口检查 |
+| [外部访问配置说明.md](外部访问配置说明.md) | 外部访问 |
+| [外部访问问题排查.md](外部访问问题排查.md) | 外部访问排查 |
+| 部署场景 | `deploy-local/` `deploy-feiniu/` `deploy-fnnas/` (各含 docker-compose) |
+| docker-compose 配置 | `docker-compose.yml` `docker-compose.prod.yml` |
+| [运维文档/](运维文档/) | 监控/备份/升级等 |
 
-### 代码规范说明.md
-- **内容**: 项目代码规范说明
-- **用途**: 开发时参考
+## 🐛 修复报告 / 历史
 
-### AI配置说明.md
-- **内容**: AI功能配置说明
-- **用途**: 配置AI相关功能
+| 文档 | 说明 |
+|------|------|
+| [Bug修复完成报告.md](Bug修复完成报告.md) | 修复完成 |
+| [Bug修复报告.md](Bug修复报告.md) | 修复记录 |
+| [整理完成说明.md](整理完成说明.md) | 整理记录 |
+| [项目不完整功能分析报告.md](项目不完整功能分析报告.md) | 不完整功能 |
+| [项目缺失文件分析报告.md](项目缺失文件分析报告.md) | 缺失文件 |
 
-### 高德地图API配置说明.md
-- **内容**: 高德地图API配置说明
-- **用途**: 配置地图功能
+## 🎨 前端
 
----
+| 文档 | 说明 |
+|------|------|
+| [图表组件使用指南.md](图表组件使用指南.md) | 图表组件 |
+| [提问记录菜单显示问题分析报告.md](提问记录菜单显示问题分析报告.md) | 菜单问题 |
+| [API.md](API.md) | 前端 API 调用 |
 
-## 📖 规范指南
+## 🔍 审计 / 报告
 
-### 代码规范安装指南.md
-- **内容**: 代码规范工具的安装和使用指南
-- **包含**:
-  - ESLint 和 Prettier 安装
-  - 配置说明
-  - 使用示例
-  - 验证方法
+| 文档 | 说明 |
+|------|------|
+| [skill-drafts/](skill-drafts/) | 技能草稿 |
+| [分析报告/](分析报告/) | 各类分析报告 |
+| [图表组件使用指南.md](图表组件使用指南.md) | UI 图表 |
+| [规范指南/](规范指南/) | 编码规范 |
+| [快速开始/](快速开始/) | 快速上手 |
+| [运维文档/](运维文档/) | 运维手册 |
+| [优化方案/](优化方案/) | 性能优化方案 |
+| [部署文档/](部署文档/) | 部署指南 |
+| [配置说明/](配置说明/) | 配置手册 |
+| [问题排查/](问题排查/) | 问题排查手册 |
+| [文档导航.md](文档导航.md) | 另一份导航 (较旧) |
+| [文档索引.md](文档索引.md) | 另一份索引 (较旧) |
+| [开源资源引用文档.md](开源资源引用文档.md) | 开源引用 |
+| [开源资源版本跟踪.json](开源资源版本跟踪.json) | 版本跟踪 |
 
-### 数据库凭据安全配置指南.md
-- **位置**: `backend/数据库凭据安全配置指南.md`
-- **内容**: 数据库凭据安全配置指南
-- **用途**: 安全配置数据库连接
-- **重要性**: 高（安全相关）
+## 📦 专项维护 (按需)
 
-### 移动端响应式优化指南.md
-- **内容**: 移动端响应式优化指南和最佳实践
-- **包含**:
-  - 优化步骤和模式
-  - 代码示例
-  - 工具函数使用
-  - 检查清单
-- **用途**: 开发移动端适配功能
-
----
-
-## 🚀 优化方案
-
-### OpenMAINT参考优化方案.md
-- **内容**: 基于 OpenMAINT 系统的优化方案和参考
-- **包含**:
-  - OpenMAINT 项目特点分析
-  - 功能模块对比
-  - 优化建议
-  - 实施计划
-
----
-
-## 🚀 部署文档
-
-### 部署到Windows服务器.md
-- **内容**: Windows服务器部署详细指南
-- **包含**:
-  - 系统要求
-  - 安装步骤
-  - 配置说明
-  - 常见问题
-  - 验证方法
-
----
-
-## 🔧 运维文档
-
-### SERVICE_STATUS.md
-- **内容**: 资产管理系统服务状态文档
-- **包含**:
-  - 服务运行状态
-  - 技术栈信息
-  - 健康检查
-  - 监控信息
-
----
-
-## 📝 其他文档
-
-### ServiceManager 相关文档
-位置: `ServiceManager/` 目录
-- 构建说明.md
-- 使用说明.md
-- 安装程序说明.md
-- 快速开始.md
-- 非开发模式问题排查.md
+| 文档 | 说明 |
+|------|------|
+| [maintenance-analysis-2026-07-16.md](maintenance-analysis-2026-07-16.md) | 工单管理专题 |
+| [资产助手日志与查库说明.md](../backend/docs/资产助手日志与查库说明.md) | 资产助手日志 |
+| [scrapping-feature.md](../backend/docs/scrapping-feature.md) | 报废功能 (backend) |
 
 ---
 
-## 🔍 快速查找
+## 文档贡献
 
-### 按主题查找
+- 新增模块时: 在 `模块化架构设计` + `模块依赖关系` 添加模块节点
+- 新增 API 时: 同步到 `API完整文档.md` 或生成 swagger 自动段
+- 完成重要功能: 写一份 1-2 页的"完成报告"放这里
 
-**问题分析**:
-- 项目逻辑问题分析报告.md
-- 技术资料系统问题分析和扩展建议.md
-
-**配置相关**:
-- .env配置说明.md
-- README_CONFIG.md
-- field-mapping.md
-- AI配置说明.md
-- 高德地图API配置说明.md
-
-**部署相关**:
-- 部署到Windows服务器.md
-
-**代码规范**:
-- 代码规范说明.md
-- 代码规范化完成报告.md
-- 代码规范安装指南.md
-
-**安全配置**:
-- 数据库凭据安全配置指南.md
-- 修复硬编码凭据说明.md
-
-**优化方案**:
-- OpenMAINT参考优化方案.md
-
----
-
-## 📅 文档更新记录
-
-- 2024-01-13: 创建文档目录，整理所有分析报告和说明文档
-- 2024-01-13: 添加规范指南和优化方案目录，整理相关文档
-- 2024-01-13: 添加快速开始和运维文档目录，完善文档结构
-
----
-
-## 💡 使用建议
-
-1. **首次使用**: 查看 `快速开始/` 目录
-2. **部署前**: 查看 `部署文档/` 目录
-3. **配置时**: 查看 `配置说明/` 目录
-4. **开发时**: 查看 `分析报告/` 目录了解已知问题
-5. **运维时**: 查看 `运维文档/` 目录了解服务状态
-6. **遇到问题**: 先查看相关文档，再查看代码
+**最后更新**: 2026-07-18 · 由工单管理补齐 + 生产级审计同步生成

@@ -3,6 +3,13 @@ const router = express.Router();
 const controller = require('../controllers/acceptance.controller');
 const { protectModuleRouter } = require('../../../core/module-router');
 const { runInModuleContext } = require('../../../core/module-context');
+const { validateBody, validateQuery, validateParams } = require('../../../middleware/zod-validator');
+const {
+  CreateApplicationSchema,
+  UpdateApplicationSchema,
+  ListQuerySchema,
+  IdParamSchema,
+} = require('../../../schemas/acceptance.schemas');
 
 // ==================== 公开端点（无需认证）====================
 // 健康检查：必须在认证中间件之前注册，用于 K8s/监控探测
@@ -25,6 +32,9 @@ router.get('/', (req, res) => {
   });
 });
 
+// ==================== 供应商协同填写（公开，无需认证，必须在 protectModuleRouter 之前注册）====================
+router.post('/supplier-fill/:token', runInModuleContext('acceptance-management', () => controller.supplierFill));
+
 // ==================== 受保护端点（需认证 + 租户隔离 + 模块上下文）====================
 protectModuleRouter(router, 'acceptance-management', {
   requireAuth: true,
@@ -35,16 +45,16 @@ protectModuleRouter(router, 'acceptance-management', {
 });
 
 // 验收申请工作流
-router.get('/applications', controller.getApplications);
-router.get('/applications/:id', controller.getApplication);
-router.post('/applications', controller.createApplication);
-router.put('/applications/:id', controller.updateApplication);
-router.delete('/applications/:id', controller.deleteApplication);
-router.post('/applications/:id/submit', controller.submitApplication);
-router.post('/applications/:id/approve', controller.approveApplication);
-router.post('/applications/:id/reject', controller.rejectApplication);
-router.post('/applications/:id/withdraw', controller.withdrawApplication);
-router.post('/applications/:id/complete', controller.completeApplication);
+router.get('/applications', validateQuery(ListQuerySchema), controller.getApplications);
+router.get('/applications/:id', validateParams(IdParamSchema), controller.getApplication);
+router.post('/applications', validateBody(CreateApplicationSchema), controller.createApplication);
+router.put('/applications/:id', validateParams(IdParamSchema), validateBody(UpdateApplicationSchema), controller.updateApplication);
+router.delete('/applications/:id', validateParams(IdParamSchema), controller.deleteApplication);
+router.post('/applications/:id/submit', validateParams(IdParamSchema), controller.submitApplication);
+router.post('/applications/:id/approve', validateParams(IdParamSchema), controller.approveApplication);
+router.post('/applications/:id/reject', validateParams(IdParamSchema), controller.rejectApplication);
+router.post('/applications/:id/withdraw', validateParams(IdParamSchema), controller.withdrawApplication);
+router.post('/applications/:id/complete', validateParams(IdParamSchema), controller.completeApplication);
 
 // 申请-资产多对多关联
 router.get('/applications/:id/assets', controller.listApplicationAssets);
@@ -80,5 +90,8 @@ router.get('/teams/:recordId', controller.getTeamMembers);
 router.post('/teams/:recordId', controller.addTeamMember);
 router.put('/teams/:recordId/:memberId', controller.updateTeamMember);
 router.delete('/teams/:recordId/:memberId', controller.deleteTeamMember);
+
+// 供应商协同：邀请供应商填写（生成令牌 + 公开链接）
+router.post('/records/:id/invite-supplier', controller.inviteSupplier);
 
 module.exports = router;
