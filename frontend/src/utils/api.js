@@ -31,8 +31,12 @@ export {
   qualityControlAPI,
   adverseReactionAPI,
   aiAPI,
-  warrantyAPI,
 } from '../api/domains/maintenance';
+
+export { poctAPI } from '../api/domains/poct';
+
+// 保修管理（独立模块，2026-07-16 从 maintenance 拆出）
+export { warrantyAPI } from '../api/domains/warranty';
 
 export { technicalDocumentsAPI, technicalDocumentsAI, auditLogsAPI, backupAPI } from '../api/domains/documents';
 export { knowledgeBaseAPI } from '../api/domains/knowledgeBase';
@@ -45,6 +49,8 @@ export {
   cloudSyncAPI,
   notificationAPI,
 } from '../api/domains/platform';
+
+export { wechatMpAPI } from '../api/domains/wechat-mp';
 
 export { complianceAPI, riskAPI, staffAPI, uptimeAPI } from '../api/domains/modules';
 

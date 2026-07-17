@@ -38,18 +38,25 @@ const InventoryList = lazyPage(() => import('./pages/InventoryList'));
 const InventoryForm = lazyPage(() => import('./pages/InventoryForm'));
 const InventoryDetail = lazyPage(() => import('./pages/InventoryDetail'));
 const InventorySelfCheck = lazyPage(() => import('./pages/InventorySelfCheck'));
-const TransferList = lazyPage(() => import('./pages/TransferList'));
-const TransferForm = lazyPage(() => import('./pages/TransferForm'));
+const InventoryPlanList = lazyPage(() => import('./pages/InventoryPlanList'));
+const InventoryPlanForm = lazyPage(() => import('./pages/InventoryPlanForm'));
+const InventoryTaskList = lazyPage(() => import('./pages/InventoryTaskList'));
+const InventoryTaskForm = lazyPage(() => import('./pages/InventoryTaskForm'));
+const InventoryDiscrepancyList = lazyPage(() => import('./pages/InventoryDiscrepancyList'));
+const InventoryDashboard = lazyPage(() => import('./pages/InventoryDashboard'));
+const TransferList = lazyPage(() => import('./pages/AssetAllocationList'));
+const TransferForm = lazyPage(() => import('./pages/AssetAllocationForm'));
 const ScrappingList = lazyPage(() => import('./pages/ScrappingList'));
 const ScrappingForm = lazyPage(() => import('./pages/ScrappingForm'));
 const ScrappingDetail = lazyPage(() => import('./pages/ScrappingDetail'));
-const TransferRequestList = lazyPage(() => import('./pages/TransferRequestList'));
+const TransferRequestList = lazyPage(() => import('./pages/AssetAllocationRequestList'));
 const IdleAssetList = lazyPage(() => import('./pages/IdleAssetList'));
 const IdleAssetForm = lazyPage(() => import('./pages/IdleAssetForm'));
 const IdleAssetDetail = lazyPage(() => import('./pages/IdleAssetDetail'));
 const Dashboard = lazyPage(() => import('./pages/Dashboard'));
 const DashboardDesktop = lazyPage(() => import('./pages/DashboardDesktop'));
 const DashboardConfigManager = lazyPage(() => import('./pages/DashboardConfigManager'));
+const AssetStatusDashboard = lazyPage(() => import('./pages/AssetStatusDashboard'));
 const Login = lazyPage(() => import('./pages/Login'));
 const Register = lazyPage(() => import('./pages/Register'));
 const TenantAssociation = lazyPage(() => import('./pages/TenantAssociation'));
@@ -61,24 +68,25 @@ const EnhancedPermissionManagement = lazyPage(() => import('./pages/EnhancedPerm
 const UserRoleManagement = lazyPage(() => import('./pages/UserRoleManagement'));
 const DataScopeManagement = lazyPage(() => import('./pages/DataScopeManagement'));
 const TenantManagement = lazyPage(() => import('./pages/TenantManagement'));
-const TemporaryMaintenanceList = lazyPage(() => import('./pages/TemporaryMaintenanceList'));
-const TemporaryMaintenanceForm = lazyPage(() => import('./pages/TemporaryMaintenanceForm'));
-const PreventiveMaintenanceList = lazyPage(() => import('./pages/PreventiveMaintenanceList'));
+// 预防性维护中心：合并了"维护计划 / 维护模板 / 提醒管理"三个原独立菜单（2026-07-16）
+const PreventiveMaintenanceHub = lazyPage(() => import('./pages/PreventiveMaintenanceHub'));
 const PreventiveMaintenanceForm = lazyPage(() => import('./pages/PreventiveMaintenanceForm'));
 const PreventiveMaintenanceDetail = lazyPage(() => import('./pages/PreventiveMaintenanceDetail'));
-const MaintenanceTemplateList = lazyPage(() => import('./pages/MaintenanceTemplateList'));
-const MaintenanceTemplateForm = lazyPage(() => import('./pages/MaintenanceTemplateForm'));
 const MaintenanceRequestList = lazyPage(() => import('./pages/MaintenanceRequestList'));
 const MaintenanceWorkOrderList = lazyPage(() => import('./pages/MaintenanceWorkOrderList'));
+// 新增"工单管理"独立页面
+const MaintenanceWorkOrderManagement = lazyPage(() => import('./pages/MaintenanceWorkOrderManagement'));
 const MaintenanceUsageTriggerList = lazyPage(() => import('./pages/MaintenanceUsageTriggerList'));
 const MaintenanceAssetUsage = lazyPage(() => import('./pages/MaintenanceAssetUsage'));
 const MaintenanceEfficiencyDashboard = lazyPage(
   () => import('./pages/MaintenanceEfficiencyDashboard'),
 );
-const MaintenanceReminderList = lazyPage(() => import('./pages/MaintenanceReminderList'));
+const MaintenanceDashboard = lazyPage(() => import('./pages/MaintenanceDashboard'));
+const MaintenanceCostList = lazyPage(() => import('./pages/MaintenanceCostList'));
+const MaintenanceEvaluationList = lazyPage(() => import('./pages/MaintenanceEvaluationList'));
+const MenuOrderSettings = lazyPage(() => import('./pages/MenuOrderSettings'));
 const WarrantyManagement = lazyPage(() => import('./pages/WarrantyManagement'));
-const WarrantyContractManagement = lazyPage(() => import('./pages/WarrantyContractManagement'));
-const WarrantyReminderManagement = lazyPage(() => import('./pages/WarrantyReminderManagement'));
+// 保修管理（独立模块，2026-07-16 从日常维修中拆出）→ 路由 /warranty
 const AssetLocationMap = lazyPage(() => import('./pages/AssetLocationMap'));
 const TechnicalDocumentsList = lazyPage(() => import('./pages/TechnicalDocumentsList'));
 const TechnicalDocumentsUpload = lazyPage(() => import('./pages/TechnicalDocumentsUpload'));
@@ -95,6 +103,9 @@ const AuditLogManagement = lazyPage(() => import('./pages/AuditLogManagement'));
 const BackupManagement = lazyPage(() => import('./pages/BackupManagement'));
 const DatabaseConnectionManagement = lazyPage(() => import('./pages/DatabaseConnectionManagement'));
 const FeishuConfigManagement = lazyPage(() => import('./pages/FeishuConfigManagement'));
+const WechatMpConfigManagement = lazyPage(() => import('./pages/WechatMpConfigManagement'));
+const WechatMpBinding = lazyPage(() => import('./pages/WechatMpBinding'));
+const NotificationChannel = lazyPage(() => import('./pages/NotificationChannel'));
 const EmailConfigManagement = lazyPage(() => import('./pages/EmailConfigManagement'));
 const NotificationManagement = lazyPage(() => import('./pages/NotificationManagement'));
 const NotificationPreferences = lazyPage(() => import('./pages/NotificationPreferences'));
@@ -125,6 +136,8 @@ const StatisticsPage = lazyPage(() => import('./pages/quality-control/Statistics
 const QualityControlList = lazyPage(() => import('./pages/QualityControlList'));
 const QualityControlForm = lazyPage(() => import('./pages/QualityControlForm'));
 const QualityControlDetail = lazyPage(() => import('./pages/QualityControlDetail'));
+// POCT 临床科室日常质控(平铺 Tab 方案,所有子页内嵌到 Dashboard)
+const PoctDashboard = lazyPage(() => import('./pages/poct/PoctDashboard'));
 const InventoryScanner = lazyPage(() => import('./pages/InventoryScanner'));
 const BatchUploadPage = lazyPage(() => import('./pages/BatchUploadPage'));
 const AdverseReactionList = lazyPage(() => import('./pages/AdverseReactionList'));
@@ -143,8 +156,8 @@ const TenderProjectList = lazyPage(() => import('./pages/tendering/TenderProject
 const TenderProjectForm = lazyPage(() => import('./pages/tendering/TenderProjectForm'));
 const TenderProjectDetail = lazyPage(() => import('./pages/tendering/TenderProjectDetail'));
 const TenderDocumentEditor = lazyPage(() => import('./pages/tendering/TenderDocumentEditor'));
-const SupplierList = lazyPage(() => import('./pages/tendering/SupplierList'));
-const SupplierQualificationUpload = lazyPage(() => import('./pages/tendering/SupplierQualificationUpload'));
+const SupplierList = lazyPage(() => import('./pages/supplier/SupplierList'));
+const SupplierQualificationUpload = lazyPage(() => import('./pages/supplier/SupplierQualificationUpload'));
 const BidList = lazyPage(() => import('./pages/tendering/BidList'));
 const BidOverview = lazyPage(() => import('./pages/tendering/BidOverview'));
 const BidDetail = lazyPage(() => import('./pages/tendering/BidDetail'));
@@ -174,6 +187,12 @@ const TendererPreview = lazyPage(() => import('./pages/tendering/TendererPreview
 const ContractList = lazyPage(() => import('./pages/tendering/ContractList'));
 const ContractForm = lazyPage(() => import('./pages/tendering/ContractForm'));
 const ContractDetail = lazyPage(() => import('./pages/tendering/ContractDetail'));
+
+// 统一合同管理（资产合同、维修服务合同、配件合同）
+const AssetContractList = lazyPage(() => import('./pages/contracts/ContractList'));
+const AssetContractForm = lazyPage(() => import('./pages/contracts/ContractForm'));
+const AssetContractDetail = lazyPage(() => import('./pages/contracts/ContractDetail'));
+
 const EnterpriseSelect = lazyPage(() => import('./pages/EnterpriseSelect'));
 const AssetLabelTemplateList = lazyPage(() => import('./pages/AssetLabelTemplateList'));
 const AssetLabelPrint = lazyPage(() => import('./pages/AssetLabelPrint'));
@@ -182,6 +201,7 @@ const AssetDepreciation = lazyPage(() => import('./pages/AssetDepreciation'));
 const FinanceBudget = lazyPage(() => import('./pages/FinanceBudget'));
 const FinanceTransactions = lazyPage(() => import('./pages/FinanceTransactions'));
 const FinanceReports = lazyPage(() => import('./pages/FinanceReports'));
+const FinanceCosts = lazyPage(() => import('./pages/FinanceCosts'));
 const TempAssetList = lazyPage(() => import('./pages/TempAssetList'));
 const ModuleManagement = lazyPage(() => import('./pages/ModuleManagement'));
 const TenantModuleConfig = lazyPage(() => import('./pages/TenantModuleConfig'));
@@ -195,17 +215,32 @@ const Preferences = lazyPage(() => import('./pages/Preferences'));
 const ComplianceDashboard = lazyPage(() => import('./pages/compliance/Dashboard'));
 const ComplianceMaintenanceLevel = lazyPage(() => import('./pages/compliance/MaintenanceLevel'));
 const SpecialEquipment = lazyPage(() => import('./pages/compliance/SpecialEquipment'));
+const SparePartsManagement = lazyPage(() => import('./pages/SparePartsManagement'));
+const MaintenanceTemporaryList = lazyPage(() => import('./pages/MaintenanceTemporaryList'));
+// 阶段3：临时保养合并到 PreventiveMaintenanceHub 作为 tab，保留组件 import 用于 Navigate 兼容
 const SafetyInspection = lazyPage(() => import('./pages/compliance/SafetyInspection'));
 const RiskDashboard = lazyPage(() => import('./pages/risk/Dashboard'));
 const RiskAssessmentPage = lazyPage(() => import('./pages/risk/RiskAssessment'));
 const RiskClassificationPage = lazyPage(() => import('./pages/risk/RiskClassification'));
 const RiskControlPage = lazyPage(() => import('./pages/risk/RiskControl'));
 const StaffDashboard = lazyPage(() => import('./modules/staff/pages/Dashboard'));
+const EmergencyAllocation = lazyPage(() => import('./modules/emergency/pages/EmergencyAllocation'));
+const ClinicalDashboard = lazyPage(() => import('./modules/clinical/pages/ClinicalDashboard'));
+const EventReminder = lazyPage(() => import('./modules/event-reminder/pages/EventReminder'));
+const EventReminderH5 = lazyPage(() => import('./modules/event-reminder/pages/EventReminderH5'));
+// PDCA 管理
+const PdcaManagement = lazyPage(() => import('./modules/pdca/pages/PdcaManagement'));
+const PdcaRecordForm = lazyPage(() => import('./modules/pdca/pages/PdcaRecordForm'));
+const PdcaRecordPrint = lazyPage(() => import('./modules/pdca/pages/PdcaRecordPrint'));
+const FormCustomization = lazyPage(() => import('./modules/form-workflow/pages/FormCustomization'));
+const WorkflowManagement = lazyPage(() => import('./modules/form-workflow/pages/WorkflowManagement'));
+const NewCollaboration = lazyPage(() => import('./modules/form-workflow/pages/NewCollaboration'));
+const MyCollaborations = lazyPage(() => import('./modules/form-workflow/pages/MyCollaborations'));
 const QualificationManagement = lazyPage(() => import('./modules/staff/pages/Qualifications'));
 const TrainingManagement = lazyPage(() => import('./modules/staff/pages/Training'));
 const CompetencyAssessment = lazyPage(() => import('./modules/staff/pages/Assessments'));
+const EngineerProfiles = lazyPage(() => import('./modules/staff/pages/EngineerProfiles'));
 const UptimeDashboard = lazyPage(() => import('./pages/uptime/Dashboard'));
-const UptimeOverview = lazyPage(() => import('./pages/uptime/UptimeOverview'));
 const OperationLogManagement = lazyPage(() => import('./pages/uptime/OperationLogManagement'));
 const UptimeStatistics = lazyPage(() => import('./pages/uptime/UptimeStatistics'));
 // 公开扫码页（供应商扫码访问，无鉴权）
@@ -271,6 +306,9 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/enterprise-select" element={<EnterpriseSelect />} />
 
+            {/* H5 移动端路由 (无侧边栏, 适合手机浏览器扫码进入) */}
+            <Route path="/m/event-reminder" element={<EventReminderH5 />} />
+
             {/* 弹窗路由 - 不需要侧边栏和顶部栏，直接渲染页面内容 */}
             {/* 弹窗从主窗口打开，已通过主窗口认证，不需再次验证 */}
             <Route path="/popup/*" element={
@@ -282,14 +320,37 @@ function App() {
                   <Route path="assets/new" element={<AssetForm />} />
                   <Route path="assets/edit/:id" element={<AssetForm />} />
                   <Route path="inventory" element={<InventoryList />} />
+                  <Route path="spare-parts" element={<SparePartsManagement />} />
+                  {/* 阶段3工单重构：弹窗里的 /maintenance/temporary 走 Navigate */}
+                  <Route path="maintenance/temporary" element={<Navigate to="/preventive-maintenance" replace />} />
+                  <Route path="emergency/allocation" element={<EmergencyAllocation />} />
+                  <Route path="clinical/dashboard" element={<ClinicalDashboard />} />
+                  <Route path="event-reminder" element={<EventReminder />} />
+                  {/* PDCA 管理 */}
+                  <Route path="pdca/records" element={<PdcaManagement />} />
+                  <Route path="pdca/records/:id/edit" element={<PdcaRecordForm />} />
+                  <Route path="pdca/records/:id/print" element={<PdcaRecordPrint />} />
+                  <Route path="pdca/templates" element={<PdcaManagement />} />
+                  <Route path="form-customization" element={<FormCustomization />} />
+                  <Route path="workflow" element={<WorkflowManagement />} />
+                  <Route path="collaboration/new" element={<NewCollaboration />} />
+                  <Route path="collaboration/list" element={<MyCollaborations />} />
                   <Route path="inventory/self" element={<InventorySelfCheck />} />
                   <Route path="inventory/new" element={<InventoryForm />} />
                   <Route path="inventory/edit/:id" element={<InventoryForm />} />
                   <Route path="inventory/:id" element={<InventoryDetail />} />
                   <Route path="inventory/:id/scan" element={<InventoryScanner />} />
-                  <Route path="transfer" element={<TransferList />} />
-                  <Route path="transfer/new" element={<TransferForm />} />
-                  <Route path="transfer/requests" element={<TransferRequestList />} />
+                  <Route path="/inventory-plans" element={<InventoryPlanList />} />
+                  <Route path="/inventory-plans/new" element={<InventoryPlanForm />} />
+                  <Route path="/inventory-plans/:id/edit" element={<InventoryPlanForm />} />
+                  <Route path="/inventory-tasks" element={<InventoryTaskList />} />
+                  <Route path="/inventory-tasks/new" element={<InventoryTaskForm />} />
+                  <Route path="/inventory-tasks/:id/edit" element={<InventoryTaskForm />} />
+                  <Route path="/inventory-discrepancies" element={<InventoryDiscrepancyList />} />
+                  <Route path="/inventory-dashboard" element={<InventoryDashboard />} />
+                  <Route path="asset-allocation" element={<TransferList />} />
+                  <Route path="asset-allocation/new" element={<TransferForm />} />
+                  <Route path="asset-allocation/requests" element={<TransferRequestList />} />
                   <Route path="idle" element={<IdleAssetList />} />
                   <Route path="idle/new" element={<IdleAssetForm />} />
                   <Route path="idle/:id" element={<IdleAssetDetail />} />
@@ -299,24 +360,25 @@ function App() {
                   <Route path="scrapping/:id/edit" element={<ScrappingForm />} />
                   <Route path="dashboard" element={<Dashboard />} />
                   <Route path="dashboard-desktop" element={<DashboardDesktop />} />
+                  <Route path="asset-dashboard" element={<AssetStatusDashboard />} />
                   <Route path="depreciation" element={<AssetDepreciation />} />
-                  <Route path="maintenance/temporary" element={<TemporaryMaintenanceList />} />
-                  <Route path="maintenance/temporary/new" element={<TemporaryMaintenanceForm />} />
-                  <Route path="maintenance/temporary/edit/:id" element={<TemporaryMaintenanceForm />} />
-                  <Route path="maintenance/plans" element={<PreventiveMaintenanceList />} />
+                  {/* 预防性维护中心：合并了"维护计划 / 维护模板 / 提醒管理"三个原独立菜单（2026-07-16） */}
+                  <Route path="maintenance/plans" element={<PreventiveMaintenanceHub />} />
                   <Route path="maintenance/plans/new" element={<PreventiveMaintenanceForm />} />
                   <Route path="maintenance/plans/edit/:id" element={<PreventiveMaintenanceForm />} />
                   <Route path="maintenance/plans/:id" element={<PreventiveMaintenanceDetail />} />
-                  <Route path="maintenance/templates" element={<MaintenanceTemplateList />} />
-                  <Route path="maintenance/templates/new" element={<MaintenanceTemplateForm />} />
-                  <Route path="maintenance/templates/edit/:id" element={<MaintenanceTemplateForm />} />
                   <Route path="maintenance/requests" element={<MaintenanceRequestList />} />
-                  <Route path="maintenance/workorders" element={<MaintenanceWorkOrderList />} />
+                  {/* 原"调度中心"路径已经下线（2026-07-16） */}
+                  {/* 新增"工单管理"独立页面 */}
+                  <Route path="maintenance/workorder-management" element={<MaintenanceWorkOrderManagement />} />
                   <Route path="maintenance/efficiency" element={<MaintenanceEfficiencyDashboard />} />
-                  <Route path="maintenance/reminders" element={<MaintenanceReminderList />} />
-                  <Route path="maintenance/warranty" element={<WarrantyManagement />} />
-                  <Route path="maintenance/warranty-contracts" element={<WarrantyContractManagement />} />
-                  <Route path="maintenance/warranty-reminders" element={<WarrantyReminderManagement />} />
+                  <Route path="maintenance/dashboard" element={<MaintenanceDashboard />} />
+                  <Route path="maintenance-dashboard" element={<MaintenanceDashboard />} />
+                  <Route path="maintenance/costs" element={<MaintenanceCostList />} />
+                  <Route path="maintenance/evaluations" element={<MaintenanceEvaluationList />} />
+                  <Route path="system/menu-order" element={<MenuOrderSettings />} />
+                  <Route path="warranty" element={<WarrantyManagement />} />
+                  {/* 保修管理（独立模块，2026-07-16） */}
                   <Route path="maintenance/usage-triggers" element={<MaintenanceUsageTriggerList />} />
                   <Route path="maintenance/asset-usage" element={<MaintenanceAssetUsage />} />
                   <Route path="asset-location" element={<AssetLocationMap />} />
@@ -335,18 +397,20 @@ function App() {
                   <Route path="acceptance/teams/:id" element={<AcceptanceTeam />} />
                   <Route path="acceptance/report/:id" element={<AcceptanceReport />} />
                   <Route path="acceptance/:id" element={<AcceptanceDetail />} />
-                  <Route path="quality-control/metrology" element={<MetrologyList />} />
-                  <Route path="quality-control/metrology/new" element={<MetrologyForm />} />
-                  <Route path="quality-control/metrology/edit/:id" element={<MetrologyForm />} />
-                  <Route path="quality-control/metrology/:id" element={<MetrologyDetail />} />
-                  <Route path="quality-control/metrology/upload" element={<MetrologyUploadPage />} />
-                  <Route path="quality-control/metrology/management" element={<MetrologyPage />} />
-                  <Route path="quality-control/management" element={<QualityControlPage />} />
+                  {/* 阶段1质量重构：路径统一为 /metrology/* 和 /quality-control/* */}
+                  <Route path="metrology" element={<MetrologyList />} />
+                  <Route path="metrology/new" element={<MetrologyForm />} />
+                  <Route path="metrology/edit/:id" element={<MetrologyForm />} />
+                  <Route path="metrology/:id" element={<MetrologyDetail />} />
+                  <Route path="metrology/upload" element={<MetrologyUploadPage />} />
+                  <Route path="quality-control" element={<QualityControlList />} />
+                  <Route path="quality-control/new" element={<QualityControlForm />} />
+                  <Route path="quality-control/edit/:id" element={<QualityControlForm />} />
+                  <Route path="quality-control/:id" element={<QualityControlDetail />} />
+                  <Route path="quality-control/management" element={<Navigate to="/quality-control" replace />} />
                   <Route path="quality-control/statistics" element={<StatisticsPage />} />
-                  <Route path="quality-control/qc" element={<QualityControlList />} />
-                  <Route path="quality-control/qc/new" element={<QualityControlForm />} />
-                  <Route path="quality-control/qc/edit/:id" element={<QualityControlForm />} />
-                  <Route path="quality-control/qc/:id" element={<QualityControlDetail />} />
+                  {/* POCT 临床科室日常质控管理(平铺 Tab 方案,所有子页内嵌到 Dashboard) */}
+                  <Route path="poct-quality-control" element={<PoctDashboard />} />
                   <Route path="adverse-reaction" element={<AdverseReactionList />} />
                   <Route path="adverse-reaction/new" element={<AdverseReactionForm />} />
                   <Route path="adverse-reaction/edit/:id" element={<AdverseReactionForm />} />
@@ -381,9 +445,9 @@ function App() {
                   <Route path="staff/qualifications" element={<QualificationManagement />} />
                   <Route path="staff/training" element={<TrainingManagement />} />
                   <Route path="staff/assessments" element={<CompetencyAssessment />} />
+                  <Route path="staff/engineers" element={<EngineerProfiles />} />
                   <Route path="uptime" element={<Navigate to="uptime/dashboard" replace />} />
                   <Route path="uptime/dashboard" element={<UptimeDashboard />} />
-                  <Route path="uptime/overview" element={<UptimeOverview />} />
                   <Route path="uptime/operation-logs" element={<OperationLogManagement />} />
                   <Route path="uptime/statistics" element={<UptimeStatistics />} />
                   <Route path="users" element={<AdminOnly><UserList /></AdminOnly>} />
@@ -414,6 +478,9 @@ function App() {
                   <Route path="backup" element={<BackupManagement />} />
                   <Route path="database-connection" element={<AdminOnly><DatabaseConnectionManagement /></AdminOnly>} />
                   <Route path="feishu-config" element={<AdminOnly><FeishuConfigManagement /></AdminOnly>} />
+                  <Route path="wechat-mp-config" element={<AdminOnly><WechatMpConfigManagement /></AdminOnly>} />
+                  <Route path="wechat-mp-binding" element={<WechatMpBinding />} />
+                  <Route path="notification-channel" element={<AdminOnly><NotificationChannel /></AdminOnly>} />
                   <Route path="email-config" element={<AdminOnly><EmailConfigManagement /></AdminOnly>} />
                   <Route path="notification-config" element={<AdminOnly><NotificationManagement /></AdminOnly>} />
                   <Route path="notification-preferences" element={<NotificationPreferences />} />
@@ -436,6 +503,12 @@ function App() {
             <Route path="/supplier-upload/:token" element={<SupplierQualificationUpload />} />
             {/* 招标项目共享二维码（任何供应商扫码即可访问） */}
             <Route path="/tenderer/:token" element={<TendererPortal />} />
+            {/* 资产状态监控平台（全屏独立页面，无 Layout 但需登录） */}
+            <Route path="/asset-dashboard" element={
+              <ProtectedRoute>
+                <AssetStatusDashboard />
+              </ProtectedRoute>
+            } />
 
             <Route
               path="/*"
@@ -466,9 +539,21 @@ function App() {
                     <Route path="/inventory/edit/:id" element={<InventoryForm />} />
                     <Route path="/inventory/:id" element={<InventoryDetail />} />
                     <Route path="/inventory/:id/scan" element={<InventoryScanner />} />
-                    <Route path="/transfer" element={<TransferList />} />
-                    <Route path="/transfer/new" element={<TransferForm />} />
-                    <Route path="/transfer/requests" element={<TransferRequestList />} />
+                    <Route path="/inventory-plans" element={<InventoryPlanList />} />
+                    <Route path="/inventory-plans/new" element={<InventoryPlanForm />} />
+                    <Route path="/inventory-plans/:id/edit" element={<InventoryPlanForm />} />
+                    <Route path="/inventory-tasks" element={<InventoryTaskList />} />
+                    <Route path="/inventory-tasks/new" element={<InventoryTaskForm />} />
+                    <Route path="/inventory-tasks/:id/edit" element={<InventoryTaskForm />} />
+                    <Route path="/inventory-discrepancies" element={<InventoryDiscrepancyList />} />
+                    <Route path="/inventory-dashboard" element={<InventoryDashboard />} />
+                    {/* 阶段2资产调配：老路径保留 Navigate 兼容 */}
+                    <Route path="/transfer" element={<Navigate to="/asset-allocation" replace />} />
+                    <Route path="/transfer/new" element={<Navigate to="/asset-allocation/new" replace />} />
+                    <Route path="/transfer/requests" element={<Navigate to="/asset-allocation/requests" replace />} />
+                    <Route path="/asset-allocation" element={<TransferList />} />
+                    <Route path="/asset-allocation/new" element={<TransferForm />} />
+                    <Route path="/asset-allocation/requests" element={<TransferRequestList />} />
                     <Route path="/idle" element={<IdleAssetList />} />
                     <Route path="/idle/new" element={<IdleAssetForm />} />
                     <Route path="/idle/:id" element={<IdleAssetDetail />} />
@@ -496,15 +581,15 @@ function App() {
                     <Route path="/backup" element={<AdminOnly><BackupManagement /></AdminOnly>} />
                     <Route path="/database-connection" element={<AdminOnly><DatabaseConnectionManagement /></AdminOnly>} />
                     <Route path="/feishu-config" element={<AdminOnly><FeishuConfigManagement /></AdminOnly>} />
+                    <Route path="/wechat-mp-config" element={<AdminOnly><WechatMpConfigManagement /></AdminOnly>} />
+                    <Route path="/wechat-mp-binding" element={<WechatMpBinding />} />
+                    <Route path="/notification-channel" element={<AdminOnly><NotificationChannel /></AdminOnly>} />
                     <Route path="/email-config" element={<AdminOnly><EmailConfigManagement /></AdminOnly>} />
                     <Route path="/notification-config" element={<AdminOnly><NotificationManagement /></AdminOnly>} />
                     <Route path="/notification-preferences" element={<NotificationPreferences />} />
                     <Route path="/api-docs" element={<AdminOnly><ApiDocs /></AdminOnly>} />
                     <Route path="/api-documentation" element={<AdminOnly><APIDocumentation /></AdminOnly>} />
-                    <Route path="/maintenance/temporary" element={<TemporaryMaintenanceList />} />
-                    <Route path="/maintenance/temporary/new" element={<TemporaryMaintenanceForm />} />
-                    <Route path="/maintenance/temporary/edit/:id" element={<TemporaryMaintenanceForm />} />
-                    <Route path="/maintenance/plans" element={<PreventiveMaintenanceList />} />
+                    <Route path="/maintenance/plans" element={<PreventiveMaintenanceHub />} />
                     <Route path="/maintenance/plans/new" element={<PreventiveMaintenanceForm />} />
                     <Route
                       path="/maintenance/plans/edit/:id"
@@ -513,15 +598,6 @@ function App() {
                     <Route
                       path="/maintenance/plans/:id"
                       element={<PreventiveMaintenanceDetail />}
-                    />
-                    <Route path="/maintenance/templates" element={<MaintenanceTemplateList />} />
-                    <Route
-                      path="/maintenance/templates/new"
-                      element={<MaintenanceTemplateForm />}
-                    />
-                    <Route
-                      path="/maintenance/templates/edit/:id"
-                      element={<MaintenanceTemplateForm />}
                     />
                     <Route path="/maintenance/requests" element={<MaintenanceRequestList />} />
                     <Route path="/maintenance/requests/new" element={<MaintenanceRequestList />} />
@@ -534,27 +610,23 @@ function App() {
                       path="/maintenance/requests/complete/:id"
                       element={<MaintenanceRequestList />}
                     />
-                    <Route path="/maintenance/workorders" element={<MaintenanceWorkOrderList />} />
+                    {/* 已删除：/maintenance/workorders 维修申请管理（原"调度中心"，2026-07-16） */}
+                    {/* 新增"工单管理"独立页面 */}
                     <Route
-                      path="/maintenance/workorders/new"
-                      element={<MaintenanceWorkOrderList />}
-                    />
-                    <Route
-                      path="/maintenance/workorders/edit/:id"
-                      element={<MaintenanceWorkOrderList />}
-                    />
-                    <Route
-                      path="/maintenance/workorders/:id"
-                      element={<MaintenanceWorkOrderList />}
+                      path="/maintenance/workorder-management"
+                      element={<MaintenanceWorkOrderManagement />}
                     />
                     <Route
                       path="/maintenance/efficiency"
                       element={<MaintenanceEfficiencyDashboard />}
                     />
-                    <Route path="/maintenance/reminders" element={<MaintenanceReminderList />} />
-                    <Route path="/maintenance/warranty" element={<WarrantyManagement />} />
-                    <Route path="/maintenance/warranty-contracts" element={<WarrantyContractManagement />} />
-                    <Route path="/maintenance/warranty-reminders" element={<WarrantyReminderManagement />} />
+                    <Route path="/maintenance/dashboard" element={<MaintenanceDashboard />} />
+                    <Route path="/maintenance-dashboard" element={<MaintenanceDashboard />} />
+                    <Route path="/maintenance/costs" element={<MaintenanceCostList />} />
+                    <Route path="/maintenance/evaluations" element={<MaintenanceEvaluationList />} />
+                    <Route path="/system/menu-order" element={<MenuOrderSettings />} />
+                    <Route path="/warranty" element={<WarrantyManagement />} />
+                    {/* 保修管理（独立模块，2026-07-16） */}
                     <Route
                       path="/maintenance/usage-triggers"
                       element={<MaintenanceUsageTriggerList />}
@@ -579,6 +651,21 @@ function App() {
                       element={<ComplianceMaintenanceLevel />}
                     />
                     <Route path="/special-equipment" element={<SpecialEquipment />} />
+                    <Route path="/spare-parts" element={<SparePartsManagement />} />
+                    {/* 阶段3工单重构：临时保养合并到预防性维护，老路径走 Navigate */}
+                    <Route path="/maintenance/temporary" element={<Navigate to="/preventive-maintenance" replace />} />
+                    <Route path="/emergency/allocation" element={<EmergencyAllocation />} />
+                    <Route path="/clinical/dashboard" element={<ClinicalDashboard />} />
+                    <Route path="/event-reminder" element={<EventReminder />} />
+                    {/* PDCA 管理 */}
+                    <Route path="/pdca/records" element={<PdcaManagement />} />
+                    <Route path="/pdca/records/:id/edit" element={<PdcaRecordForm />} />
+                    <Route path="/pdca/records/:id/print" element={<PdcaRecordPrint />} />
+                    <Route path="/pdca/templates" element={<PdcaManagement />} />
+                    <Route path="/form-customization" element={<FormCustomization />} />
+                    <Route path="/workflow" element={<WorkflowManagement />} />
+                    <Route path="/collaboration/new" element={<NewCollaboration />} />
+                    <Route path="/collaboration/list" element={<MyCollaborations />} />
                     <Route path="/safety-inspection" element={<SafetyInspection />} />
                     <Route path="/inspection" element={<InspectionList />} />
                     <Route path="/inspection/records" element={<InspectionRecordList />} />
@@ -614,9 +701,9 @@ function App() {
                     />
                     <Route path="/staff/training" element={<TrainingManagement />} />
                     <Route path="/staff/assessments" element={<CompetencyAssessment />} />
+                    <Route path="/staff/engineers" element={<EngineerProfiles />} />
                     <Route path="/uptime" element={<Navigate to="/uptime/dashboard" replace />} />
                     <Route path="/uptime/dashboard" element={<UptimeDashboard />} />
-                    <Route path="/uptime/overview" element={<UptimeOverview />} />
                     <Route
                       path="/uptime/operation-logs"
                       element={<OperationLogManagement />}
@@ -646,24 +733,20 @@ function App() {
                     <Route path="/acceptance/report/:id" element={<AcceptanceReport />} />
                     <Route path="/acceptance/teams/:id" element={<AcceptanceTeam />} />
                     <Route path="/acceptance/:id" element={<AcceptanceDetail />} />
-                    <Route path="/quality-control/metrology" element={<MetrologyList />} />
-                    <Route path="/quality-control/metrology/new" element={<MetrologyForm />} />
-                    <Route path="/quality-control/metrology/edit/:id" element={<MetrologyForm />} />
-                    <Route path="/quality-control/metrology/:id" element={<MetrologyDetail />} />
-                    <Route
-                      path="/quality-control/metrology/upload"
-                      element={<MetrologyUploadPage />}
-                    />
-                    <Route
-                      path="/quality-control/metrology/management"
-                      element={<MetrologyPage />}
-                    />
-                    <Route path="/quality-control/management" element={<QualityControlPage />} />
+                    {/* 阶段1质量重构：路径统一为 /metrology/* 和 /quality-control/* */}
+                    <Route path="/metrology" element={<MetrologyList />} />
+                    <Route path="/metrology/new" element={<MetrologyForm />} />
+                    <Route path="/metrology/edit/:id" element={<MetrologyForm />} />
+                    <Route path="/metrology/:id" element={<MetrologyDetail />} />
+                    <Route path="/metrology/upload" element={<MetrologyUploadPage />} />
+                    <Route path="/quality-control" element={<QualityControlList />} />
+                    <Route path="/quality-control/new" element={<QualityControlForm />} />
+                    <Route path="/quality-control/edit/:id" element={<QualityControlForm />} />
+                    <Route path="/quality-control/:id" element={<QualityControlDetail />} />
+                    <Route path="/quality-control/management" element={<Navigate to="/quality-control" replace />} />
                     <Route path="/quality-control/statistics" element={<StatisticsPage />} />
-                    <Route path="/quality-control/qc" element={<QualityControlList />} />
-                    <Route path="/quality-control/qc/new" element={<QualityControlForm />} />
-                    <Route path="/quality-control/qc/edit/:id" element={<QualityControlForm />} />
-                    <Route path="/quality-control/qc/:id" element={<QualityControlDetail />} />
+                    {/* POCT 临床科室日常质控管理(平铺 Tab 方案,所有子页内嵌到 Dashboard) */}
+                    <Route path="/poct-quality-control" element={<PoctDashboard />} />
                     <Route
                       path="/adverse-events"
                       element={<Navigate to="/adverse-reaction" replace />}
@@ -712,6 +795,7 @@ function App() {
                     {/* 财务管理 - 新增子模块 */}
                     <Route path="/finance/budget" element={<FinanceBudget />} />
                     <Route path="/finance/transactions" element={<FinanceTransactions />} />
+                    <Route path="/finance/costs" element={<FinanceCosts />} />
                     <Route path="/finance/reports" element={<FinanceReports />} />
 
                     {/* 部门管理相关路由 */}
@@ -776,11 +860,29 @@ function App() {
                     <Route path="/tendering/statistics" element={<TenderStatistics />} />
                     <Route path="/tendering/qrcodes" element={<TendererPreview />} />
                     <Route path="/tendering/bids/:bidId" element={<BidDetail />} />
-                    <Route path="/tendering/suppliers" element={<SupplierList />} />
+                    {/* 注：/tendering/suppliers 已迁移至 /supplier/list，由 module-routes.js 统一管理 */}
                     <Route path="/tendering/contracts" element={<ContractList />} />
                     <Route path="/tendering/contracts/new" element={<ContractForm />} />
                     <Route path="/tendering/contracts/edit/:id" element={<ContractForm />} />
                     <Route path="/tendering/contracts/:id" element={<ContractDetail />} />
+
+                    {/* 统一合同管理 - 资产合同 */}
+                    <Route path="/contracts/asset" element={<AssetContractList type="asset" />} />
+                    <Route path="/contracts/asset/new" element={<AssetContractForm type="asset" />} />
+                    <Route path="/contracts/asset/edit/:id" element={<AssetContractForm type="asset" />} />
+                    <Route path="/contracts/asset/:id" element={<AssetContractDetail type="asset" />} />
+
+                    {/* 统一合同管理 - 维修服务合同 */}
+                    <Route path="/contracts/maintenance" element={<AssetContractList type="maintenance" />} />
+                    <Route path="/contracts/maintenance/new" element={<AssetContractForm type="maintenance" />} />
+                    <Route path="/contracts/maintenance/edit/:id" element={<AssetContractForm type="maintenance" />} />
+                    <Route path="/contracts/maintenance/:id" element={<AssetContractDetail type="maintenance" />} />
+
+                    {/* 统一合同管理 - 配件合同 */}
+                    <Route path="/contracts/parts" element={<AssetContractList type="parts" />} />
+                    <Route path="/contracts/parts/new" element={<AssetContractForm type="parts" />} />
+                    <Route path="/contracts/parts/edit/:id" element={<AssetContractForm type="parts" />} />
+                    <Route path="/contracts/parts/:id" element={<AssetContractDetail type="parts" />} />
 
                     {/* 发票管理 */}
                     <Route path="/tendering/invoices" element={<TenderInvoiceList />} />

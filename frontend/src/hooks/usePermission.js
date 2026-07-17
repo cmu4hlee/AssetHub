@@ -57,6 +57,19 @@ export const useCan = (module, action = 'view') => {
       delete: ['quality_admin', 'asset_admin'],
       approve: ['quality_admin'],
     },
+    // ==================== POCT 临床科室日常质控 ====================
+    poct: {
+      // 所有用户都能查看(临床科室自行录入)
+      view: ['asset_admin', 'quality_admin', 'department_admin', 'maintenance_admin', 'maintenance_engineer'],
+      // 录入需要任何业务用户(临床操作员)
+      add: ['asset_admin', 'quality_admin', 'department_admin', 'maintenance_admin', 'maintenance_engineer'],
+      // 修改记录(只能改自己的)
+      edit: ['asset_admin', 'quality_admin', 'department_admin', 'maintenance_admin', 'maintenance_engineer'],
+      // 删除 = 管理员
+      delete: ['asset_admin', 'quality_admin'],
+      // 管理 = 排班 / 班次 / 科目 / 提醒规则
+      admin: ['asset_admin', 'quality_admin'],
+    },
     acceptance: {
       view: ['acceptance_admin', 'asset_admin'],
       add: ['acceptance_admin', 'asset_admin'],
@@ -175,6 +188,14 @@ export const useCan = (module, action = 'view') => {
       delete: ['asset_admin'],
       approve: ['asset_admin', 'system_admin'],
     },
+    // ==================== 供应商中心 ====================
+    supplier: {
+      view: ['asset_admin', 'system_admin'],
+      add: ['asset_admin', 'system_admin'],
+      edit: ['asset_admin', 'system_admin'],
+      delete: ['asset_admin', 'system_admin'],
+      approve: ['asset_admin', 'system_admin'],
+    },
     // ==================== IoT ====================
     iot: {
       view: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
@@ -212,6 +233,61 @@ export const useCan = (module, action = 'view') => {
       add: ['asset_admin'],
       edit: ['asset_admin'],
       delete: ['asset_admin'],
+    },
+    // ==================== 备件库 ====================
+    spare_parts: {
+      view: ['asset_admin', 'maintenance_admin', 'maintenance_engineer', 'department_admin'],
+      add: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
+      edit: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
+      delete: ['asset_admin', 'maintenance_admin'],
+      stock_in: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
+      stock_out: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
+    },
+    // ==================== 临时保养 ====================
+    maintenance_temporary: {
+      view: ['asset_admin', 'maintenance_admin', 'maintenance_engineer', 'department_admin'],
+      add: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
+      edit: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
+      delete: ['asset_admin', 'maintenance_admin'],
+    },
+    // ==================== 应急设备调配 / 租借计费 ====================
+    emergency_allocation: {
+      view: ['asset_admin', 'maintenance_admin', 'maintenance_engineer', 'department_admin'],
+      add: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
+      edit: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
+      delete: ['asset_admin', 'maintenance_admin'],
+      approve: ['asset_admin', 'maintenance_admin'],
+      borrow: ['asset_admin', 'maintenance_admin'],
+      return: ['asset_admin', 'maintenance_admin'],
+      settle: ['asset_admin', 'maintenance_admin'],
+    },
+    // ==================== 临床管理平台聚合视图 ====================
+    clinical: {
+      view: ['asset_admin', 'department_admin', 'maintenance_admin', 'maintenance_engineer'],
+    },
+    // ==================== 通用事件提醒 ====================
+    event_reminder: {
+      view: ['asset_admin', 'maintenance_admin', 'maintenance_engineer', 'department_admin'],
+      add: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
+      edit: ['asset_admin', 'maintenance_admin', 'maintenance_engineer'],
+      delete: ['asset_admin', 'maintenance_admin'],
+      type: ['asset_admin', 'maintenance_admin'],
+    },
+    // ==================== 表单定制 ====================
+    form_customization: {
+      view: ['asset_admin', 'system_admin'],
+      'schema:create': ['asset_admin', 'system_admin'],
+      'schema:update': ['asset_admin', 'system_admin'],
+      'schema:delete': ['asset_admin', 'system_admin'],
+    },
+    // ==================== 流程定制（通用审批引擎） ====================
+    workflow: {
+      view: ['asset_admin', 'system_admin', 'department_admin', 'maintenance_admin'],
+      'definition:create': ['asset_admin', 'system_admin'],
+      'definition:update': ['asset_admin', 'system_admin'],
+      'definition:delete': ['asset_admin', 'system_admin'],
+      'instance:create': ['asset_admin', 'system_admin', 'department_admin', 'maintenance_admin'],
+      'instance:approve': ['asset_admin', 'system_admin', 'department_admin', 'maintenance_admin'],
     },
   };
 
