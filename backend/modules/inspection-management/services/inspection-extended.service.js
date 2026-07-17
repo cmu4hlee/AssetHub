@@ -333,7 +333,7 @@ class InspectionExtendedService {
   // ============ 专门复核 API ============
 
   async reviewRecord(id, payload, tenantId, userInfo) {
-    const { decision, remark } = payload; // decision: 'approve' | 'reject'
+    const { decision, remark, signature_reviewer, overall_result } = payload; // decision: 'approve' | 'reject'
     const status = decision === 'approve' ? 'reviewed' : 'submitted';
     const updateData = {
       status,
@@ -343,6 +343,14 @@ class InspectionExtendedService {
     };
     if (decision === 'approve') {
       updateData.review_action = 'review';
+      // 复核人手写签名(base64 PNG)—— 重要审批留痕
+      if (signature_reviewer && typeof signature_reviewer === 'string' && signature_reviewer.startsWith('data:image/')) {
+        updateData.signature_reviewer = signature_reviewer;
+      }
+      // 复核结论:normal / abnormal / need_attention
+      if (overall_result && ['normal', 'abnormal', 'need_attention'].includes(overall_result)) {
+        updateData.overall_result = overall_result;
+      }
     }
     return coreInspection.updateRecord(id, updateData, tenantId);
   }
@@ -796,7 +804,7 @@ class InspectionExtendedService {
       th, td { border: 1px solid #999; padding: 6px 8px; text-align: left; }
       th { background: #f0f0f0; }
       .footer { margin-top: 32px; font-size: 12px; }
-      .signature { display: inline-block; width: 200px; border-bottom: 1px solid #333; }
+      .signature { display: inline-block; width: 200px; height: 60px; border-bottom: 1px solid #333; vertical-align: middle; object-fit: contain; }
     </style></head><body>
       <h1>巡检记录单</h1>
       <div class="meta">
@@ -816,8 +824,8 @@ class InspectionExtendedService {
         <p>巡检总结: ${this._esc(record.summary || '')}</p>
         <p>改进建议: ${this._esc(record.suggestions || '')}</p>
         <p style="margin-top: 24px;">
-          巡检人签字: <span class="signature">${this._esc(record.signature_inspector || '')}</span>
-          复核人签字: <span class="signature">${this._esc(record.signature_reviewer || '')}</span>
+          巡检人签字: ${this._signatureImg(record.signature_inspector)}
+          复核人签字: ${this._signatureImg(record.signature_reviewer)}
         </p>
       </div>
     </body></html>`;
@@ -826,6 +834,19 @@ class InspectionExtendedService {
   _esc(v) {
     if (v === null || v === undefined) return '';
     return String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  /**
+   * 渲染签名:base64 PNG 用 <img> 显示,空值/文字则回退为下划线占位
+   */
+  _signatureImg(val) {
+    if (!val) return '<span class="signature"></span>';
+    if (typeof val === 'string' && val.startsWith('data:image/')) {
+      // base64 已包含 data URI,直接进 src
+      return `<img class="signature" src="${val}" alt="签名" />`;
+    }
+    // 兼容旧数据(图片URL/纯文字签名)
+    return `<span class="signature">${this._esc(val)}</span>`;
   }
 
   _resultBadge(r) {

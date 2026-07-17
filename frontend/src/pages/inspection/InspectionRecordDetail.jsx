@@ -15,6 +15,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { inspectionAPI } from '../../utils/api';
 import dayjs from 'dayjs';
 import useIsMobile from '../../hooks/useIsMobile';
+import SignatureField from '../../components/SignatureField';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -94,6 +95,8 @@ const InspectionRecordDetail = () => {
       await inspectionAPI.reviewRecord(id, {
         decision: values.decision || 'approve',
         remark: values.reviewed_remark,
+        signature_reviewer: values.signature_reviewer,
+        overall_result: values.overall_result,
       });
       message.success('复核成功');
       setReviewModalVisible(false);
@@ -241,6 +244,18 @@ const InspectionRecordDetail = () => {
           <Descriptions.Item label="巡检人">{record.inspector_name}</Descriptions.Item>
           <Descriptions.Item label="复核人">{record.reviewer_name || '-'}</Descriptions.Item>
           <Descriptions.Item label="复核时间">{record.reviewed_at ? dayjs(record.reviewed_at).format('YYYY-MM-DD HH:mm') : '-'}</Descriptions.Item>
+          {record.reviewed_at && (
+            <Descriptions.Item label="复核结论">
+              <Tag color={overallResultMap[record.overall_result]?.color}>
+                {overallResultMap[record.overall_result]?.label || '-'}
+              </Tag>
+            </Descriptions.Item>
+          )}
+          {record.reviewed_remark && (
+            <Descriptions.Item label="复核意见" span={2}>
+              {record.reviewed_remark}
+            </Descriptions.Item>
+          )}
         </Descriptions>
       </Card>
 
@@ -396,15 +411,23 @@ const InspectionRecordDetail = () => {
         <Row gutter={16}>
           <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
             <p>巡检人签字：</p>
-            <div style={{ borderBottom: '1px solid #000', height: 40, marginBottom: 8 }}>
-              {record.signature_inspector && <span style={{ lineHeight: '40px' }}>{record.inspector_name}</span>}
+            <div className="signature-box">
+              {record.signature_inspector ? (
+                <img src={record.signature_inspector} alt="巡检人签字" className="signature-img" />
+              ) : (
+                <span style={{ lineHeight: '40px', color: '#999' }}>{record.inspector_name || '（无）'}</span>
+              )}
             </div>
             <p style={{ color: '#999', fontSize: 12 }}>日期：{record.inspection_date ? dayjs(record.inspection_date).format('YYYY-MM-DD') : ''}</p>
           </Col>
           <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
             <p>复核人签字：</p>
-            <div style={{ borderBottom: '1px solid #000', height: 40, marginBottom: 8 }}>
-              {record.reviewer_name && <span style={{ lineHeight: '40px' }}>{record.reviewer_name}</span>}
+            <div className="signature-box">
+              {record.signature_reviewer ? (
+                <img src={record.signature_reviewer} alt="复核人签字" className="signature-img" />
+              ) : (
+                <span style={{ lineHeight: '40px', color: '#999' }}>{record.reviewer_name || '（待复核）'}</span>
+              )}
             </div>
             <p style={{ color: '#999', fontSize: 12 }}>日期：{record.reviewed_at ? dayjs(record.reviewed_at).format('YYYY-MM-DD') : ''}</p>
           </Col>
@@ -426,13 +449,10 @@ const InspectionRecordDetail = () => {
         open={reviewModalVisible}
         onOk={handleReview}
         onCancel={() => setReviewModalVisible(false)}
-        width={isMobile ? '95vw' : undefined}
+        width={isMobile ? '95vw' : 560}
       >
         <Form form={reviewForm} layout="vertical">
-          <Form.Item name="reviewer_name" label="复核人姓名" rules={[{ required: true, message: '请输入' }]}>
-            <Input placeholder="复核人姓名" />
-          </Form.Item>
-          <Form.Item name="overall_result" label="复核结论" rules={[{ required: true }]}>
+          <Form.Item name="overall_result" label="复核结论" rules={[{ required: true, message: '请选择' }]}>
             <Select>
               <Option value="normal">正常</Option>
               <Option value="abnormal">异常</Option>
@@ -442,13 +462,38 @@ const InspectionRecordDetail = () => {
           <Form.Item name="remark" label="复核意见">
             <TextArea rows={3} placeholder="复核意见" />
           </Form.Item>
+          <SignatureField
+            name="signature_reviewer"
+            label="复核人手写签名"
+            required
+            requiredMessage="请复核人完成手写签名"
+            width="100%"
+            height={150}
+            placeholder="复核人现场签字确认"
+          />
         </Form>
       </Modal>
 
       <style>{`
+        .signature-box {
+          border-bottom: 1px solid #000;
+          height: 60px;
+          margin-bottom: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .signature-img {
+          max-width: 100%;
+          max-height: 60px;
+          object-fit: contain;
+        }
         @media print {
           .no-print { display: none !important; }
           .ant-card { box-shadow: none !important; border: 1px solid #000 !important; }
+          .signature-box { border-bottom: 1px solid #000 !important; }
+          .signature-img { max-height: 60px !important; }
         }
       `}</style>
     </div>

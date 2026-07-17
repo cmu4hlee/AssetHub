@@ -119,11 +119,11 @@ class InspectionExtendedController {
   // ============ 复核 ============
   async reviewRecord(req, res) {
     try {
-      const { decision, remark } = req.body;
+      const { decision, remark, signature_reviewer, overall_result } = req.body;
       if (!['approve', 'reject'].includes(decision)) {
         return res.status(400).json({ success: false, message: 'decision 必须是 approve 或 reject' });
       }
-      const ok = await ext.reviewRecord(req.params.id, { decision, remark }, req.user.tenant_id, {
+      const ok = await ext.reviewRecord(req.params.id, { decision, remark, signature_reviewer, overall_result }, req.user.tenant_id, {
         id: req.user.id,
         username: req.user.username || req.user.name,
         real_name: req.user.real_name || req.user.username || req.user.name,
