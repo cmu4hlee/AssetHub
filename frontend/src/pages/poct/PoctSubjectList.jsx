@@ -4,10 +4,12 @@ import {
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { poctAPI } from '../../api/domains/poct';
+import { ResponsiveTable } from '../../components';
 import { useCan } from '../../hooks';
 
 const PoctSubjectList = () => {
   const canAdmin = useCan('poct', 'admin');
+  const { t } = useTranslation();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -59,33 +61,33 @@ const PoctSubjectList = () => {
   };
 
   const columns = [
-    { title: '编码', dataIndex: 'subject_code', width: 100 },
-    { title: '名称', dataIndex: 'subject_name', width: 200 },
-    { title: '分类', dataIndex: 'category', width: 130 },
-    { title: '单位', dataIndex: 'unit', width: 100 },
-    { title: '参考范围', dataIndex: 'reference_range', width: 130 },
+    { title: t('poct:subject.code'), dataIndex: 'subject_code', width: 100 },
+    { title: t('poct:subject.name'), dataIndex: 'subject_name', width: 200 },
+    { title: t('poct:subject.category'), dataIndex: 'category', width: 130 },
+    { title: t('poct:subject.unit'), dataIndex: 'unit', width: 100 },
+    { title: t('poct:subject.range'), dataIndex: 'reference_range', width: 130 },
     { title: '靶值', dataIndex: 'target_value', width: 100 },
     { title: '容差', dataIndex: 'tolerance', width: 100 },
     {
       title: '来源', dataIndex: 'is_builtin', width: 90,
-      render: v => v ? <Tag color="blue">系统预置</Tag> : <Tag color="green">科室自建</Tag>,
+      render: v => v ? <Tag color="blue">{t('poct:subject.builtin')}</Tag> : <Tag color="green">{t('poct:subject.custom')}</Tag>,
     },
     {
       title: '操作', width: 150, fixed: 'right',
       render: (_, r) => canAdmin ? (
         <Space>
-          <Button size="small" icon={<EditOutlined />} disabled={r.is_builtin} onClick={() => openEdit(r)}>编辑</Button>
-          <Popconfirm title="确认删除" disabled={r.is_builtin} onConfirm={() => handleDelete(r.id)}>
-            <Button size="small" danger icon={<DeleteOutlined />} disabled={r.is_builtin}>删除</Button>
+          <Button size="small" icon={<EditOutlined />} disabled={r.is_builtin} onClick={() => openEdit(r)}>{t('poct:common.edit')}</Button>
+          <Popconfirm title={t('poct:common.confirmDelete')} disabled={r.is_builtin} onConfirm={() => handleDelete(r.id)}>
+            <Button size="small" danger icon={<DeleteOutlined />} disabled={r.is_builtin}>{t('poct:common.delete')}</Button>
           </Popconfirm>
         </Space>
-      ) : <Tag>无权限</Tag>,
+      ) : <Tag>{t('poct:common.noPermission')}</Tag>,
     },
   ];
 
   return (
     <div style={{ padding: 24 }}>
-      <Card title="监测科目管理" extra={
+      <Card title={t('poct:subject.title')} extra={
         <Space>
           <Select
             placeholder="分类" allowClear style={{ width: 140 }} value={category}
@@ -98,7 +100,7 @@ const PoctSubjectList = () => {
           {canAdmin && <Button type="primary" icon={<PlusOutlined />} onClick={() => openEdit({})}>新增科目</Button>}
         </Space>
       }>
-        <Table rowKey="id" loading={loading} dataSource={data} columns={columns} scroll={{ x: 1200 }} pagination={{ pageSize: 20 }} />
+        <ResponsiveTable rowKey="id" loading={loading} dataSource={data} columns={columns} scroll={{ x: 1200 }} pagination={{ pageSize: 20 }} />
       </Card>
 
       <Modal

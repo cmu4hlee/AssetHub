@@ -2,6 +2,7 @@ import React from 'react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { message } from 'antd';
+import './i18n';
 import 'antd/dist/reset.css';
 import './index.css';
 import App from './App.jsx';
@@ -66,6 +67,15 @@ const initWithTimeout = () => {
 };
 
 initWithTimeout().then(() => {
+  // 注册 POCT Service Worker(简化版 PWA 离线缓存)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/poct-sw.js').catch(() => {
+        // 注册失败静默
+      });
+    });
+  }
+
   createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <ErrorBoundary

@@ -8,6 +8,7 @@ import {
   AppstoreOutlined, BookOutlined, CalendarOutlined, BellOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { poctAPI } from '../../api/domains/poct';
 import { useIsMobile } from '../../hooks';
 
@@ -35,6 +36,7 @@ const { TabPane } = Tabs;
  */
 const PoctDashboard = () => {
   const isMobile = useIsMobile();
+  const { t } = useTranslation();
   const [tab, setTab] = useState('home');
   const [stats, setStats] = useState(null);
   const [shifts, setShifts] = useState([]);
@@ -92,7 +94,7 @@ const PoctDashboard = () => {
             <Space>
               <ClockCircleOutlined style={{ fontSize: 24 }} />
               <div>
-                <div style={{ fontSize: 18, fontWeight: 'bold' }}>当前: {currentShift.shift_name}</div>
+                <div style={{ fontSize: 18, fontWeight: 'bold' }}>{t('poct:dashboard.currentShift')}: {currentShift.shift_name}</div>
                 <div style={{ fontSize: 12, opacity: 0.85 }}>
                   {currentShift.start_time?.slice(0, 5)} - {currentShift.end_time?.slice(0, 5)}
                   {' · '}
@@ -114,26 +116,26 @@ const PoctDashboard = () => {
         {/* 30天统计 */}
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col xs={12} sm={8} md={6} lg={4}>
-            <Card><Statistic title="30天总记录" value={summary.total} prefix={<FileTextOutlined />} /></Card>
+            <Card><Statistic title={t('poct:dashboard.totalRecords')} value={summary.total} prefix={<FileTextOutlined />} /></Card>
           </Col>
           <Col xs={12} sm={8} md={6} lg={4}>
-            <Card><Statistic title="合格" value={summary.pass} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} /></Card>
+            <Card><Statistic title={t('poct:dashboard.passCount')} value={summary.pass} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} /></Card>
           </Col>
           <Col xs={12} sm={8} md={6} lg={4}>
-            <Card><Statistic title="预警" value={summary.warn} valueStyle={{ color: '#faad14' }} prefix={<WarningOutlined />} /></Card>
+            <Card><Statistic title={t('poct:dashboard.warnCount')} value={summary.warn} valueStyle={{ color: '#faad14' }} prefix={<WarningOutlined />} /></Card>
           </Col>
           <Col xs={12} sm={8} md={6} lg={4}>
-            <Card><Statistic title="不合格" value={summary.fail} valueStyle={{ color: '#ff4d4f' }} prefix={<CloseCircleOutlined />} /></Card>
+            <Card><Statistic title={t('poct:dashboard.failCount')} value={summary.fail} valueStyle={{ color: '#ff4d4f' }} prefix={<CloseCircleOutlined />} /></Card>
           </Col>
           <Col xs={24} sm={8} md={12} lg={8}>
-            <Card title="30天合格率">
+            <Card title={t('poct:dashboard.passRate')}>
               <Progress
                 type="circle" percent={passRateNum}
                 strokeColor={passRateNum >= 95 ? '#52c41a' : passRateNum >= 80 ? '#faad14' : '#ff4d4f'}
                 format={p => `${p}%`}
               />
               <div style={{ marginTop: 12, fontSize: 12, color: '#999' }}>
-                {passRateNum >= 95 ? '优秀' : passRateNum >= 80 ? '合格' : '需关注'}
+                {passRateNum >= 95 ? t('poct:dashboard.excellent') : passRateNum >= 80 ? t('poct:dashboard.qualified') : t('poct:dashboard.attention')}
               </div>
             </Card>
           </Col>
@@ -142,7 +144,7 @@ const PoctDashboard = () => {
         {/* 班次对比 + 快捷入口 */}
         <Row gutter={16}>
           <Col xs={24} lg={14}>
-            <Card title="班次合格率对比(30天)" extra={<Button icon={<ReloadOutlined />} onClick={loadStats} />}>
+            <Card title={t('poct:dashboard.shiftCompare')} extra={<Button icon={<ReloadOutlined />} onClick={loadStats} />}>
               <List
                 dataSource={stats?.byShift || []}
                 renderItem={s => {
@@ -151,7 +153,7 @@ const PoctDashboard = () => {
                     <List.Item>
                       <List.Item.Meta
                         title={<Space><Tag color={s.color}>{s.shift_name}</Tag></Space>}
-                        description={`${s.pass} / ${s.total} 合格`}
+                        description={`${s.pass} / ${s.total} ${t('poct:result.pass')}`}
                       />
                       <div style={{ width: 200 }}>
                         <Progress
@@ -168,30 +170,30 @@ const PoctDashboard = () => {
           </Col>
 
           <Col xs={24} lg={10}>
-            <Card title="快捷入口">
+            <Card title={t('poct:dashboard.quickEntries')}>
               <Space direction="vertical" style={{ width: '100%' }} size={12}>
                 <Button block size="large" icon={<MobileOutlined />} onClick={() => setTab('mobile')}>
-                  移动端录入
+                  {t('poct:tab.mobile')}
                 </Button>
                 <Button block size="large" icon={<FileTextOutlined />} onClick={() => setTab('records')}>
-                  质控记录列表
+                  {t('poct:tab.records')}
                 </Button>
                 <Button block icon={<ClockCircleOutlined />} onClick={() => setTab('shifts')}>
-                  班次设置
+                  {t('poct:tab.shifts')}
                 </Button>
                 <Button block icon={<ExperimentOutlined />} onClick={() => setTab('subjects')}>
-                  监测科目管理
+                  {t('poct:tab.subjects')}
                 </Button>
                 <Button block icon={<CalendarOutlined />} onClick={() => setTab('schedules')}>
-                  排班管理
+                  {t('poct:tab.schedules')}
                 </Button>
                 <Button block icon={<BellOutlined />} onClick={() => setTab('reminders')}>
-                  提醒规则
+                  {t('poct:tab.reminders')}
                 </Button>
               </Space>
             </Card>
 
-            <Card title="系统预置" style={{ marginTop: 16 }}>
+            <Card title={t('poct:dashboard.preset')} style={{ marginTop: 16 }}>
               <Space direction="vertical" size={4} style={{ width: '100%' }}>
                 <div>📊 监测科目: <b>20+</b> 项常见 POCT 项目</div>
                 <div>🕐 班次: <b>3</b> 班(早 / 中 / 晚)</div>
@@ -224,14 +226,14 @@ const PoctDashboard = () => {
         }}
         size={isMobile ? 'small' : 'middle'}
         items={[
-          { key: 'home',      label: <span><AppstoreOutlined /> 首页</span>,     children: renderHome() },
+          { key: 'home',      label: <span><AppstoreOutlined /> {t('poct:tab.home')}</span>,     children: renderHome() },
           // 其他子页自带 padding 24,这里用负 margin 抹平 dashboard 外层 padding
-          { key: 'records',   label: <span><FileTextOutlined /> 记录</span>,     children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctRecordList /></div> },
-          { key: 'mobile',    label: <span><MobileOutlined /> 移动录入</span>,   children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctMobile /></div> },
-          { key: 'subjects',  label: <span><BookOutlined /> 科目</span>,         children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctSubjectList /></div> },
-          { key: 'shifts',    label: <span><ClockCircleOutlined /> 班次</span>,   children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctShiftList /></div> },
-          { key: 'schedules', label: <span><CalendarOutlined /> 排班</span>,     children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctScheduleList /></div> },
-          { key: 'reminders', label: <span><BellOutlined /> 提醒</span>,         children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctReminderList /></div> },
+          { key: 'records',   label: <span><FileTextOutlined /> {t('poct:tab.records')}</span>,     children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctRecordList /></div> },
+          { key: 'mobile',    label: <span><MobileOutlined /> {t('poct:tab.mobile')}</span>,   children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctMobile /></div> },
+          { key: 'subjects',  label: <span><BookOutlined /> {t('poct:tab.subjects')}</span>,         children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctSubjectList /></div> },
+          { key: 'shifts',    label: <span><ClockCircleOutlined /> {t('poct:tab.shifts')}</span>,   children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctShiftList /></div> },
+          { key: 'schedules', label: <span><CalendarOutlined /> {t('poct:tab.schedules')}</span>,     children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctScheduleList /></div> },
+          { key: 'reminders', label: <span><BellOutlined /> {t('poct:tab.reminders')}</span>,         children: <div style={{ margin: isMobile ? '0 -8px' : '0 -16px' }}><PoctReminderList /></div> },
         ]}
       />
     </div>

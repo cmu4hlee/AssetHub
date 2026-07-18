@@ -5,6 +5,8 @@ import maintenance from './maintenance.json';
 import quality from './quality.json';
 import message from './message.json';
 import system from './system.json';
+import adverseEvent from './adverseEvent.json';
+import poct from './poct.json';
 
 export default {
   translation: {
@@ -15,5 +17,7 @@ export default {
     quality,
     message,
     system,
+    adverseEvent,
+    poct,
   },
 };

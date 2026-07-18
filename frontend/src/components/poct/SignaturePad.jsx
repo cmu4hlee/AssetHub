@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Button, Space, Empty, message } from 'antd';
 import { ClearOutlined, CheckOutlined, EditOutlined } from '@ant-design/icons';
+import { useTranslation } from './useTranslationFallback';
 
 /**
  * 手写签名组件 (Canvas)
@@ -20,8 +21,10 @@ const SignaturePad = ({
   width = '100%',
   height = 180,
   disabled = false,
-  label = '手写签名',
+  label,
 }) => {
+  const { t } = useTranslation();
+  const _label = label || t('poct:signature.label');
   const canvasRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const [hasInk, setHasInk] = useState(!!value);
@@ -130,8 +133,43 @@ const SignaturePad = ({
 
   const isReadOnly = disabled;
 
+  // 拍照/上传图片备选(老人/不会 canvas 的人用)
+  const fileInputRef = useRef(null);
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      message.error('请选择图片文件');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      message.error('图片不能超过 2MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      onChange?.(ev.target.result);
+      setHasInk(true);
+    };
+    reader.onerror = () => message.error('图片读取失败');
+    reader.readAsDataURL(file);
+    // 允许重复选同一文件
+    e.target.value = '';
+  };
+
   return (
     <div className="poct-signature-pad">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -139,13 +177,16 @@ const SignaturePad = ({
         marginBottom: 8,
       }}>
         <span style={{ color: '#666', fontSize: 13 }}>
-          {label}
-          {hasInk && !isReadOnly && <span style={{ color: '#52c41a', marginLeft: 8 }}>✓ 已签名</span>}
+          {_label}
+          {hasInk && !isReadOnly && <span style={{ color: '#52c41a', marginLeft: 8 }}>✓ {t('poct:signature.signed')}</span>}
         </span>
         {!isReadOnly && (
           <Space>
             <Button size="small" icon={<ClearOutlined />} onClick={clear} disabled={!hasInk}>
-              清空
+              {t('poct:signature.clear')}
+            </Button>
+            <Button size="small" onClick={handleUploadClick}>
+              📷 {t('poct:signature.upload') || '拍照/上传'}
             </Button>
           </Space>
         )}
@@ -159,7 +200,7 @@ const SignaturePad = ({
           background: '#fafafa',
           textAlign: 'center',
         }}>
-          <img src={value} alt="签名" style={{ maxWidth: '100%', maxHeight: height }} />
+          <img src={value} alt={t('poct:signature.label')} style={{ maxWidth: '100%', maxHeight: height }} />
         </div>
       ) : (
         <canvas
@@ -186,7 +227,7 @@ const SignaturePad = ({
 
       {!isReadOnly && !hasInk && (
         <div style={{ marginTop: 6, fontSize: 12, color: '#999', textAlign: 'center' }}>
-          ↑ 请在此区域签名(支持鼠标 / 手指)
+          ↑ {t('poct:signature.hint')}
         </div>
       )}
     </div>
