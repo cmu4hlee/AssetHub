@@ -1,5 +1,15 @@
 const express = require('express');
 const { authenticate, authorize } = require('../../middleware/auth');
+const { validateBody, validateQuery, validateParams } = require('../../middleware/zod-validator');
+const {
+  IdParamSchema,
+  CreateWorkOrderSchema,
+  AssignWorkOrderSchema,
+  CompleteWorkOrderSchema,
+  EvaluateWorkOrderSchema,
+  ListWorkOrdersQuerySchema,
+  CancelWorkOrderSchema,
+} = require('../../schemas/workorder.schemas');
 
 // 维修工单模块权限集合
 const WO_GET_ROLES = ['maintenance.view', 'asset.view_all', 'asset.view_own_department'];
@@ -24,7 +34,7 @@ function handleError(res, error, fallbackMessage) {
   });
 }
 
-router.get('/workorders', authenticate, authorize(WO_GET_ROLES), async (req, res) => {
+router.get('/workorders', authenticate, authorize(WO_GET_ROLES), validateQuery(ListWorkOrdersQuerySchema), async (req, res) => {
   try {
     const result = await workordersService.getWorkOrders(req.query, req);
     res.json(result);
@@ -60,7 +70,7 @@ router.get('/workorders/engineers', authenticate, authorize(WO_GET_ROLES), async
   }
 });
 
-router.get('/workorders/:id/history', authenticate, authorize(WO_GET_ROLES), async (req, res) => {
+router.get('/workorders/:id/history', authenticate, authorize(WO_GET_ROLES), validateParams(IdParamSchema), async (req, res) => {
   try {
     const result = await workordersService.getWorkOrderHistory(req.params.id, req);
     res.json(result);
@@ -69,7 +79,7 @@ router.get('/workorders/:id/history', authenticate, authorize(WO_GET_ROLES), asy
   }
 });
 
-router.get('/workorders/:id', authenticate, authorize(WO_GET_ROLES), async (req, res) => {
+router.get('/workorders/:id', authenticate, authorize(WO_GET_ROLES), validateParams(IdParamSchema), async (req, res) => {
   try {
     const result = await workordersService.getWorkOrder(req.params.id, req);
     res.json(result);
@@ -78,7 +88,7 @@ router.get('/workorders/:id', authenticate, authorize(WO_GET_ROLES), async (req,
   }
 });
 
-router.post('/workorders', authenticate, requireTenantId, authorize(WO_WRITE_ROLES), async (req, res) => {
+router.post('/workorders', authenticate, requireTenantId, authorize(WO_WRITE_ROLES), validateBody(CreateWorkOrderSchema), async (req, res) => {
   try {
     const result = await workordersService.createWorkOrder(req.body, req);
     res.json(result);
@@ -105,7 +115,7 @@ router.post('/workorders/:id/materials', authenticate, requireTenantId, async (r
   }
 });
 
-router.delete('/workorders/:id', authenticate, requireTenantId, async (req, res) => {
+router.delete('/workorders/:id', authenticate, requireTenantId, validateParams(IdParamSchema), async (req, res) => {
   try {
     const result = await workordersService.deleteWorkOrder(req.params.id, req);
     res.json(result);
@@ -114,52 +124,9 @@ router.delete('/workorders/:id', authenticate, requireTenantId, async (req, res)
   }
 });
 
-router.get('/legacy/workorders', authenticate, authorize(WO_GET_ROLES), async (req, res) => {
-  try {
-    const result = await workordersService.getLegacyWorkOrders(req.query, req);
-    res.json(result);
-  } catch (error) {
-    handleError(res, error, '获取维护工单列表失败');
-  }
-});
+// 2026-07-16 第三阶段: 移除 5 个 legacy 路由 (旧表已废弃, 数据已迁入 work_orders)
 
-router.get('/legacy/workorders/:id', authenticate, authorize(WO_GET_ROLES), async (req, res) => {
-  try {
-    const result = await workordersService.getLegacyWorkOrder(req.params.id, req);
-    res.json(result);
-  } catch (error) {
-    handleError(res, error, '获取维护工单详情失败');
-  }
-});
-
-router.post('/legacy/workorders', authenticate, requireTenantId, async (req, res) => {
-  try {
-    const result = await workordersService.createLegacyWorkOrder(req.body, req);
-    res.json(result);
-  } catch (error) {
-    handleError(res, error, '创建维护工单失败');
-  }
-});
-
-router.put('/legacy/workorders/:id', authenticate, requireTenantId, async (req, res) => {
-  try {
-    const result = await workordersService.updateLegacyWorkOrder(req.params.id, req.body, req);
-    res.json(result);
-  } catch (error) {
-    handleError(res, error, '更新维护工单失败');
-  }
-});
-
-router.delete('/legacy/workorders/:id', authenticate, requireTenantId, async (req, res) => {
-  try {
-    const result = await workordersService.deleteLegacyWorkOrder(req.params.id, req);
-    res.json(result);
-  } catch (error) {
-    handleError(res, error, '删除维护工单失败');
-  }
-});
-
-router.post('/workorders/:id/assign', authenticate, requireTenantId, async (req, res) => {
+router.post('/workorders/:id/assign', authenticate, requireTenantId, validateParams(IdParamSchema), validateBody(AssignWorkOrderSchema), async (req, res) => {
   try {
     const result = await workordersService.assignWorkOrder(req.params.id, req.body, req);
     res.json(result);
@@ -177,7 +144,7 @@ router.post('/workorders/:id/start', authenticate, requireTenantId, async (req, 
   }
 });
 
-router.post('/workorders/:id/complete', authenticate, requireTenantId, async (req, res) => {
+router.post('/workorders/:id/complete', authenticate, requireTenantId, validateParams(IdParamSchema), validateBody(CompleteWorkOrderSchema), async (req, res) => {
   try {
     const result = await workordersService.completeWorkOrder(req.params.id, req.body, req);
     res.json(result);
@@ -186,7 +153,7 @@ router.post('/workorders/:id/complete', authenticate, requireTenantId, async (re
   }
 });
 
-router.post('/workorders/:id/evaluate', authenticate, requireTenantId, async (req, res) => {
+router.post('/workorders/:id/evaluate', authenticate, requireTenantId, validateParams(IdParamSchema), validateBody(EvaluateWorkOrderSchema), async (req, res) => {
   try {
     const result = await workordersService.evaluateWorkOrder(req.params.id, req.body, req);
     res.json(result);
@@ -204,7 +171,7 @@ router.post('/workorders/:id/close', authenticate, requireTenantId, async (req, 
   }
 });
 
-router.post('/workorders/:id/cancel', authenticate, requireTenantId, async (req, res) => {
+router.post('/workorders/:id/cancel', authenticate, requireTenantId, validateParams(IdParamSchema), validateBody(CancelWorkOrderSchema), async (req, res) => {
   try {
     const result = await workordersService.cancelWorkOrder(req.params.id, req.body.cancel_reason, req);
     res.json(result);

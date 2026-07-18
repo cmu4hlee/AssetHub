@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../../../middleware/auth');
+const { authenticate, requireSystemAdmin } = require('../../../middleware/auth');
+const { validateBody, validateQuery, validateParams } = require('../../../middleware/zod-validator');
+const { IdParamSchema, CreateDepartmentSchema, UpdateDepartmentSchema, ListDepartmentsQuerySchema } = require('../../../schemas/department.schemas');
 const departmentController = require('../controllers/department.controller');
 const db = require('../../../config/database');
 
@@ -51,11 +53,11 @@ router.get('/search', async (req, res) => {
   }
 });
 
-router.get('/', authenticate, (req, res) => departmentController.getDepartments(req, res));
-router.get('/tree', authenticate, (req, res) => departmentController.getDepartmentTree(req, res));
-router.get('/:id', authenticate, (req, res) => departmentController.getDepartmentById(req, res));
-router.post('/', authenticate, (req, res) => departmentController.createDepartment(req, res));
-router.put('/:id', authenticate, (req, res) => departmentController.updateDepartment(req, res));
-router.delete('/:id', authenticate, (req, res) => departmentController.deleteDepartment(req, res));
+router.get('/', authenticate, requireSystemAdmin, validateQuery(ListDepartmentsQuerySchema), (req, res) => departmentController.getDepartments(req, res));
+router.get('/tree', authenticate, requireSystemAdmin, (req, res) => departmentController.getDepartmentTree(req, res));
+router.get('/:id', authenticate, requireSystemAdmin, validateParams(IdParamSchema), (req, res) => departmentController.getDepartmentById(req, res));
+router.post('/', authenticate, requireSystemAdmin, validateBody(CreateDepartmentSchema), (req, res) => departmentController.createDepartment(req, res));
+router.put('/:id', authenticate, requireSystemAdmin, validateParams(IdParamSchema), validateBody(UpdateDepartmentSchema), (req, res) => departmentController.updateDepartment(req, res));
+router.delete('/:id', authenticate, requireSystemAdmin, validateParams(IdParamSchema), (req, res) => departmentController.deleteDepartment(req, res));
 
 module.exports = router;

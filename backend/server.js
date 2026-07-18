@@ -2156,6 +2156,10 @@ app.use(
 const requestContext = require('./middleware/requestContext');
 app.use(requestContext.middleware());
 
+// 链路追踪 (traceId) — 必须早于其它中间件, 让 logger 自动绑定 traceId
+const { traceMiddleware } = require('./middleware/tracing');
+app.use(traceMiddleware());
+
 // 安全 headers 中间件
 const helmet = require('helmet');
 app.use(helmet({
