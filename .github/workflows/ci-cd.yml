@@ -64,7 +64,7 @@ jobs:
     needs: lint
     services:
       mysql:
-        image: mysql:${{ env.MYSQL_VERSION }}
+        image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: testroot
           MYSQL_DATABASE: assethub_test
