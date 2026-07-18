@@ -33,11 +33,11 @@ jobs:
           cache: ''
 
       - name: Install backend deps
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
         working-directory: ./backend
 
       - name: Install frontend deps
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
         working-directory: ./frontend
 
       # 注: ESLint 仍 continue-on-error 是因为项目有 pre-existing warning 大量,
@@ -102,7 +102,7 @@ jobs:
           cache: ''
 
       - name: Install backend deps
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
         working-directory: ./backend
 
       - name: Wait for MySQL ready
@@ -152,7 +152,7 @@ jobs:
           cache: ''
 
       - name: Install frontend deps
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
         working-directory: ./frontend
 
       - name: Run vitest
@@ -210,7 +210,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: ''
       - name: Install
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
         working-directory: ./backend
       - name: Check route mounts
         run: npm run audit:routes
