@@ -3,6 +3,7 @@ import {
   Table, Button, Input, Select, Space, Card, Tag, Modal, Form, InputNumber, message, Popconfirm,
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { poctAPI } from '../../api/domains/poct';
 import { ResponsiveTable } from '../../components';
 import { useCan } from '../../hooks';
@@ -21,7 +22,7 @@ const PoctSubjectList = () => {
     try {
       setLoading(true);
       const r = await poctAPI.getSubjects({ keyword, category, pageSize: 200 });
-      if (r.data?.success) setData(r.data.data || []);
+      if (r.success) setData(r.data || []);
     } catch (e) { message.error('加载科目失败'); }
     finally { setLoading(false); }
   }, [keyword, category]);
@@ -108,8 +109,7 @@ const PoctSubjectList = () => {
         open={!!editing}
         onCancel={() => setEditing(null)}
         onOk={handleSave}
-        destroyOnClose
-      >
+        destroyOnHidden      >
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item name="subject_code" label="编码" rules={[{ required: true, message: '请填写编码' }]}>
             <Input placeholder="如 GLU" disabled={editing?.is_builtin} />

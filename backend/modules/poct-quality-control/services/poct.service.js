@@ -62,17 +62,22 @@ class PoctService {
 
   async listSubjects(params) {
     const { keyword, category, status, includeBuiltin = 'true', tenantId, page = 1, pageSize = 50 } = params;
-    const where = ['tenant_id = ?'];
-    const args = [tenantId];
+    // 预置(builtin)科目跨租户共享:includeBuiltin 时显示本租户 + 预置科目
+    const where = [];
+    const args = [];
+    if (includeBuiltin === 'true') {
+      where.push('(tenant_id = ? OR is_builtin = 1)');
+      args.push(tenantId);
+    } else {
+      where.push('tenant_id = ?');
+      args.push(tenantId);
+    }
     if (keyword) {
       where.push('(subject_code LIKE ? OR subject_name LIKE ?)');
       args.push(`%${keyword}%`, `%${keyword}%`);
     }
     if (category) { where.push('category = ?'); args.push(category); }
     if (status)   { where.push('status = ?');    args.push(status); }
-    if (includeBuiltin === 'true') {
-      where.push('(is_builtin = 1 OR tenant_id = ?)');
-    }
     const offset = (page - 1) * pageSize;
     const [rows] = await db.execute(
       `SELECT * FROM poct_subjects WHERE ${where.join(' AND ')} ORDER BY is_builtin DESC, category, subject_code LIMIT ? OFFSET ?`,
@@ -181,8 +186,9 @@ class PoctService {
   // ============================================================
 
   async listShifts(tenantId) {
+    // 预置(builtin)班次跨租户共享
     const [rows] = await db.execute(
-      `SELECT * FROM poct_shifts WHERE tenant_id = ? AND status = 'active' ORDER BY sort_order, start_time`,
+      `SELECT * FROM poct_shifts WHERE (tenant_id = ? OR is_builtin = 1) AND status = 'active' ORDER BY sort_order, start_time`,
       [tenantId],
     );
     return rows;

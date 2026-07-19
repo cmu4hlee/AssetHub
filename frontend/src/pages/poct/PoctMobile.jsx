@@ -42,7 +42,7 @@ const PoctMobile = () => {
   // 加载班次
   useEffect(() => {
     poctAPI.getShifts().then(r => {
-      if (r.data?.success) setShifts(r.data.data);
+      if (r.success) setShifts(r.data);
     }).catch(() => message.error('加载班次失败'));
   }, []);
 
@@ -82,7 +82,7 @@ const PoctMobile = () => {
     try {
       setLoading(true);
       const r = await poctAPI.getShiftTasks({ department_id: deptId, shift_id: shiftId, date });
-      if (r.data?.success) setTasks(r.data.data || []);
+      if (r.success) setTasks(r.data || []);
       else setTasks([]);
     } catch (e) {
       message.error('加载当班任务失败');
@@ -123,15 +123,15 @@ const PoctMobile = () => {
         sign_device: isMobile ? 'mobile' : 'pc',
       };
       const r = await poctAPI.createRecord(payload);
-      if (r.data?.success) {
-        const { result, deviation } = r.data.data;
+      if (r.success) {
+        const { result, deviation } = r.data;
         const color = result === 'pass' ? 'success' : result === 'warn' ? 'warning' : 'error';
         const text = result === 'pass' ? '合格' : result === 'warn' ? '预警' : '不合格';
         message.success(`提交成功 - ${text} (偏差 ${deviation || '0%'})`);
         closeSubmit();
         loadTasks();
       } else {
-        message.error(r.data?.message || '提交失败');
+        message.error(r.message || '提交失败');
       }
     } catch (e) {
       message.error(e.response?.data?.message || '提交失败');
@@ -146,7 +146,7 @@ const PoctMobile = () => {
 
   return (
     <div style={{ padding: isMobile ? 12 : 24, background: '#f5f5f5', minHeight: '100vh' }}>
-      <Card bodyStyle={{ padding: 16 }}>
+      <Card styles={{ body: { padding: 16 } }}>
         <div style={{ marginBottom: 12 }}>
           <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22 }}>📋 POCT 质控 - 当班录入</h2>
           <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
@@ -156,7 +156,7 @@ const PoctMobile = () => {
         </div>
 
         {/* 选择区 */}
-        <Space direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: '100%' }} size={8}>
+        <Space orientation={isMobile ? 'vertical' : 'horizontal'} style={{ width: '100%' }} size={8}>
           <Select
             placeholder="选择科室"
             value={deptId}
@@ -224,7 +224,7 @@ const PoctMobile = () => {
             dataSource={tasks}
             renderItem={task => (
               <List.Item style={{ padding: 0, marginBottom: 8 }}>
-                <Card style={{ width: '100%' }} bodyStyle={{ padding: 12 }}>
+                <Card style={{ width: '100%' }} styles={{ body: { padding: 12 } }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 15, fontWeight: 500 }}>
@@ -265,12 +265,11 @@ const PoctMobile = () => {
         width={isMobile ? '100%' : 600}
         style={isMobile ? { top: 0, maxWidth: '100vw', margin: 0 } : {}}
         footer={null}
-        destroyOnClose
-      >
+        destroyOnHidden      >
         {submitting && (
           <div>
             <Card size="small" style={{ marginBottom: 12, background: '#fafafa' }}>
-              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={4} style={{ width: '100%' }}>
                 <div>科目: <b>{submitting.subject_name}</b> ({submitting.subject_code})</div>
                 <div>靶值: <b>{submitting.target_value || '-'}</b> · 容差: {submitting.tolerance || '-'}</div>
                 <div>参考范围: {submitting.reference_range || '-'}</div>
@@ -290,7 +289,7 @@ const PoctMobile = () => {
               />
             </div>
 
-            <Space style={{ width: '100%' }} direction={isMobile ? 'vertical' : 'horizontal'}>
+            <Space style={{ width: '100%' }} orientation={isMobile ? 'vertical' : 'horizontal'}>
               <Input
                 placeholder="设备名称/编号"
                 value={instrument}

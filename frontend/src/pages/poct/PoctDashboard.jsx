@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Tabs, Card, Row, Col, Statistic, Button, Space, Tag, List, Progress, message, Spin,
+  Tabs, Card, Row, Col, Statistic, Button, Space, Tag, Progress, message, Spin,
 } from 'antd';
 import {
   ExperimentOutlined, CheckCircleOutlined, WarningOutlined, CloseCircleOutlined,
@@ -52,8 +52,8 @@ const PoctDashboard = () => {
         poctAPI.getStatistics({ start_date: monthAgo, end_date: today }),
         poctAPI.getShifts(),
       ]);
-      if (statR.data?.success) setStats(statR.data.data);
-      if (shiftR.data?.success) setShifts(shiftR.data.data);
+      if (statR.success) setStats(statR.data);
+      if (shiftR.success) setShifts(shiftR.data);
     } catch (e) {
       message.error('加载概览失败');
     } finally {
@@ -63,16 +63,16 @@ const PoctDashboard = () => {
 
   useEffect(() => { loadStats(); }, [loadStats]);
 
-  // 当前班次(仅展示用)
+  // 当前班次(每次 render 重算,响应 shifts 状态变化)
   const currentShift = (() => {
-    if (!shifts.length) return null;
+    if (!shifts || !shifts.length) return null;
     const now = dayjs();
     const cur = now.hour() * 60 + now.minute();
     return shifts.find(s => {
-      const [sh, sm] = s.start_time.split(':').map(Number);
-      const [eh, em] = s.end_time.split(':').map(Number);
-      const start = sh * 60 + sm;
-      const end = eh * 60 + em;
+      const [sh, sm] = (s.start_time || '00:00:00').split(':').map(Number);
+      const [eh, em] = (s.end_time || '00:00:00').split(':').map(Number);
+      const start = (sh || 0) * 60 + (sm || 0);
+      const end = (eh || 0) * 60 + (em || 0);
       return end > start ? (cur >= start && cur < end) : (cur >= start || cur < end);
     });
   })();
@@ -90,7 +90,7 @@ const PoctDashboard = () => {
         {currentShift && (
           <Card style={{
             marginBottom: 16, background: currentShift.color || '#1890ff', color: '#fff',
-          }} bodyStyle={{ padding: 16 }}>
+          }} styles={{ body: { padding: 16 } }}>
             <Space>
               <ClockCircleOutlined style={{ fontSize: 24 }} />
               <div>
@@ -119,13 +119,13 @@ const PoctDashboard = () => {
             <Card><Statistic title={t('poct:dashboard.totalRecords')} value={summary.total} prefix={<FileTextOutlined />} /></Card>
           </Col>
           <Col xs={12} sm={8} md={6} lg={4}>
-            <Card><Statistic title={t('poct:dashboard.passCount')} value={summary.pass} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} /></Card>
+            <Card><Statistic title={t('poct:dashboard.passCount')} value={summary.pass} styles={{ content: { color: '#52c41a' } }} prefix={<CheckCircleOutlined />} /></Card>
           </Col>
           <Col xs={12} sm={8} md={6} lg={4}>
-            <Card><Statistic title={t('poct:dashboard.warnCount')} value={summary.warn} valueStyle={{ color: '#faad14' }} prefix={<WarningOutlined />} /></Card>
+            <Card><Statistic title={t('poct:dashboard.warnCount')} value={summary.warn} styles={{ content: { color: '#faad14' } }} prefix={<WarningOutlined />} /></Card>
           </Col>
           <Col xs={12} sm={8} md={6} lg={4}>
-            <Card><Statistic title={t('poct:dashboard.failCount')} value={summary.fail} valueStyle={{ color: '#ff4d4f' }} prefix={<CloseCircleOutlined />} /></Card>
+            <Card><Statistic title={t('poct:dashboard.failCount')} value={summary.fail} styles={{ content: { color: '#ff4d4f' } }} prefix={<CloseCircleOutlined />} /></Card>
           </Col>
           <Col xs={24} sm={8} md={12} lg={8}>
             <Card title={t('poct:dashboard.passRate')}>
@@ -145,16 +145,27 @@ const PoctDashboard = () => {
         <Row gutter={16}>
           <Col xs={24} lg={14}>
             <Card title={t('poct:dashboard.shiftCompare')} extra={<Button icon={<ReloadOutlined />} onClick={loadStats} />}>
-              <List
-                dataSource={stats?.byShift || []}
-                renderItem={s => {
+              <div>
+                {(stats?.byShift || []).map((s, i) => {
                   const rate = s.total > 0 ? Math.round((s.pass / s.total) * 100) : 0;
                   return (
-                    <List.Item>
-                      <List.Item.Meta
-                        title={<Space><Tag color={s.color}>{s.shift_name}</Tag></Space>}
-                        description={`${s.pass} / ${s.total} ${t('poct:result.pass')}`}
-                      />
+                    <div
+                      key={s.shift_id || s.shift_name || i}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '12px 0',
+                        borderBottom: i < stats.byShift.length - 1 ? '1px solid #f0f0f0' : 'none',
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div>
+                          <Tag color={s.color}>{s.shift_name}</Tag>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                          {s.pass} / {s.total} {t('poct:result.pass')}
+                        </div>
+                      </div>
                       <div style={{ width: 200 }}>
                         <Progress
                           percent={rate}
@@ -162,16 +173,19 @@ const PoctDashboard = () => {
                           format={p => `${p}%`}
                         />
                       </div>
-                    </List.Item>
+                    </div>
                   );
-                }}
-              />
+                })}
+                {(!stats?.byShift || stats.byShift.length === 0) && (
+                  <div style={{ padding: 24, textAlign: 'center', color: '#999' }}>暂无班次数据</div>
+                )}
+              </div>
             </Card>
           </Col>
 
           <Col xs={24} lg={10}>
             <Card title={t('poct:dashboard.quickEntries')}>
-              <Space direction="vertical" style={{ width: '100%' }} size={12}>
+              <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                 <Button block size="large" icon={<MobileOutlined />} onClick={() => setTab('mobile')}>
                   {t('poct:tab.mobile')}
                 </Button>
@@ -194,7 +208,7 @@ const PoctDashboard = () => {
             </Card>
 
             <Card title={t('poct:dashboard.preset')} style={{ marginTop: 16 }}>
-              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={4} style={{ width: '100%' }}>
                 <div>📊 监测科目: <b>20+</b> 项常见 POCT 项目</div>
                 <div>🕐 班次: <b>3</b> 班(早 / 中 / 晚)</div>
                 <div>✍️ 签名: Canvas 手绘,留痕可追溯</div>
@@ -214,7 +228,7 @@ const PoctDashboard = () => {
         activeKey={tab}
         onChange={setTab}
         type="card"
-        destroyInactiveTabPane={false}
+        destroyOnHidden={false}
         tabBarStyle={{
           margin: isMobile ? '0 8px' : '0 16px',
           marginBottom: 12,

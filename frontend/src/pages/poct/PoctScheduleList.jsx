@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { poctAPI } from '../../api/domains/poct';
+import { ResponsiveTable } from '../../components';
 import { useCan } from '../../hooks';
 
 const { RangePicker } = DatePicker;
@@ -40,13 +41,10 @@ const PoctScheduleList = () => {
 
   // 字典
   useEffect(() => {
-    poctAPI.getShifts().then(r => { if (r.data?.success) setShifts(r.data.data); });
-    poctAPI.getSubjects({ pageSize: 200 }).then(r => { if (r.data?.success) setSubjects(r.data.data || []); });
+    poctAPI.getShifts().then(r => { if (r.success) setShifts(r.data); }).catch(err => { console.warn('POCT shifts load failed:', err?.message); });
+    poctAPI.getSubjects({ pageSize: 200 }).then(r => { if (r.success) setSubjects(r.data || []); }).catch(err => { console.warn('POCT subjects load failed:', err?.message); });
     import('../../api/domains/users').then(({ departmentsAPI }) => {
-      departmentsAPI.getDepartments({ pageSize: 200 }).then(r => {
-        const list = r.data?.data || r.data || [];
-        setDepartments(Array.isArray(list) ? list : []);
-      });
+      departmentsAPI.getDepartments({ pageSize: 200 }).then(r => { const list = r.data?.data || r.data || []; setDepartments(Array.isArray(list) ? list : []); }).catch(err => { console.warn('POCT depts load failed:', err?.message); });
       userAPI.getUsers({ pageSize: 200 }).then(r => {
         const list = r.data?.data?.list || r.data?.data || r.data?.list || r.data || [];
         setUsers(Array.isArray(list) ? list : []);
@@ -68,7 +66,7 @@ const PoctScheduleList = () => {
         department_id: filterDept || undefined,
       };
       const r = await poctAPI.getSchedules(params);
-      if (r.data?.success) setData(r.data.data || []);
+      if (r.success) setData(r.data || []);
     } catch (e) { message.error('加载排班失败'); }
     finally { setLoading(false); }
   }, [dateRange, filterDept]);
@@ -204,7 +202,7 @@ const PoctScheduleList = () => {
           )
         }
       >
-        <Table
+        <ResponsiveTable
           size="small"
           rowKey="id"
           dataSource={group.items}
@@ -299,8 +297,7 @@ const PoctScheduleList = () => {
         open={!!editing}
         onCancel={() => setEditing(null)}
         onOk={handleSave}
-        destroyOnClose
-      >
+        destroyOnHidden      >
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item name="schedule_date" label="日期" rules={[{ required: true }]}>
             <DatePicker style={{ width: '100%' }} />
@@ -346,8 +343,7 @@ const PoctScheduleList = () => {
         onOk={handleBatch}
         width={600}
         okText="生成"
-        destroyOnClose
-      >
+        destroyOnHidden      >
         <Alert
           type="warning" showIcon style={{ marginBottom: 16 }}
           message="重复排班会自动去重(同一天同一班次同一科目同一科室只保留最新)"

@@ -4,6 +4,7 @@ import {
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { poctAPI } from '../../api/domains/poct';
+import { ResponsiveTable } from '../../components';
 import { useCan } from '../../hooks';
 
 const PoctShiftList = () => {
@@ -17,7 +18,7 @@ const PoctShiftList = () => {
     try {
       setLoading(true);
       const r = await poctAPI.getShifts();
-      if (r.data?.success) setData(r.data.data || []);
+      if (r.success) setData(r.data || []);
     } catch (e) { message.error('加载班次失败'); }
     finally { setLoading(false); }
   }, []);
@@ -95,7 +96,7 @@ const PoctShiftList = () => {
           {canAdmin && <Button type="primary" icon={<PlusOutlined />} onClick={() => openEdit({})}>新增班次</Button>}
         </Space>
       }>
-        <Table rowKey="id" loading={loading} dataSource={data} columns={columns} pagination={false} />
+        <ResponsiveTable rowKey="id" loading={loading} dataSource={data} columns={columns} pagination={false} />
       </Card>
 
       <Modal
@@ -103,8 +104,7 @@ const PoctShiftList = () => {
         open={!!editing}
         onCancel={() => setEditing(null)}
         onOk={handleSave}
-        destroyOnClose
-      >
+        destroyOnHidden      >
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item name="shift_code" label="班次编码" rules={[{ required: true, message: '请填写编码' }]}>
             <Input placeholder="morning / noon / evening / 自定义" disabled={editing?.is_builtin} />

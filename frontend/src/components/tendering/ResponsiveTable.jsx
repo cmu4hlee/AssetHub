@@ -79,7 +79,7 @@ const ResponsiveTable = ({
           <div className="responsive-table-mobile-pagination">
             <Pagination
               simple
-              current={pagination.current}
+              {...(pagination.current ? { current: pagination.current } : {})}
               total={pagination.total}
               pageSize={pagination.pageSize}
               onChange={pagination.onChange}

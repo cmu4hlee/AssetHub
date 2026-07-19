@@ -10,6 +10,7 @@ import {
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 import { poctAPI } from '../../api/domains/poct';
+import { ResponsiveTable } from '../../components';
 import { useCan } from '../../hooks';
 
 const { RangePicker } = DatePicker;
@@ -35,12 +36,9 @@ const PoctRecordList = () => {
 
   // 加载基础数据
   useEffect(() => {
-    poctAPI.getShifts().then(r => { if (r.data?.success) setShifts(r.data.data); });
+    poctAPI.getShifts().then(r => { if (r.success) setShifts(r.data); }).catch(err => { console.warn('POCT shifts load failed:', err?.message); });
     import('../../api/domains/users').then(({ departmentsAPI }) => {
-      departmentsAPI.getDepartments({ pageSize: 200 }).then(r => {
-        const list = r.data?.data || r.data || [];
-        setDepartments(Array.isArray(list) ? list : []);
-      });
+      departmentsAPI.getDepartments({ pageSize: 200 }).then(r => { const list = r.data?.data || r.data || []; setDepartments(Array.isArray(list) ? list : []); }).catch(err => { console.warn('POCT depts load failed:', err?.message); });
     });
   }, []);
 
@@ -58,9 +56,9 @@ const PoctRecordList = () => {
         end_date: end?.format('YYYY-MM-DD'),
       };
       const r = await poctAPI.getRecords(params);
-      if (r.data?.success) {
-        setData(r.data.data || []);
-        setPagination({ current: r.data.pagination?.page || page, pageSize: r.data.pagination?.pageSize || pageSize, total: r.data.pagination?.total || 0 });
+      if (r.success) {
+        setData(r.data || []);
+        setPagination({ current: r.pagination?.page || page, pageSize: r.pagination?.pageSize || pageSize, total: r.pagination?.total || 0 });
       }
     } catch (e) {
       message.error('加载质控记录失败');
@@ -77,7 +75,7 @@ const PoctRecordList = () => {
         end_date: end?.format('YYYY-MM-DD'),
         department_id: filters.department_id || undefined,
       });
-      if (r.data?.success) setStats(r.data.data);
+      if (r.success) setStats(r.data);
     } catch {}
   }, [filters.dateRange, filters.department_id]);
 
@@ -86,14 +84,14 @@ const PoctRecordList = () => {
   const showDetail = async (id) => {
     try {
       const r = await poctAPI.getRecordDetail(id);
-      if (r.data?.success) setDetail(r.data.data);
+      if (r.success) setDetail(r.data);
     } catch { message.error('加载详情失败'); }
   };
 
   const handleDelete = async (id) => {
     try {
       const r = await poctAPI.deleteRecord(id);
-      if (r.data?.success) {
+      if (r.success) {
         message.success('已删除');
         loadData();
       }
@@ -112,8 +110,8 @@ const PoctRecordList = () => {
         result: filters.result || undefined,
         department_id: filters.department_id || undefined,
       });
-      if (!r.data?.success) throw new Error(r.data?.message || '导出失败');
-      const rows = r.data.data || [];
+      if (!r.success) throw new Error(r.data?.message || '导出失败');
+      const rows = r.data || [];
       if (rows.length === 0) {
         message.warning('当前筛选无数据');
         return;
@@ -178,10 +176,10 @@ const PoctRecordList = () => {
       {stats && (
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col span={4}><Card><Statistic title="总记录" value={stats.summary.total || 0} /></Card></Col>
-          <Col span={4}><Card><Statistic title="合格" value={stats.summary.pass || 0} valueStyle={{ color: '#52c41a' }} /></Card></Col>
-          <Col span={4}><Card><Statistic title="预警" value={stats.summary.warn || 0} valueStyle={{ color: '#faad14' }} /></Card></Col>
-          <Col span={4}><Card><Statistic title="不合格" value={stats.summary.fail || 0} valueStyle={{ color: '#ff4d4f' }} /></Card></Col>
-          <Col span={4}><Card><Statistic title="合格率" value={stats.passRate || '0%'} valueStyle={{ color: '#1890ff' }} /></Card></Col>
+          <Col span={4}><Card><Statistic title="合格" value={stats.summary.pass || 0} styles={{ content: { color: '#52c41a' } }} /></Card></Col>
+          <Col span={4}><Card><Statistic title="预警" value={stats.summary.warn || 0} styles={{ content: { color: '#faad14' } }} /></Card></Col>
+          <Col span={4}><Card><Statistic title="不合格" value={stats.summary.fail || 0} styles={{ content: { color: '#ff4d4f' } }} /></Card></Col>
+          <Col span={4}><Card><Statistic title="合格率" value={stats.passRate || '0%'} styles={{ content: { color: '#1890ff' } }} /></Card></Col>
           <Col span={4}>
             <Card>
               <Statistic
@@ -241,12 +239,12 @@ const PoctRecordList = () => {
           </Button>
         </Space>
       }>
-        <Table
+        <ResponsiveTable
           rowKey="id"
           loading={loading}
           dataSource={data}
           columns={columns}
-          scroll={{ x: 1300 }}
+          scroll={{ x: 1400 }}
           pagination={{
             ...pagination,
             showSizeChanger: true,

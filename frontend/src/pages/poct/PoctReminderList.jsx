@@ -4,6 +4,7 @@ import {
 } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, BellOutlined } from '@ant-design/icons';
 import { poctAPI } from '../../api/domains/poct';
+import { ResponsiveTable } from '../../components';
 import { useCan } from '../../hooks';
 
 const CHANNEL_OPTIONS = [
@@ -32,7 +33,7 @@ const PoctReminderList = () => {
     try {
       setLoading(true);
       const r = await poctAPI.getReminders();
-      if (r.data?.success) setData(r.data.data || []);
+      if (r.success) setData(r.data || []);
     } catch (e) { message.error('加载提醒规则失败'); }
     finally { setLoading(false); }
   }, []);
@@ -41,12 +42,9 @@ const PoctReminderList = () => {
 
   // 字典
   useEffect(() => {
-    poctAPI.getShifts().then(r => { if (r.data?.success) setShifts(r.data.data); });
+    poctAPI.getShifts().then(r => { if (r.success) setShifts(r.data); }).catch(err => { console.warn('POCT shifts load failed:', err?.message); });
     import('../../api/domains/users').then(({ departmentsAPI }) => {
-      departmentsAPI.getDepartments({ pageSize: 200 }).then(r => {
-        const list = r.data?.data || r.data || [];
-        setDepartments(Array.isArray(list) ? list : []);
-      });
+      departmentsAPI.getDepartments({ pageSize: 200 }).then(r => { const list = r.data?.data || r.data || []; setDepartments(Array.isArray(list) ? list : []); }).catch(err => { console.warn('POCT depts load failed:', err?.message); });
     });
   }, []);
 
@@ -160,7 +158,7 @@ const PoctReminderList = () => {
           {canAdmin && <Button type="primary" icon={<PlusOutlined />} onClick={() => openEdit({})}>新增规则</Button>}
         </Space>
       }>
-        <Table rowKey="id" loading={loading} dataSource={data} columns={columns} pagination={false} scroll={{ x: 1200 }} />
+        <ResponsiveTable rowKey="id" loading={loading} dataSource={data} columns={columns} pagination={false} scroll={{ x: 1200 }} />
       </Card>
 
       <Modal
@@ -169,8 +167,7 @@ const PoctReminderList = () => {
         onCancel={() => setEditing(null)}
         onOk={handleSave}
         width={620}
-        destroyOnClose
-      >
+        destroyOnHidden      >
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item name="name" label="规则名称" rules={[{ required: true, message: '请填写名称' }]}>
             <Input placeholder="如:早班质控提醒" />
