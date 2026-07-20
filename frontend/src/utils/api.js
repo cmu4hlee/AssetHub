@@ -4,6 +4,7 @@ export { api, getApiErrorMessage, normalizeApiMessage } from '../api/client';
 export { i18nAPI } from '../api/domains/i18n';
 
 export { assetAPI, assetImageAPI, depreciationAPI, financeAPI } from '../api/domains/assets';
+export { sparePartsAPI, maintenanceAPI as monitoringMaintenanceAPI, metrologyAPI } from '../api/domains/monitoring';
 
 export {
   inventoryAPI,

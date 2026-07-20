@@ -1,5 +1,5 @@
 /**
- * 资产状态大屏 Dashboard
+ * 资产状态监控平台 Dashboard
  * 面向大屏幕（1920x1080+）的全屏数据展示页面
  * 自动刷新、暗色科技感设计
  *
@@ -22,7 +22,7 @@ import {
   ComposedChart,
   Line,
 } from 'recharts';
-import { assetAPI } from '../utils/api';
+import { assetAPI, sparePartsAPI, monitoringMaintenanceAPI, metrologyAPI } from '../utils/api';
 import './AssetStatusDashboard.css';
 
 /* ============ 错误边界 ============ */
@@ -100,6 +100,10 @@ const AssetStatusDashboard = () => {
   const [data, setData] = useState(null);
   const [departmentStats, setDepartmentStats] = useState([]);
   const [warranties, setWarranties] = useState([]);
+  const [spareParts, setSpareParts] = useState(null);
+  const [maintenanceReminders, setMaintenanceReminders] = useState([]);
+  const [engineerStats, setEngineerStats] = useState([]);
+  const [metrologyExpiring, setMetrologyExpiring] = useState([]);
   const [loading, setLoading] = useState(true);
   const [time, setTime] = useState(new Date());
   const [todayAdded, setTodayAdded] = useState(0);
@@ -109,11 +113,18 @@ const AssetStatusDashboard = () => {
   /* ---------- 数据加载 ---------- */
   const loadData = useCallback(async () => {
     try {
-      const [statsRes, deptRes, dashRes, warrantyRes] = await Promise.allSettled([
+      const [
+        statsRes, deptRes, dashRes, warrantyRes,
+        spareRes, reminderRes, engineerRes, metrologyRes,
+      ] = await Promise.allSettled([
         assetAPI.getStatistics({}),
         assetAPI.getDepartmentStatistics({}),
         assetAPI.getDashboardData(),
         assetAPI.getExpiringWarranties({ days: 90 }),
+        sparePartsAPI.getStatistics({}),
+        monitoringMaintenanceAPI.getReminders({ status: '未处理', pageSize: 20 }),
+        monitoringMaintenanceAPI.getEngineerStats({ limit: 8 }),
+        metrologyAPI.getExpiring({ days: 30 }),
       ]);
 
       if (!mounted.current) return;
@@ -133,6 +144,18 @@ const AssetStatusDashboard = () => {
       }
       if (warrantyRes.status === 'fulfilled' && warrantyRes.value?.success) {
         setWarranties(warrantyRes.value.data || []);
+      }
+      if (spareRes.status === 'fulfilled' && spareRes.value?.success) {
+        setSpareParts(spareRes.value.data || null);
+      }
+      if (reminderRes.status === 'fulfilled' && reminderRes.value?.success) {
+        setMaintenanceReminders(reminderRes.value.data || []);
+      }
+      if (engineerRes.status === 'fulfilled' && engineerRes.value?.success) {
+        setEngineerStats(engineerRes.value.data || []);
+      }
+      if (metrologyRes.status === 'fulfilled' && metrologyRes.value?.success) {
+        setMetrologyExpiring(metrologyRes.value.data || []);
       }
     } catch (err) {
       console.error('加载大屏数据失败:', err);
@@ -169,6 +192,25 @@ const AssetStatusDashboard = () => {
   const transfer = overview.transfer_count || 0;
 
   const totalValueFormatted = useMemo(() => formatCurrency(totalValue), [totalValue]);
+
+  /* 生命支持设备完好率 */
+  const lifeSupportGoodRate = overview.life_support_good_rate;
+  const lifeSupportTotal = overview.life_support_total || 0;
+
+  /* 备件统计 */
+  const sparePartsQuantity = spareParts?.total_quantity || 0;
+  const sparePartsValue = spareParts?.total_value || 0;
+  const sparePartsLowStock = spareParts?.low_stock_count || 0;
+
+  /* 工程师工作统计（按维修人分组） */
+  const engineerChartData = useMemo(() => {
+    return (engineerStats || []).slice(0, 8).map(e => ({
+      name: e.technician || '未知',
+      total: Number(e.maintenance_count) || 0,
+      completed: Number(e.completed_count) || 0,
+      rate: Number(e.completion_rate) || 0,
+    }));
+  }, [engineerStats]);
 
   /* 状态分布饼图数据 */
   const statusPieData = useMemo(() => {
@@ -267,7 +309,7 @@ const AssetStatusDashboard = () => {
           <div className="asset-dashboard-logo-area">
             <div className="asset-dashboard-logo-icon">◆</div>
             <div>
-              <span className="asset-dashboard-title">资产状态大屏</span>
+              <span className="asset-dashboard-title">资产状态监控平台</span>
               <span className="asset-dashboard-title-sub">ASSET DASHBOARD</span>
             </div>
           </div>
@@ -325,6 +367,22 @@ const AssetStatusDashboard = () => {
               <div className="asset-dashboard-kpi-label">💰 资产原值总额</div>
               <div className="asset-dashboard-kpi-value">{totalValueFormatted.value}</div>
               <div className="asset-dashboard-kpi-sub">{totalValueFormatted.unit}</div>
+            </div>
+            <div className="asset-dashboard-kpi-card">
+              <div className="asset-dashboard-kpi-label">🧰 备件数量</div>
+              <div className="asset-dashboard-kpi-value">{sparePartsQuantity.toLocaleString()}</div>
+              <div className="asset-dashboard-kpi-sub">
+                低库存 {sparePartsLowStock.toLocaleString()} 种
+              </div>
+            </div>
+            <div className="asset-dashboard-kpi-card">
+              <div className="asset-dashboard-kpi-label">❤️ 生命支持完好率</div>
+              <div className="asset-dashboard-kpi-value">
+                {lifeSupportGoodRate != null ? `${lifeSupportGoodRate}%` : '—'}
+              </div>
+              <div className="asset-dashboard-kpi-sub">
+                共 {lifeSupportTotal.toLocaleString()} 台
+              </div>
             </div>
           </div>
 
@@ -486,7 +544,7 @@ const AssetStatusDashboard = () => {
             </div>
           </div>
 
-          {/* --- 底部行 --- */}
+          {/* --- 底部行 1：分布与概览 --- */}
           <div className="asset-dashboard-bottom-row">
             {/* 部门资产统计 */}
             <div className="asset-dashboard-bottom-card">
@@ -522,6 +580,41 @@ const AssetStatusDashboard = () => {
               </div>
             </div>
 
+            {/* 工程师工作统计 */}
+            <div className="asset-dashboard-bottom-card">
+              <div className="asset-dashboard-bottom-header">
+                <div className="asset-dashboard-bottom-title">
+                  <span className="chart-icon" style={{ color: '#a855f7' }}>◉</span>
+                  工程师工作统计
+                </div>
+                <div className="asset-dashboard-bottom-sub">近 {engineerChartData.length} 名维修人</div>
+              </div>
+              <div className="asset-dashboard-bottom-body">
+                {engineerChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={120} debounce={100}>
+                    <BarChart
+                      data={engineerChartData}
+                      layout="vertical"
+                      margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(56,132,255,0.08)" horizontal={false} />
+                      <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <YAxis type="category" dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={64} />
+                      <Tooltip
+                        formatter={(val, name) => [val, name === 'total' ? '维修数' : '完成数']}
+                        contentStyle={{ background: 'rgba(10,20,40,0.92)', border: '1px solid rgba(56,132,255,0.3)', borderRadius: 8, fontSize: 12 }}
+                        labelStyle={{ color: '#e2e8f0', fontWeight: 600 }}
+                      />
+                      <Bar dataKey="total" name="维修数" fill="#fb923c" radius={[0, 4, 4, 0]} barSize={10} />
+                      <Bar dataKey="completed" name="完成数" fill="#4ade80" radius={[0, 4, 4, 0]} barSize={10} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="dashboard-empty">暂无维修记录</div>
+                )}
+              </div>
+            </div>
+
             {/* 维护工单统计 */}
             <div className="asset-dashboard-bottom-card">
               <div className="asset-dashboard-bottom-header">
@@ -551,6 +644,88 @@ const AssetStatusDashboard = () => {
                     <div className="maint-stat-label">故障率</div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* --- 底部行 2：提醒事项 --- */}
+          <div className="asset-dashboard-bottom-row">
+            {/* 维修提醒 */}
+            <div className="asset-dashboard-bottom-card">
+              <div className="asset-dashboard-bottom-header">
+                <div className="asset-dashboard-bottom-title">
+                  <span className="chart-icon" style={{ color: '#fb923c' }}>◉</span>
+                  维修提醒
+                </div>
+                <div className="asset-dashboard-bottom-sub">
+                  {maintenanceReminders.length > 0 ? `未处理 ${maintenanceReminders.length}` : '全部已处理'}
+                </div>
+              </div>
+              <div className="asset-dashboard-bottom-body">
+                {maintenanceReminders.length > 0 ? (
+                  <div className="warranty-list-scroll">
+                    {maintenanceReminders.slice(0, 6).map((r, i) => {
+                      const endDate = r.next_maintenance_date || r.reminder_date;
+                      const daysLeft = endDate
+                        ? Math.ceil((new Date(endDate) - new Date()) / (1000 * 60 * 60 * 24))
+                        : 99;
+                      const badgeClass = daysLeft <= 0 ? 'urgent' : daysLeft <= 7 ? 'warning' : 'normal';
+                      return (
+                        <div className="warranty-item" key={i}>
+                          <span className="warranty-item-name" title={r.asset_name}>
+                            {r.asset_code || ''} {r.asset_name || ''}
+                          </span>
+                          <span className="warranty-item-date">{endDate || '—'}</span>
+                          <span className={`warranty-day-badge ${badgeClass}`}>
+                            {daysLeft > 0 ? `${daysLeft}天` : '已逾期'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="warranty-empty">暂无维修提醒 ✓</div>
+                )}
+              </div>
+            </div>
+
+            {/* 检测提醒（计量/校准到期） */}
+            <div className="asset-dashboard-bottom-card">
+              <div className="asset-dashboard-bottom-header">
+                <div className="asset-dashboard-bottom-title">
+                  <span className="chart-icon" style={{ color: '#3884ff' }}>◉</span>
+                  检测提醒
+                </div>
+                <div className="asset-dashboard-bottom-sub">
+                  {metrologyExpiring.length > 0 ? `${metrologyExpiring.length} 项待检` : '无待检'}
+                </div>
+              </div>
+              <div className="asset-dashboard-bottom-body">
+                {metrologyExpiring.length > 0 ? (
+                  <div className="warranty-list-scroll">
+                    {metrologyExpiring.slice(0, 6).map((m, i) => {
+                      const endDate = m.next_metrology_date;
+                      const daysLeft = endDate
+                        ? Math.ceil((new Date(endDate) - new Date()) / (1000 * 60 * 60 * 24))
+                        : 99;
+                      const badgeClass = daysLeft <= 0 ? 'urgent' : daysLeft <= 7 ? 'warning' : 'normal';
+                      return (
+                        <div className="warranty-item" key={i}>
+                          <span className="warranty-item-name" title={m.asset_name}>
+                            {m.asset_code || ''} {m.asset_name || ''}
+                          </span>
+                          <span className="warranty-item-date">{endDate || '—'}</span>
+                          <span className={`warranty-day-badge ${badgeClass}`}>
+                            {daysLeft > 0 ? `${daysLeft}天` : '已逾期'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="warranty-empty">暂无检测提醒 ✓</div>
+                )}
               </div>
             </div>
 

@@ -202,12 +202,18 @@ export const maintenanceAPI = {
   recommendMaintenanceTemplates: params =>
     getNormalizedList(api.get('/maintenance/templates/recommend', { params })),
 
-  getEfficiencyOverview: params => api.get('/maintenance/efficiency/overview', { params }),
-  getEfficiencyResponseTime: params => api.get('/maintenance/efficiency/response-time', { params }),
-  getEfficiencyTechnician: params => api.get('/maintenance/efficiency/technician', { params }),
-  getEfficiencyAssetFrequency: params => api.get('/maintenance/efficiency/asset-frequency', { params }),
-  getCostAnalysis: params => api.get('/maintenance/analysis/cost-analysis', { params }),
-  getCostTrendAnalysis: params => api.get('/maintenance/analysis/cost-trend', { params }),
+  getEfficiencyOverview: params => api.get('/preventive-maintenance/efficiency/overview', { params }),
+  getEfficiencyResponseTime: params => api.get('/preventive-maintenance/efficiency/response-time', { params }),
+  getEfficiencyTechnician: params => api.get('/preventive-maintenance/efficiency/technician', { params }),
+  getEfficiencyAssetFrequency: params => api.get('/preventive-maintenance/efficiency/asset-frequency', { params }),
+  // ===== 维护成本管理（后端：backend/routes/maintenance/costs.router.js => /api/maintenance/costs）=====
+  getMaintenanceCosts: params => api.get('/maintenance/costs', { params }),
+  getCostAnalysis: params => api.get('/maintenance/costs/analysis', { params }),
+  createMaintenanceCost: data => api.post('/maintenance/costs', data),
+  updateMaintenanceCost: (id, data) => api.put(`/maintenance/costs/${id}`, data),
+  deleteMaintenanceCost: id => api.delete(`/maintenance/costs/${id}`),
+  // 成本趋势（旧效率页分析路径有误，已修正为真实路由，保留作为兜底）
+  getCostTrendAnalysis: params => api.get('/maintenance/costs/trend', { params }),
   getMaintenanceDashboardOverview: params => api.get('/maintenance/dashboard/overview', { params }),
   getTypeDistribution: params => api.get('/maintenance/analysis/type-distribution', { params }),
 
@@ -230,6 +236,8 @@ export const maintenanceAPI = {
   evaluateMaintenanceWorkOrder: (id, data) => api.post(`/maintenance/workorders/${id}/evaluate`, data),
   closeMaintenanceWorkOrder: (id, data) => api.post(`/maintenance/workorders/${id}/close`, data),
   cancelMaintenanceWorkOrder: (id, data) => api.post(`/maintenance/workorders/${id}/cancel`, data),
+  // 2026-07-17 配件库完善: 工单材料明细(关联备件 part_id 联动扣库存)
+  addMaintenanceWorkOrderMaterials: (id, materials) => api.post(`/maintenance/workorders/${id}/materials`, { materials }),
   getEngineers: params => api.get('/maintenance/workorders/engineers', { params }),
   getWorkOrderDispatchPanel: params => api.get('/maintenance/workorders/dispatch-panel', { params }),
   getWorkOrderHistory: id => api.get(`/maintenance/workorders/${id}/history`),
@@ -278,6 +286,7 @@ export const acceptanceAPI = {
     apiWithBatching.put(`/acceptance/records/${id}/checklist/${checkId}`, data),
   passAllChecklist: id => apiWithBatching.put(`/acceptance/records/${id}/checklist/pass-all`),
   getAssetFillInfo: code => apiWithBatching.get(`/acceptance/assets/${code}/fill-info`),
+  inviteSupplier: id => apiWithBatching.post(`/acceptance-management/records/${id}/invite-supplier`),
 };
 
 export const acceptanceManagementAPI = {
@@ -324,29 +333,16 @@ export const acceptanceManagementAPI = {
   },
 };
 
-// warranty 模块后端 API 已实现 (路径 /api/maintenance/warranty/*)
-export const warrantyAPI = {
-  getReminders: params => api.get('/maintenance/warranty/reminders', { params }),
-  getReminderConfigs: () => api.get('/maintenance/warranty/reminder-configs'),
-  createReminderConfig: data => api.post('/maintenance/warranty/reminder-configs', data),
-  updateReminderConfig: (id, data) => api.put(`/maintenance/warranty/reminder-configs/${id}`, data),
-  deleteReminderConfig: id => api.delete(`/maintenance/warranty/reminder-configs/${id}`),
-  getContracts: params => api.get('/maintenance/warranty/contracts', { params }),
-  createContract: data => api.post('/maintenance/warranty/contracts', data),
-  updateContract: (id, data) => api.put(`/maintenance/warranty/contracts/${id}`, data),
-  deleteContract: id => api.delete(`/maintenance/warranty/contracts/${id}`),
-  // 在保清单 / Dashboard 保修卡片
-  getInWarrantyList: params => api.get('/maintenance/warranty/in-warranty', { params }),
-  getStatistics: () => api.get('/maintenance/warranty/statistics'),
-  checkExpiringWarranties: () => api.get('/maintenance/warranty/reminders/check'),
-};
+// warranty 模块后端 API 已迁出至 /api/warranty，详见 ./warranty.js
+// （2026-07-16：保修管理从日常维修中独立出来，成立单独模块）
 
 export const qualityControlAPI = {
-  getMetrologyRecords: params => getNormalizedList(api.get('/quality-control/metrology', { params })),
-  getMetrologyRecord: id => api.get(`/quality-control/metrology/${id}`),
-  createMetrologyRecord: data => api.post('/quality-control/metrology', data),
-  updateMetrologyRecord: (id, data) => api.put(`/quality-control/metrology/${id}`, data),
-  deleteMetrologyRecord: id => api.delete(`/quality-control/metrology/${id}`),
+  getMetrologyRecords: params => getNormalizedList(api.get('/metrology', { params })),
+  getMetrologyRecord: id => api.get(`/metrology/${id}`),
+  createMetrologyRecord: data => api.post('/metrology', data),
+  updateMetrologyRecord: (id, data) => api.put(`/metrology/${id}`, data),
+  deleteMetrologyRecord: id => api.delete(`/metrology/${id}`),
+  getMetrologyAttachments: id => api.get(`/metrology/${id}/attachments`),
   uploadMetrologyAttachments: (id, files) => {
     const formData = new FormData();
     files.forEach(file => {
@@ -355,23 +351,23 @@ export const qualityControlAPI = {
         formData.append('originalFileName', encodeURIComponent(file.name));
       }
     });
-    return api.post(`/quality-control/metrology/${id}/attachments`, formData, {
+    return api.post(`/metrology/${id}/attachments`, formData, {
       headers: {
       },
     });
   },
-  deleteMetrologyAttachment: attachmentId => api.delete(`/quality-control/metrology/attachments/${attachmentId}`),
+  deleteMetrologyAttachment: attachmentId => api.delete(`/metrology/attachments/${attachmentId}`),
   getExpiringMetrology: params =>
-    getNormalizedList(api.get('/quality-control/metrology/expiring', { params })),
-  getMetrologyStatistics: params => api.get('/quality-control/metrology/statistics', { params }),
-  getAdvancedMetrologyStatistics: params => api.get('/quality-control/metrology/statistics/advanced', { params }),
-  getMetrologyReport: params => api.get('/quality-control/reports/metrology', { params, responseType: 'blob' }),
+    getNormalizedList(api.get('/metrology/expiring', { params })),
+  getMetrologyStatistics: params => api.get('/metrology/statistics', { params }),
+  getAdvancedMetrologyStatistics: params => api.get('/metrology/statistics/advanced', { params }),
+  getMetrologyReport: params => api.get('/metrology/report', { params, responseType: 'blob' }),
   getQualityControlRecords: params =>
-    getNormalizedList(api.get('/quality-control/quality-control', { params })),
-  getQualityControlRecord: id => api.get(`/quality-control/quality-control/${id}`),
-  createQualityControlRecord: data => api.post('/quality-control/quality-control', data),
-  updateQualityControlRecord: (id, data) => api.put(`/quality-control/quality-control/${id}`, data),
-  deleteQualityControlRecord: id => api.delete(`/quality-control/quality-control/${id}`),
+    getNormalizedList(api.get('/quality-control', { params })),
+  getQualityControlRecord: id => api.get(`/quality-control/${id}`),
+  createQualityControlRecord: data => api.post('/quality-control', data),
+  updateQualityControlRecord: (id, data) => api.put(`/quality-control/${id}`, data),
+  deleteQualityControlRecord: id => api.delete(`/quality-control/${id}`),
   uploadQualityControlAttachments: (id, files) => {
     const formData = new FormData();
     files.forEach(file => {
@@ -380,26 +376,26 @@ export const qualityControlAPI = {
         formData.append('originalFileName', encodeURIComponent(file.name));
       }
     });
-    return api.post(`/quality-control/quality-control/${id}/attachments`, formData, {
+    return api.post(`/quality-control/${id}/attachments`, formData, {
       headers: {
       },
     });
   },
   deleteQualityControlAttachment: attachmentId =>
-    api.delete(`/quality-control/quality-control/attachments/${attachmentId}`),
+    api.delete(`/quality-control/attachments/${attachmentId}`),
   getExpiringQualityControl: params =>
-    getNormalizedList(api.get('/quality-control/quality-control/expiring', { params })),
-  getQualityControlStatistics: params => api.get('/quality-control/quality-control/statistics', { params }),
+    getNormalizedList(api.get('/quality-control/expiring', { params })),
+  getQualityControlStatistics: params => api.get('/quality-control/statistics', { params }),
   getAssetQualityHistory: assetCode =>
     getNormalizedList(api.get(`/quality-control/asset/${assetCode}/history`)),
   analyzeMetrologyReport: (formData, onUploadProgress) =>
-    api.post('/quality-control/metrology/analyze-report', formData, {
+    api.post('/metrology/analyze-report', formData, {
       headers: {
       },
       onUploadProgress,
     }),
   createMetrologyRecordFromFile: (formData, onUploadProgress) =>
-    api.post('/quality-control/metrology/from-file', formData, {
+    api.post('/metrology/from-file', formData, {
       headers: {
       },
       onUploadProgress,
@@ -407,18 +403,21 @@ export const qualityControlAPI = {
   // 计量证书批量导入
   getMetrologyImportTemplate: () =>
     api
-      .get('/quality-control/metrology/import-template', { responseType: 'blob' })
+      .get('/metrology/import-template', { responseType: 'blob' })
       .then(response => response.data),
   validateMetrologyImport: file => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post('/quality-control/metrology/import/validate', formData);
+    return api.post('/metrology/import/validate', formData);
   },
   importMetrologyRecords: file => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post('/quality-control/metrology/import', formData);
+    return api.post('/metrology/import', formData);
   },
+  // 资产批量重新关联(补救:导入时未匹配 / 新增资产后可重跑)
+  reassociateAssets: ({ ids, force = false, includeAll = false } = {}) =>
+    api.post('/metrology/reassociate', { ids, force, includeAll }),
 };
 
 export const adverseReactionAPI = {
@@ -455,6 +454,27 @@ export const adverseReactionAPI = {
     const qs = query.toString();
     return `/api/adverse-reaction/export/excel${qs ? `?${qs}` : ''}`;
   },
+  // 根因分析
+  getRootCauseAnalyses: id => api.get(`/adverse-reaction/${id}/root-cause`),
+  createRootCauseAnalysis: (id, data) => api.post(`/adverse-reaction/${id}/root-cause`, data),
+  updateRootCauseAnalysis: (id, analysisId, data) =>
+    api.put(`/adverse-reaction/${id}/root-cause/${analysisId}`, data),
+  verifyRootCauseAnalysis: (id, analysisId) =>
+    api.post(`/adverse-reaction/${id}/root-cause/${analysisId}/verify`),
+  deleteRootCauseAnalysis: (id, analysisId) =>
+    api.delete(`/adverse-reaction/${id}/root-cause/${analysisId}`),
+  // 预防措施
+  getPreventiveMeasures: id => api.get(`/adverse-reaction/${id}/preventive-measures`),
+  createPreventiveMeasure: (id, data) =>
+    api.post(`/adverse-reaction/${id}/preventive-measures`, data),
+  updatePreventiveMeasure: (id, measureId, data) =>
+    api.put(`/adverse-reaction/${id}/preventive-measures/${measureId}`, data),
+  verifyPreventiveMeasure: (id, measureId, data) =>
+    api.post(`/adverse-reaction/${id}/preventive-measures/${measureId}/verify`, data),
+  deletePreventiveMeasure: (id, measureId) =>
+    api.delete(`/adverse-reaction/${id}/preventive-measures/${measureId}`),
+  // 监管上报
+  markAuthorityReport: (id, data) => api.post(`/adverse-reaction/${id}/authority-report`, data),
 };
 
 export const aiAPI = {
@@ -488,4 +508,12 @@ export const aiAPI = {
   },
   analyzeMaintenance: params => api.get('maintenance/ai/analysis', { params }),
   getPending: () => api.get('maintenance/ai/pending'),
+
+  // ==================== 临时保养（按需/轻量维护, 区别于正式维修工单） ====================
+  getTemporaryRecords: params => getNormalizedList(api.get('/preventive-maintenance/temporary', { params })),
+  getTemporaryRecord: id => api.get(`/preventive-maintenance/temporary/${id}`),
+  createTemporaryRecord: data => api.post('/preventive-maintenance/temporary', data),
+  updateTemporaryRecord: (id, data) => api.put(`/preventive-maintenance/temporary/${id}`, data),
+  deleteTemporaryRecord: id => api.delete(`/preventive-maintenance/temporary/${id}`),
+  getTemporaryStatistics: () => api.get('/preventive-maintenance/temporary/statistics/overview'),
 };
