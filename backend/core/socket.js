@@ -39,50 +39,73 @@ function initSocket(server, corsConfig) {
 
     // 客户端注册身份（userId + role）
     socket.on('register', ({ userId, username, role, tenantId }) => {
-      if (userId) {
-        userSocketMap.set(String(userId), socket.id);
-        socket.data.userId = String(userId);
-        socket.data.username = username;
-        socket.data.role = role;
-        socket.data.tenantId = tenantId;
-        logger.debug(`[Socket.IO] 用户注册: ${username}(ID:${userId}, 角色:${role})`);
+      try {
+        if (userId) {
+          userSocketMap.set(String(userId), socket.id);
+          socket.data.userId = String(userId);
+          socket.data.username = username;
+          socket.data.role = role;
+          socket.data.tenantId = tenantId;
+          logger.debug(`[Socket.IO] 用户注册: ${username}(ID:${userId}, 角色:${role})`);
 
-        // 加入用户房间（用于 pushToUser 定向推送）
-        socket.join(`user:${userId}`);
+          // 加入用户房间（用于 pushToUser 定向推送）
+          socket.join(`user:${userId}`);
 
-        // 加入角色房间
-        if (role) {
-          const roomName = `role:${role}`;
-          socket.join(roomName);
-          if (!roleSocketMap.has(role)) {
-            roleSocketMap.set(role, new Set());
+          // 加入角色房间
+          if (role) {
+            const roomName = `role:${role}`;
+            socket.join(roomName);
+            if (!roleSocketMap.has(role)) {
+              roleSocketMap.set(role, new Set());
+            }
+            roleSocketMap.get(role).add(socket.id);
           }
-          roleSocketMap.get(role).add(socket.id);
+          // 加入租户房间
+          if (tenantId) {
+            socket.join(`tenant:${tenantId}`);
+          }
         }
-        // 加入租户房间
-        if (tenantId) {
-          socket.join(`tenant:${tenantId}`);
-        }
+      } catch (err) {
+        logger.error(`[Socket.IO] register 处理失败 (${socket.id}):`, err.message);
       }
     });
 
-    socket.on('disconnect', () => {
-      const userId = socket.data.userId;
-      const role = socket.data.role;
-      if (userId) userSocketMap.delete(userId);
-      if (role && roleSocketMap.has(role)) {
-        roleSocketMap.get(role).delete(socket.id);
-        if (roleSocketMap.get(role).size === 0) {
-          roleSocketMap.delete(role);
+    socket.on('disconnect', reason => {
+      try {
+        const userId = socket.data.userId;
+        const role = socket.data.role;
+        if (userId) userSocketMap.delete(userId);
+        if (role && roleSocketMap.has(role)) {
+          roleSocketMap.get(role).delete(socket.id);
+          if (roleSocketMap.get(role).size === 0) {
+            roleSocketMap.delete(role);
+          }
         }
+        // reason: 'transport close' / 'client disconnect' / 'ping timeout' / 'server shutting down'
+        logger.info(`[Socket.IO] 客户端已断开: ${socket.id} reason=${reason}`);
+      } catch (err) {
+        logger.error(`[Socket.IO] disconnect 清理失败 (${socket.id}):`, err.message);
       }
-      logger.info(`[Socket.IO] 客户端已断开: ${socket.id}`);
+    });
+
+    // 兜底: socket 自身错误（如底层 transport 错误）
+    socket.on('error', err => {
+      logger.error(`[Socket.IO] socket 错误 (${socket.id}):`, err.message);
     });
 
     // 心跳
     socket.on('ping', () => {
-      socket.emit('pong');
+      try {
+        socket.emit('pong');
+      } catch (e) {
+        // 静默, 心跳失败常见
+      }
     });
+  });
+
+  // 服务级兜底错误
+  io.engine.on('connection_error', err => {
+    logger.warn('[Socket.IO] engine connection_error:', err.message);
   });
 
   logger.info('[Socket.IO] 服务已启动，路径: /socket.io/');

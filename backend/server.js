@@ -407,14 +407,44 @@ async function initDatabase() {
           action_text VARCHAR(100) DEFAULT '查看详情' COMMENT '按钮文案',
           is_read TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读',
           read_at TIMESTAMP NULL DEFAULT NULL COMMENT '读取时间',
+          aggregate_count INT NOT NULL DEFAULT 1 COMMENT '聚合条数（同用户+同事件短时间内合并）',
+          aggregate_keys TEXT DEFAULT NULL COMMENT '聚合键 JSON 数组',
+          first_occurred_at TIMESTAMP NULL DEFAULT NULL COMMENT '首次发生时间（聚合起点）',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           expires_at TIMESTAMP NULL DEFAULT NULL COMMENT '过期时间（可选）',
           KEY idx_user_read (user_id, is_read, created_at),
           KEY idx_tenant (tenant_id),
           KEY idx_event (event_code),
-          KEY idx_category (category)
+          KEY idx_category (category),
+          KEY idx_aggregate (user_id, event_code, category, is_read, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='站内消息表'`);
         logger.info('in_app_notifications 表创建成功');
+      } else {
+        // 幂等补列：兼容旧版本建的表（缺聚合相关列会导致 deliver() INSERT 报 Unknown column）
+        try {
+          const [iaCols] = await conn.execute(
+            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'in_app_notifications'`,
+          );
+          const iaHave = new Set(iaCols.map(c => c.COLUMN_NAME));
+          const iaAdds = [];
+          if (!iaHave.has('aggregate_count')) iaAdds.push("ADD COLUMN aggregate_count INT NOT NULL DEFAULT 1 COMMENT '聚合条数'");
+          if (!iaHave.has('aggregate_keys')) iaAdds.push("ADD COLUMN aggregate_keys TEXT DEFAULT NULL COMMENT '聚合键 JSON 数组'");
+          if (!iaHave.has('first_occurred_at')) iaAdds.push("ADD COLUMN first_occurred_at TIMESTAMP NULL DEFAULT NULL COMMENT '首次发生时间'");
+          if (iaAdds.length) {
+            await conn.execute(`ALTER TABLE in_app_notifications ${iaAdds.join(', ')}`);
+            logger.info(`in_app_notifications 补齐聚合列: ${iaAdds.length} 列`);
+          }
+          const [iaIdx] = await conn.execute(`SHOW INDEX FROM in_app_notifications WHERE Key_name = 'idx_aggregate'`);
+          if (!iaIdx.length) {
+            await conn.execute(
+              `ALTER TABLE in_app_notifications ADD KEY idx_aggregate (user_id, event_code, category, is_read, created_at)`,
+            );
+            logger.info('in_app_notifications 补齐 idx_aggregate 索引');
+          }
+        } catch (iaMigErr) {
+          logger.warn('in_app_notifications 聚合列补齐跳过:', iaMigErr.message);
+        }
       }
       if (!existingTables.has('recipient_strategies')) {
         await conn.execute(`CREATE TABLE recipient_strategies (
@@ -521,11 +551,11 @@ async function initDatabase() {
       logger.warn('system_configs 表检查/创建跳过:', scTableErr.message);
     }
 
-    // ========== 特种设备表补全列迁移 ==========
+    // ========== 重点设备表补全列迁移（原「特种设备」于 2026-07-20 重命名为 key_equipment）==========
     try {
       const conn = await db.getConnection();
       const [seCols] = await conn.execute(
-        "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'special_equipment'",
+        "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'key_equipment'",
       );
       const existing = new Set(seCols.map(r => r.COLUMN_NAME));
 
@@ -552,33 +582,33 @@ async function initDatabase() {
       let addedCount = 0;
       for (const col of newColumns) {
         if (!existing.has(col.name)) {
-          logger.warn(`special_equipment 表缺少 ${col.name} 列，正在自动添加...`);
-          await conn.execute(`ALTER TABLE special_equipment ADD COLUMN ${col.name} ${col.type}`);
+          logger.warn(`key_equipment 表缺少 ${col.name} 列，正在自动添加...`);
+          await conn.execute(`ALTER TABLE key_equipment ADD COLUMN ${col.name} ${col.type}`);
           addedCount++;
         }
       }
       if (addedCount > 0) {
-        logger.info(`special_equipment 表迁移完成：新增 ${addedCount} 列`);
+        logger.info(`key_equipment 表迁移完成：新增 ${addedCount} 列`);
       } else {
-        logger.info('special_equipment 表列完整性检查通过');
+        logger.info('key_equipment 表列完整性检查通过');
       }
       conn.release();
     } catch (seMigrateErr) {
-      logger.warn('special_equipment 表迁移跳过:', seMigrateErr.message);
+      logger.warn('key_equipment 表迁移跳过:', seMigrateErr.message);
     }
 
-    // ========== 特种设备证件表（special_equipment_cert）==========
+    // ========== 重点设备证件表（key_equipment_cert）==========
     try {
       const certConn = await db.getConnection();
       const [certTbl] = await certConn.execute(
-        "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'special_equipment_cert'",
+        "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'key_equipment_cert'",
       );
       if (certTbl.length === 0) {
         await certConn.execute(`
-          CREATE TABLE special_equipment_cert (
+          CREATE TABLE key_equipment_cert (
             id INT AUTO_INCREMENT PRIMARY KEY,
             tenant_id INT NOT NULL,
-            equipment_id INT NOT NULL COMMENT '关联 special_equipment.id',
+            equipment_id INT NOT NULL COMMENT '关联 key_equipment.id',
             cert_type VARCHAR(50) NOT NULL COMMENT '证件类型：使用登记证/检验合格证/注册证/计量证/辐射安全证/其他',
             cert_no VARCHAR(100) DEFAULT NULL COMMENT '证件编号',
             attachment_url VARCHAR(500) DEFAULT NULL COMMENT '附件URL',
@@ -590,17 +620,17 @@ async function initDatabase() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             is_deleted TINYINT(1) NOT NULL DEFAULT 0,
             deleted_at DATETIME DEFAULT NULL,
-            INDEX idx_se_cert_tenant (tenant_id),
-            INDEX idx_se_cert_equipment (equipment_id)
-          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='特种设备证件管理'
+            INDEX idx_ke_cert_tenant (tenant_id),
+            INDEX idx_ke_cert_equipment (equipment_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='重点设备证件管理'
         `);
-        logger.info('special_equipment_cert 表创建完成');
+        logger.info('key_equipment_cert 表创建完成');
       } else {
-        logger.info('special_equipment_cert 表已存在，跳过创建');
+        logger.info('key_equipment_cert 表已存在，跳过创建');
       }
       certConn.release();
     } catch (certErr) {
-      logger.warn('special_equipment_cert 表创建跳过:', certErr.message);
+      logger.warn('key_equipment_cert 表创建跳过:', certErr.message);
     }
 
     // ========== 工程师档案扩展表（staff_skill / staff_schedule）==========
@@ -2166,10 +2196,10 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com'],
       scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
       imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
-      fontSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+      fontSrc: ["'self'", 'https://cdn.jsdelivr.net', 'https://fonts.gstatic.com', 'data:'],
       connectSrc: ["'self'", 'wss:', 'https:'],
       mediaSrc: ["'self'", 'data:', 'blob:'],
     },
@@ -2450,6 +2480,18 @@ const { deprecatedRoute, moduleRoute } = require('./middleware/route-deprecation
 app.use('/api', apiLimiter);
 
 // ============================================
+// 请求超时中间件（防慢请求拖死进程，30s 默认，可通过 REQUEST_TIMEOUT_MS 调整）
+// 必须在限流之后、路由之前挂载；跳过 /api/health* K8s 探针路径
+// ============================================
+try {
+  const requestTimeout = require('./middleware/request-timeout');
+  app.use(requestTimeout());
+  logger.info('[Server] 请求超时中间件已挂载 (30s)');
+} catch (e) {
+  logger.error('[Server] 请求超时中间件挂载失败:', e.message);
+}
+
+// ============================================
 // 系统级路由（无模块归属）
 // ============================================
 app.use('/api', require('./routes/health'));
@@ -2472,6 +2514,9 @@ app.use('/api/workflow', require('./routes/workflow'));
 app.use('/api/i18n', require('./routes/i18n.routes'));
 app.use('/api/api-documentation', require('./routes/api-documentation'));
 app.use('/api/agent-mesh', require('./routes/agent-mesh'));
+// Service Token（应用服务账号令牌）—— 给 OpenClaw / AI agent 等内部服务调用使用
+// 避免在 prompt 上下文里塞用户明文密码。签发 / 吊销 / 列表。
+app.use('/api/auth/service-tokens', require('./routes/service-tokens').router);
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/dashboard-configs', require('./routes/dashboard-configs'));
 app.use('/api/desktop-preferences', require('./routes/desktop-preferences'));
@@ -2513,8 +2558,8 @@ app.use('/api/assets', require('./routes/assets/asset.share'));
 app.use('/api/compliance', ...moduleRoute('/api/compliance', 'compliance-management', require('./modules/compliance-management/routes/index')));
 // 安全检查
 app.use('/api/safety-inspection', ...moduleRoute('/api/safety-inspection', 'safety-inspection-management', require('./modules/safety-inspection-management/routes/index')));
-// 特种设备
-app.use('/api/special-equipment', ...moduleRoute('/api/special-equipment', 'special-equipment-management', require('./modules/special-equipment-management/routes/index')));
+// 重点设备（原「特种设备」，2026-07-20 重命名）
+app.use('/api/key-equipment', ...moduleRoute('/api/key-equipment', 'key-equipment-management', require('./modules/key-equipment-management/routes/index')));
 // 风险管理
 app.use('/api/risk', ...moduleRoute('/api/risk', 'asset-risk-management', require('./modules/asset-risk-management/routes/index')));
 // 员工资质
@@ -2585,6 +2630,8 @@ app.use('/api/pdca', ...moduleRoute('/api/pdca', 'pdca-management', require('./m
 app.use('/api/form-customization', ...moduleRoute('/api/form-customization', 'form-customization-management', require('./modules/form-customization-management/routes/index')));
 // 流程定制（通用审批引擎：节点/角色/条件/会签，可绑定业务表单）
 app.use('/api/workflow', ...moduleRoute('/api/workflow', 'workflow-management', require('./modules/workflow-management/routes/index')));
+// 大型设备管理（设备台账/巡检/维修保养/计量校准/附件/二维码/到期预警）
+app.use('/api/large-equipment', ...moduleRoute('/api/large-equipment', 'large-equipment-management', require('./modules/large-equipment-management/routes/index')));
 
 // ============================================
 // 旧版路由（已弃用）- 使用 deprecatedRoute 注册
@@ -2798,6 +2845,18 @@ const onServerStart = () => {
   logger.info(`服务器运行在端口 ${PORT}`);
   logger.info(`健康检查: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/api/health`);
   logger.info(`启动时间: ${new Date().toISOString()}`);
+
+  // 启动进程看门狗 (定期打内存/event loop lag 快照, 内存超阈值告警)
+  try {
+    const { startWatchdog } = require('./utils/process-watchdog');
+    startWatchdog({
+      intervalMs: parseInt(process.env.WATCHDOG_INTERVAL_MS || '60000', 10),
+      heapWarnMB: parseInt(process.env.WATCHDOG_HEAP_WARN_MB || '400', 10),
+      rssWarnMB: parseInt(process.env.WATCHDOG_RSS_WARN_MB || '480', 10),
+    });
+  } catch (e) {
+    logger.error('[onServerStart] 看门狗启动失败:', e.message);
+  }
 
   // 启动巡检模块调度器（逾期标记 / 到期提醒 / 整改超期 / 计划派发）
   try {
