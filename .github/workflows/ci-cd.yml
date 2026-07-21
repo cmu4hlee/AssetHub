@@ -135,6 +135,31 @@ jobs:
           path: backend/coverage/
           retention-days: 7
 
+      - name: Run stability stress test (50 并发 200 请求, 验证后端不崩)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          # 启动后端到后台
+          node server.js > /tmp/stress-backend.log 2>&1 &
+          SERVER_PID=$!
+          # 等待后端就绪 (最多 30s)
+          for i in $(seq 1 30); do
+            if curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:5183/api/health 2>/dev/null | grep -q "200"; then
+              break
+            fi
+            sleep 1
+          done
+          # 跑压测
+          STRESS_CONCURRENCY=50 STRESS_TOTAL=200 node scripts/stress-test.js
+          STRESS_EXIT=$?
+          # 清理后端
+          kill -TERM $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+          exit $STRESS_EXIT
+        working-directory: ./backend
+        continue-on-error: true  # 压测失败不阻塞 CI, 但会显示在 report
+        env:
+          HIGH_RISK_GATE_ENABLED: 'false'
+
   # ============================================================
   # 3. Frontend Test + Build
   # ============================================================

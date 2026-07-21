@@ -393,12 +393,23 @@ const dbProxy = {
 
     // 模块级连接配额隔离 + 跨模块表访问审计 + 模块级断路器
     const moduleId = getCurrentModuleId();
-    if (moduleId && !acquireModuleConnection(moduleId)) {
-      const limit = getModulePoolLimit(moduleId);
-      const err = new Error(`MODULE_POOL_EXHAUSTED: 模块 ${moduleId} 已达到连接配额上限 ${limit}，请稍后重试`);
-      err.code = 'MODULE_POOL_EXHAUSTED';
-      err.statusCode = 503;
-      throw err;
+    // 有界重试：模块池瞬时耗尽时，短暂让出事件循环等待其它请求释放连接，
+    // 避免正常并发（如一次写操作叠加守卫审计/出站事件）被直接 503。超时后仍未获连接才真正失败。
+    if (moduleId) {
+      let acquired = false;
+      const maxWaitMs = parseInt(process.env.MODULE_POOL_WAIT_MS, 10) || 1500;
+      const stepMs = 25;
+      for (let waited = 0; waited <= maxWaitMs; waited += stepMs) {
+        if (acquireModuleConnection(moduleId)) { acquired = true; break; }
+        await new Promise((r) => setTimeout(r, stepMs));
+      }
+      if (!acquired) {
+        const limit = getModulePoolLimit(moduleId);
+        const err = new Error(`MODULE_POOL_EXHAUSTED: 模块 ${moduleId} 已达到连接配额上限 ${limit}，请稍后重试`);
+        err.code = 'MODULE_POOL_EXHAUSTED';
+        err.statusCode = 503;
+        throw err;
+      }
     }
     auditSQLAccess(moduleId, sql);
 
@@ -408,6 +419,11 @@ const dbProxy = {
 
     // 模块级断路器：某模块连续失败时仅熔断该模块
     const breaker = getModuleCircuitBreaker(moduleId);
+    // 慢 SQL 监控阈值（可通过 SLOW_QUERY_MS 环境变量调整, 默认 1000ms）
+    const SLOW_QUERY_MS = parseInt(process.env.SLOW_QUERY_MS || '1000', 10);
+    // 慢 SQL 计时: 在外层 try/catch 都能访问
+    const sqlStart = Date.now();
+    let slowQueryLogged = false;
     const executeSQL = async () => {
       if (isDebug) {
         console.debug(`📊 SQL: ${sql.slice(0, 80)}...`);
@@ -451,11 +467,33 @@ const dbProxy = {
 
     try {
       // 通过断路器执行（仅模块级断路器；无模块上下文时直接执行）
+      let result;
       if (breaker) {
-        return await breaker.execute(executeSQL);
+        result = await breaker.execute(executeSQL);
+      } else {
+        result = await executeSQL();
       }
-      return await executeSQL();
+      // 慢 SQL 检测: 超阈值自动 warn (不阻塞正常返回)
+      const sqlMs = Date.now() - sqlStart;
+      if (sqlMs > SLOW_QUERY_MS) {
+        slowQueryLogged = true;
+        const sqlPreview = sql.replace(/\s+/g, ' ').slice(0, 200);
+        console.warn(
+          `⚠️ [SlowQuery] ${sqlMs}ms > ${SLOW_QUERY_MS}ms | module=${moduleId || 'core'} | ` +
+          `sql=${sqlPreview}${sql.length > 200 ? '...' : ''}`,
+        );
+      }
+      return result;
     } catch (error) {
+      const sqlMs = Date.now() - sqlStart;
+      // 慢 SQL 失败的也 log (失败可能是慢 SQL 引起的)
+      if (sqlMs > SLOW_QUERY_MS && !slowQueryLogged) {
+        const sqlPreview = sql.replace(/\s+/g, ' ').slice(0, 200);
+        console.warn(
+          `⚠️ [SlowQuery+Error] ${sqlMs}ms > ${SLOW_QUERY_MS}ms (failed) | module=${moduleId || 'core'} | ` +
+          `sql=${sqlPreview}${sql.length > 200 ? '...' : ''} | err=${error.message}`,
+        );
+      }
       // 断路器开启时的拒绝错误直接抛出
       if (error.message && error.message.includes('Circuit breaker is OPEN')) {
         const cbErr = new Error(`MODULE_CIRCUIT_OPEN: 模块 ${moduleId} 断路器已熔断，请稍后重试`);
