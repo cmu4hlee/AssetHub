@@ -384,6 +384,20 @@ const AssetStatusDashboard = () => {
                 共 {lifeSupportTotal.toLocaleString()} 台
               </div>
             </div>
+            <div className="asset-dashboard-kpi-card">
+              <div className="asset-dashboard-kpi-label">🔔 维修提醒</div>
+              <div className="asset-dashboard-kpi-value">{maintenanceReminders.length.toLocaleString()}</div>
+              <div className="asset-dashboard-kpi-sub">
+                待处理工单
+              </div>
+            </div>
+            <div className="asset-dashboard-kpi-card">
+              <div className="asset-dashboard-kpi-label">🧪 检测提醒</div>
+              <div className="asset-dashboard-kpi-value">{(Array.isArray(metrologyExpiring) ? metrologyExpiring.length : 0).toLocaleString()}</div>
+              <div className="asset-dashboard-kpi-sub">
+                30 天内到期
+              </div>
+            </div>
           </div>
 
           {/* --- 图表行 --- */}

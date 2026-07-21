@@ -8,7 +8,7 @@
  *
  * 实时保养中心: 该页面 + 预防性维护 + 模板 + 提醒 4 个 tab 在 PreventiveMaintenanceHub 聚合
  */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Card, Table, Button, Input, Select, Space, Tag, Modal, Form, DatePicker, InputNumber, message, Popconfirm,
   Row, Col, Statistic, Drawer, Descriptions, Empty, Spin, Tooltip, Progress,
@@ -16,6 +16,7 @@ import {
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined, EyeOutlined,
   ToolOutlined, CheckCircleOutlined, WarningOutlined, ClockCircleOutlined, ExperimentOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { maintenanceAPI, assetAPI } from '../utils/api';
@@ -58,6 +59,41 @@ const PreventiveMaintenanceTemporary = () => {
   const [form] = Form.useForm();
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
+  // 资产联想下拉: 服务端模糊搜索 (编码/名称/科室), 选中后自动带出名称与科室
+  const [assetOptions, setAssetOptions] = useState([]);
+  const [assetSearching, setAssetSearching] = useState(false);
+  const assetSearchTimer = useRef(null);
+
+  const searchAssets = useCallback(async (keyword) => {
+    try {
+      setAssetSearching(true);
+      const r = await assetAPI.getAssetsNoCache({ keyword: keyword || undefined, page: 1, pageSize: 50 });
+      const list = r.data || [];
+      setAssetOptions(list.map(a => ({
+        value: a.asset_code,
+        label: `${a.asset_code} ${a.asset_name || ''}`.trim() + (a.department ? `（${a.department}）` : ''),
+        asset: a,
+      })));
+    } catch (e) {
+      console.warn('资产搜索失败:', e?.message);
+    } finally {
+      setAssetSearching(false);
+    }
+  }, []);
+
+  const handleAssetSearch = (value) => {
+    if (assetSearchTimer.current) clearTimeout(assetSearchTimer.current);
+    assetSearchTimer.current = setTimeout(() => searchAssets(value), 300);
+  };
+
+  // 把当前编辑行已有的资产加入选项, 保证回显 (防止 options 未加载时显示原始 code)
+  const ensureAssetOption = (row) => {
+    if (!row?.asset_code) return;
+    setAssetOptions(prev => (prev.some(o => o.value === row.asset_code)
+      ? prev
+      : [{ value: row.asset_code, label: `${row.asset_code} ${row.asset_name || ''}`.trim(), asset: row }, ...prev]));
+  };
+
   const load = useCallback(async (page = pagination.current, pageSize = pagination.pageSize) => {
     try {
       setLoading(true);
@@ -68,7 +104,7 @@ const PreventiveMaintenanceTemporary = () => {
         pageSize,
       });
       setData(r.data || []);
-      setPagination(prev => ({ ...prev, current: page, pageSize, total: r.total || 0 }));
+      setPagination(prev => ({ ...prev, current: page, pageSize, total: r.pagination?.total || 0 }));
     } catch (e) {
       message.error('加载临时保养失败');
     } finally {
@@ -95,12 +131,14 @@ const PreventiveMaintenanceTemporary = () => {
   const openEdit = (row) => {
     setEditing(row || {});
     form.resetFields();
+    setAssetOptions([]);
     if (row) {
       form.setFieldsValue({
         ...row,
         maintenance_date: row.maintenance_date ? dayjs(row.maintenance_date) : null,
         next_maintenance_date: row.next_maintenance_date ? dayjs(row.next_maintenance_date) : null,
       });
+      ensureAssetOption(row);
     } else {
       form.setFieldsValue({
         maintenance_date: dayjs(),
@@ -142,6 +180,74 @@ const PreventiveMaintenanceTemporary = () => {
       loadStats();
     } catch (e) {
       message.error(e.response?.data?.message || '删除失败');
+    }
+  };
+
+  // 导出当前列表为 Excel (.xlsx) — 复用工单导出的 SheetJS 模式
+  const handleExport = async () => {
+    if (data.length === 0) {
+      message.warning('没有可导出的数据');
+      return;
+    }
+    try {
+      const XLSX = await import('xlsx');
+      const headers = {
+        asset_code: '资产编码',
+        asset_name: '资产名称',
+        department: '科室',
+        maintenance_type: '保养类型',
+        maintenance_person: '保养人',
+        maintenance_date: '保养日期',
+        maintenance_duration: '耗时(分)',
+        result: '结果',
+        next_maintenance_date: '下次保养',
+        status: '状态',
+        remark: '备注',
+        created_at: '创建时间',
+      };
+      const fields = Object.keys(headers);
+      const typeLabel = v => TEMP_TYPE_OPTIONS.find(t => t.value === v)?.icon + v || v;
+      const rows = data.map(r => {
+        const out = {};
+        fields.forEach(f => {
+          let v = r[f];
+          if (f === 'maintenance_type') v = typeLabel(v);
+          else if (f === 'maintenance_date' || f === 'next_maintenance_date' || f === 'created_at') {
+            v = v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '';
+          } else if (f === 'maintenance_duration') {
+            v = v != null ? `${v}` : '';
+          } else {
+            v = v || '';
+          }
+          out[f] = v;
+        });
+        return out;
+      });
+      const headerRow = fields.map(f => headers[f]);
+      const dataRows = rows.map(row => fields.map(f => row[f]));
+      const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
+      ws['!cols'] = [
+        { wch: 16 }, // 资产编码
+        { wch: 22 }, // 资产名称
+        { wch: 16 }, // 科室
+        { wch: 14 }, // 保养类型
+        { wch: 10 }, // 保养人
+        { wch: 18 }, // 保养日期
+        { wch: 10 }, // 耗时
+        { wch: 8 },  // 结果
+        { wch: 14 }, // 下次保养
+        { wch: 10 }, // 状态
+        { wch: 24 }, // 备注
+        { wch: 18 }, // 创建时间
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '临时保养台账');
+      const filename = `临时保养台账_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`;
+      XLSX.writeFile(wb, filename);
+      message.success(`成功导出 ${data.length} 条记录到 ${filename}`);
+    } catch (err) {
+      console.error('导出失败:', err);
+      message.error(`导出失败: ${err?.message || err}`);
     }
   };
 
@@ -301,7 +407,7 @@ const PreventiveMaintenanceTemporary = () => {
         }
         variant="borderless"
         extra={
-          <Space>
+          <Space wrap>
             <Select
               placeholder="保养类型" allowClear style={{ width: 140 }} value={type}
               onChange={setType}
@@ -314,6 +420,9 @@ const PreventiveMaintenanceTemporary = () => {
               onChange={e => e.target.value === '' && setKeyword('')}
             />
             <Button icon={<ReloadOutlined />} onClick={() => load()}>刷新</Button>
+            <Button icon={<DownloadOutlined />} onClick={handleExport} disabled={data.length === 0}>
+              导出 Excel
+            </Button>
             {canWrite && (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => openEdit({})}>
                 新增临时保养
@@ -352,20 +461,35 @@ const PreventiveMaintenanceTemporary = () => {
         <Form form={form} layout="vertical" preserve={false}>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="asset_code" label="资产编码" rules={[{ required: true, message: '请填写资产编码' }]}>
-                <Input placeholder="如 EQ-00001" prefix={<ToolOutlined />} />
+              <Form.Item name="asset_code" label="资产" rules={[{ required: true, message: '请选择资产' }]}>
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder="搜索资产编码/名称/科室"
+                  filterOption={false}
+                  notFoundContent={assetSearching ? <Spin size="small" /> : '无匹配资产'}
+                  onSearch={handleAssetSearch}
+                  onFocus={() => { if (assetOptions.length === 0) searchAssets(''); }}
+                  onSelect={(value, option) => {
+                    const a = option?.asset || {};
+                    form.setFieldsValue({ asset_name: a.asset_name || '', department: a.department || '' });
+                  }}
+                  onClear={() => form.setFieldsValue({ asset_name: '', department: '' })}
+                  options={assetOptions}
+                  loading={assetSearching}
+                />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="asset_name" label="资产名称" rules={[{ required: true, message: '请填写资产名称' }]}>
-                <Input placeholder="如 心电图机" />
+              <Form.Item name="asset_name" label="资产名称" rules={[{ required: true, message: '请先选择资产' }]}>
+                <Input placeholder="选择资产后自动填充" disabled />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="department" label="科室">
-                <Input placeholder="如 心内科" />
+                <Input placeholder="选择资产后自动填充" disabled />
               </Form.Item>
             </Col>
             <Col span={12}>
